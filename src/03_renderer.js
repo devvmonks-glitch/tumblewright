@@ -691,6 +691,11 @@ function buildVisual(d) {
   if (d.thr) for (const t of d.thr) g.add(buildThruster(t));
   if (d.veh) addVehicleWheels(g, d);
   if (d.board) g.add(boardFace(d));
+  if (d.hov && s.t === 'ball') add(Geo.get(`hovr${s.r}`, () => new THREE.TorusGeometry(s.r * 1.02, s.r * 0.16, 8, 32).rotateX(Math.PI / 2)), 'neon', '#4dd0e1').castShadow = false;
+  if (d.dyn && s.t === 'cyl') {   // paper band + fuse
+    add(Geo.get(`dynb${s.r}`, () => new THREE.CylinderGeometry(s.r * 1.04, s.r * 1.04, s.h * 0.18, 16)), 'plastic', '#efe6d0');
+    add(Geo.get(`dynf${s.h}`, () => new THREE.CylinderGeometry(0.008, 0.008, 0.09, 6)), 'rubber', '#2a2c31', [0, s.h / 2 + 0.045, 0]);
+  }
   return g;
 }
 // billboard picture: the painted image (data URL) or a "paint me" placeholder, on the panel's front

@@ -132,7 +132,7 @@ const Hotbar = {
     for (let k = 1; k <= 12; k++) { const i = (cur + dir * k + 144) % 12; if (this.valid(s[i]) && !s[i].i) { this.use(i); return; } }
   },
 };
-const TOOL_ICON = { heal: 'medical_services', weld: 'link', rope: 'cable', thruster: 'rocket_launch', wheel: 'tire_repair', seat: 'chair', remover: 'delete', paint: 'format_paint', dupe: 'content_copy' };
+const TOOL_ICON = { heal: 'medical_services', weld: 'link', rope: 'cable', thruster: 'rocket_launch', wheel: 'tire_repair', seat: 'chair', remover: 'delete', paint: 'format_paint', dupe: 'content_copy', motor: 'settings', balloon: 'air', hover: 'blur_circular', dynamite: 'local_fire_department' };
 const TOAST_ICONS = { '❄': 'ac_unit', '💾': 'save', '📋': 'content_copy', '🔒': 'lock', '⚠': 'warning', '🎮': 'sports_esports', '🕊': 'flight', '✏': 'edit', '🧹': 'mop', '👢': 'person_remove', '🔗': 'link', '⚔': 'swords', '👑': 'workspace_premium', '🔇': 'volume_off', '🌍': 'public' };
 const TOAST_WORDS = [[/^Graphics/i, 'tune'], [/noclip/i, 'flight'], [/frozen|freeze/i, 'ac_unit'], [/unfrozen/i, 'water_drop'], [/welded/i, 'link'], [/thruster/i, 'rocket_launch'], [/limit/i, 'block'], [/copied/i, 'content_copy'], [/undo/i, 'undo'], [/snap/i, 'grid_4x4'], [/controller/i, 'sports_esports'], [/not allowed|disabled/i, 'lock']];
 const UI = {
@@ -453,7 +453,12 @@ const UI = {
       if (w === 'physgun') {
         if (Tools.grab) { hint(glyph('alt'), 'Freeze'); hint(glyph('reload'), 'Hold + look to rotate'); hint(pad ? glyph(PAD.UP) + glyph(PAD.DOWN) : glyph('Wheel'), 'Push / pull'); }
         else { hint(glyph('fire'), 'Grab object'); hint(glyph('reload'), 'Unfreeze aimed object'); }
-      } else if (w === 'toolgun') { hint(glyph('fire'), Tools.first ? 'Pick second point' : 'Use tool'); hint(glyph('alt'), { weld: 'Clear selection', rope: 'Clear selection', remover: 'Remove constraints', paint: 'Pick material', dupe: 'Paste contraption' }[Tools.mode] || 'Alt'); hint(glyph('reload'), 'Next tool mode'); }
+      } else if (w === 'toolgun') {
+        const o = Tools.opt, alt = { weld: 'Clear selection', rope: 'Clear selection', motor: 'Clear selection', remover: 'Remove constraints', paint: 'Pick material', dupe: 'Paste contraption' }[Tools.mode];
+        hint(glyph('fire'), Tools.first ? 'Pick second point' : 'Use tool'); if (alt) hint(glyph('alt'), alt); hint(glyph('reload'), 'Next tool mode');
+        if (Tools.mode === 'hover') hint(`<kbd>${esc(keyLabel(o.hovUp))}</kbd><kbd>${esc(keyLabel(o.hovDn))}</kbd>`, 'Hoverballs rise / sink');
+        if (Tools.mode === 'dynamite') hint(`<kbd>${esc(keyLabel(o.dynKey))}</kbd>`, 'Detonate your dynamite');
+      }
       else if (w === 'grenade') hint(glyph('fire'), 'Throw');
       else if (w === 'sniper') { hint(glyph('fire'), 'Shoot'); hint(glyph('alt'), 'Hold to scope in'); }
       else hint(glyph('fire'), { crowbar: 'Swing', rocket: 'Fire rocket', propcannon: 'Launch a prop' }[w] || 'Shoot');
@@ -644,6 +649,13 @@ const UI = {
     const mk = h('button', { class: 'bindbtn', text: keyLabel(o.motKey), onclick: () => { mk.textContent = 'press key…'; mk.classList.add('wait'); Input.capture = code => { if (code !== 'Escape') { o.motKey = code; Tools.saveOpt(); } mk.textContent = keyLabel(o.motKey); mk.classList.remove('wait'); }; } });
     s.append(h('div', { class: 'opt' }, h('div', { class: 'row' }, h('label', { text: 'Key' }), mk)),
       h('div', { class: 'opt' }, h('div', { class: 'row' }, h('label', { text: 'Toggle (press to start / stop)' }), h('input', { type: 'checkbox', checked: !!o.motTog, onchange: e => { o.motTog = e.target.checked; Tools.saveOpt(); } }))));
+    const bind = (label, key) => {
+      const b = h('button', { class: 'bindbtn', text: keyLabel(o[key]), onclick: () => { b.textContent = 'press key…'; b.classList.add('wait'); Input.capture = code => { if (code !== 'Escape') { o[key] = code; Tools.saveOpt(); } b.textContent = keyLabel(o[key]); b.classList.remove('wait'); }; } });
+      return h('div', { class: 'opt' }, h('div', { class: 'row' }, h('label', { text: label }), b));
+    };
+    s.append(h('h3', { text: 'Balloon' }), slider('Lift', 'blLift', 1, 300, 1, v => v + ' kg'), slider('String length', 'blLen', 0.5, 8, 0.25, v => v.toFixed(2) + ' m'));
+    s.append(h('h3', { text: 'Hoverball' }), slider('Rise / sink speed', 'hovSpd', 0.5, 10, 0.5, v => v + ' m/s'), slider('Air resistance', 'hovAir', 0, 1, 0.05, v => Math.round(v * 100) + '%'), bind('Rise key', 'hovUp'), bind('Sink key', 'hovDn'));
+    s.append(h('h3', { text: 'Dynamite' }), slider('Power', 'dynPow', 0.3, 2.5, 0.1, v => Math.round(v * 100) + '%'), bind('Detonate key', 'dynKey'));
     s.append(h('h3', { text: 'Painter' }));
     const mats = h('div', { class: 'mats' });
     for (const k of MAT_KEYS) mats.append(h('button', { class: o.paintMat === k ? 'on' : '', text: MATDEFS[k].name, onclick: () => { o.paintMat = k; Tools.saveOpt(); this.buildToolOptions(); } }));

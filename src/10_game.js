@@ -1267,7 +1267,8 @@ const Water = {
   pbrMat() {
     const m = csmMat(new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, transparent: true, depthWrite: false, roughness: 0.06, metalness: 0, normalMap: this.normTex(), normalScale: new THREE.Vector2(0.32, 0.32), envMapIntensity: 0.75 }), sh => {
       sh.uniforms.uWT = this.t;
-      sh.fragmentShader = 'uniform float uWT;\n' + sh.fragmentShader.replace('vec3 mapN = texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;',
+      // the line lives in an #include that three.js only expands after this hook, so inline the chunk first
+      sh.fragmentShader = 'uniform float uWT;\n' + sh.fragmentShader.replace('#include <normal_fragment_maps>', THREE.ShaderChunk.normal_fragment_maps).replace('vec3 mapN = texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;',
         'vec3 mapN = normalize( ( texture2D( normalMap, vNormalMapUv + uWT * vec2( 0.016, 0.009 ) ).xyz * 2.0 - 1.0 ) + ( texture2D( normalMap, vNormalMapUv * 1.73 + uWT * vec2( -0.011, 0.019 ) ).xyz * 2.0 - 1.0 ) );');
     });
     m.customProgramCacheKey = () => 'water'; m.userData.outlineParameters = { visible: false };

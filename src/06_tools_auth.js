@@ -30,10 +30,14 @@ const TOOL_MODES = [
   { id: 'dupe', name: 'Duplicator', icon: '📋', desc: 'Fire copies a contraption. Alt-fire pastes it.' },
   { id: 'motor', name: 'Motor', icon: '⚙️', desc: 'Click the part that should spin, then what it spins on (another prop, or the ground for the world). Hold the motor key to turn it.', two: true },
   { id: 'heal', name: 'Medic', icon: '💉', desc: 'Patch up an NPC: stops the bleeding and restores health. Revives them if their head is still attached.' },
+  { id: 'balloon', name: 'Balloon', icon: '🎈', desc: 'Tie a balloon to an object (or the ground). Set how much it lifts. Pops when shot.' },
+  { id: 'hover', name: 'Hoverball', icon: '🔵', desc: 'Attach a hoverball: it holds its height. Hold its keys to rise or sink.' },
+  { id: 'dynamite', name: 'Dynamite', icon: '🧨', desc: 'Plant a charge on a surface. Press its key to set it off (or shoot it).' },
 ];
 const Tools = {
   weapon: 'physgun', mode: 'weld', grab: null, first: null, cool: 0, rot: [0, 0], rotating: false, clipboard: null, marker: null, beam: null, kick: 0,
-  opt: Object.assign({ ropeLen: 1.0, ropeRigid: 1.0, thrForce: 12, thrKey: 'KeyF', thrPad: 'Pad7', wheelR: 0.4, paintMat: 'metal', paintCol: '#ff5a5f', motSpd: 4, motKey: 'KeyM', motTog: false }, store.get('toolopt', {})),
+  opt: Object.assign({ ropeLen: 1.0, ropeRigid: 1.0, thrForce: 12, thrKey: 'KeyF', thrPad: 'Pad7', wheelR: 0.4, paintMat: 'metal', paintCol: '#ff5a5f', motSpd: 4, motKey: 'KeyM', motTog: false,
+    blLift: 10, blLen: 2, hovSpd: 3, hovAir: 0.3, hovUp: 'KeyU', hovDn: 'KeyJ', dynPow: 1, dynKey: 'KeyX' }, store.get('toolopt', {})),
   saveOpt() { store.set('toolopt', this.opt); },
   init() {
     this.marker = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 8), new THREE.MeshBasicMaterial({ color: 0xfed330, depthTest: false }));
@@ -120,6 +124,9 @@ const Tools = {
     if (M === 'paint') { if (!e) return; Net.toHost({ t: 'tool', m: 'paint', a: strip(hi), o: { m: o.paintMat, c: o.paintCol } }); return; }
     if (M === 'dupe') { if (!isProp) return UI.toast('Aim at a contraption'); this.copyDupe(hi.e); return; }
     if (M === 'heal') { if (!e || !e.d.g) return UI.toast('Aim at an NPC'); Net.toHost({ t: 'tool', m: 'heal', a: strip(hi) }); return; }
+    if (M === 'balloon') { Net.toHost({ t: 'tool', m: M, a: strip(hi), o: { lift: o.blLift, len: o.blLen } }); return; }
+    if (M === 'hover') { if (!isProp) return UI.toast('Aim at a prop'); Net.toHost({ t: 'tool', m: M, a: strip(hi), o: { spd: o.hovSpd, air: o.hovAir, up: o.hovUp, dn: o.hovDn } }); return; }
+    if (M === 'dynamite') { Net.toHost({ t: 'tool', m: M, a: strip(hi), o: { pow: o.dynPow, key: o.dynKey } }); return; }
   },
   toolAlt() {
     const M = this.mode;
@@ -767,6 +774,33 @@ const Auth = {
         Net.bcastAll({ t: 'fx', k: 'heal', g: g.id });
         Net.notify(p.id, fatal ? 'Too late for this one' : g.alive ? `${g.n} patched up` : 'Patched up'); return;
       }
+      case 'balloon': {   // a balloon straight above the knot, roped to the object (or the ground / a map piece)
+        if (A && (A.d.k === 'nade' || A.d.k === 'rocket')) return;
+        if (!this.canSpawn(p, 1)) return;
+        const o = m.o || {}, R0 = 0.35, lift = clamp(+o.lift || 40, 1, 300), len = clamp(+o.len || 2, 0.5, 10), pt = Bv(m.a.pt);
+        // lift comes from mass: gravity scale -2.5 nets 1.5 x its own weight upward, so the mass sets how much it carries
+        const den = +(lift / 1.5 / (4.18879 * R0 ** 3)).toFixed(2);
+        const d = { id: World.allocId(), k: 'prop', sh: { t: 'ball', r: R0 }, m: 'plastic', c: pickOne(BALLOON_COLORS), vis: 'balloon', gs: -2.5, ld: 8, den, brk: 'pop', n: 'Balloon', p: a3(pt.clone().add(_v1.set(0, len + R0, 0))), q: [0, 0, 0, 1], o: p.id };
+        const c = { id: World.allocId(), t: 'rope', len, a: d.id, b: A ? A.id : 0, pa: [0, -R0, 0], pb: A ? a3(Bv(m.a.lp)) : a3(pt), o: p.id };
+        this.addCons(p, [c], [d]); return;
+      }
+      case 'hover': {   // a hoverball welded on; stepGadgets holds the whole contraption at its height
+        if (!A || A.d.k === 'map' || A.d.k === 'nade' || A.d.k === 'rocket') return;
+        if (!this.canSpawn(p, 1)) return;
+        const o = m.o || {}, r = 0.16, pa = this.pose(A), pos = Bv(m.a.pt).addScaledVector(Bv(m.a.n).normalize(), r * 0.8), q = new QT(), key = k => String(k || '').slice(0, 20);
+        const hov = { spd: clamp(+o.spd || 3, 0.2, 15), air: clamp(+o.air || 0, 0, 1), up: key(o.up || 'KeyU'), dn: key(o.dn || 'KeyJ') };
+        const d = { id: World.allocId(), k: 'prop', sh: { t: 'ball', r }, m: 'metal', c: '#3a3f4b', den: 1, n: 'Hoverball', hov, p: a3(pos), q: a4(q), o: p.id };
+        this.addCons(p, [Object.assign({ id: World.allocId(), t: 'weld', a: d.id, b: A.id, o: p.id }, weldFrames(pos, q, pa.p, pa.q))], [d]);
+        Net.notify(p.id, `Hoverball added. Hold ${keyLabel(hov.up)} / ${keyLabel(hov.dn)} to rise / sink.`); return;
+      }
+      case 'dynamite': {   // a stick standing on the surface, welded to what it's on (the world if that's the ground)
+        if (A && (A.d.k === 'nade' || A.d.k === 'rocket')) return;
+        if (!this.canSpawn(p, 1)) return;
+        const o = m.o || {}, H = 0.34, n = Bv(m.a.n).normalize(), pos = Bv(m.a.pt).addScaledVector(n, H / 2 + 0.01), q = new QT().setFromUnitVectors(UP, n), pb = this.pose(A);
+        const d = { id: World.allocId(), k: 'prop', sh: { t: 'cyl', r: 0.05, h: H }, m: 'plastic', c: '#c0392b', den: 1.2, xp: clamp(+o.pow || 1, 0.3, 2.5), dyn: { key: String(o.key || 'KeyX').slice(0, 20) }, n: 'Dynamite', p: a3(pos), q: a4(q), o: p.id };
+        this.addCons(p, [Object.assign({ id: World.allocId(), t: 'weld', a: d.id, b: A ? A.id : 0, o: p.id }, weldFrames(pos, q, pb.p, pb.q))], [d]);
+        Net.notify(p.id, `Dynamite planted. Press ${keyLabel(d.dyn.key)} to set it off.`); return;
+      }
       case 'unconstrain': {
         if (!A) return; const ids = [...World.cons.values()].filter(c => (c.a === A.id || c.b === A.id) && !(A.d.g && c.a && World.ents.get(c.a) && World.ents.get(c.a).d.g === A.d.g)).map(c => c.id);
         const msg = { t: 'rem', cons: ids }; applyRem(msg); this.broadcast(msg); return;
@@ -930,6 +964,41 @@ const Auth = {
         e.body.applyImpulseAtPoint({ x: F.x, y: F.y, z: F.z }, { x: P.x, y: P.y, z: P.z }, true);
         this.activeThr.push(e.id, th.id);
       }
+    }
+  },
+  // hoverballs hold their contraption at a height (their keys move it up / down); dynamite goes off on its key.
+  // Keys work for the owner on foot, or for whoever drives the contraption it's part of (seated drivers can also use D-pad up / down for hoverballs).
+  hovSets: new Map(), hovVer: -1,
+  stepGadgets(dt) {
+    if (this.hovVer !== World.consVer) { this.hovSets.clear(); this.hovVer = World.consVer; }
+    const ctrl = (e, key, pad) => {
+      for (const p of Players.map.values()) {
+        if (p.dead) continue;
+        if (p.seat) { if ((p.held.has(key) || (pad && p.held.has(pad))) && this.contraption(p.seat).set.has(e.id)) return true; }
+        else if (p.id === e.d.o && p.held.has(key)) return true;
+      }
+      return false;
+    };
+    let grabbed = null;
+    for (const e of World.ents.values()) {
+      if (!e.body) continue;
+      if (e.d.dyn && !e.lit && ctrl(e, e.d.dyn.key)) this.ignite(e, e.d.o, 0.05);
+      const H = e.d.hov; if (!H || !e.body.isDynamic()) continue;
+      let s = this.hovSets.get(e.id);
+      if (!s) {   // the mass it carries, shared between every hoverball on the same contraption
+        const set = World.connected(e.id); let mass = 0, n = 0;
+        for (const id of set) { const x = World.ents.get(id); if (!x || !x.body) continue; if (x.body.isDynamic()) mass += x.body.mass(); if (x.d.hov) n++; }
+        s = { k: mass / Math.max(1, n), set }; this.hovSets.set(e.id, s);
+      }
+      const t = e.body.translation(), v = e.body.linvel();
+      if (!grabbed) { grabbed = new Set(); for (const p of Players.map.values()) if (p.grab) grabbed.add(p.grab.e); }
+      if (e._hy == null || [...grabbed].some(id => s.set.has(id))) e._hy = t.y;   // carried by a physics gun: hover wherever it's let go
+      const dir = ctrl(e, H.up, 'Pad12') - ctrl(e, H.dn, 'Pad13');
+      if (dir) e._hy = t.y; else e._hy = clamp(e._hy, t.y - 1.5, t.y + 1.5);   // knocked far away: settle where it ends up instead of yanking back
+      // climb / sink at the set speed while a key is held, otherwise steer back to the held height; cancel gravity on top
+      const vy = dir ? dir * H.spd : clamp(2.5 * (e._hy - t.y), -H.spd, H.spd);
+      const ay = clamp(9.81 + 8 * (vy - v.y), 0, 40), air = H.air * 2.5;
+      e.body.applyImpulse({ x: -v.x * air * s.k * dt, y: ay * s.k * dt, z: -v.z * air * s.k * dt }, true);
     }
   },
   // ---- combat ---------------------------------------------------------------
@@ -1469,7 +1538,7 @@ const Auth = {
   },
   // ---- per fixed step (host) ---------------------------------------------------
   step(dt) {
-    this.stepBots(dt); this.stepPhysgun(); this.stepThrusters(dt); this.stepMotors(); this.stepDoors(); this.stepVehicles(dt); Phys.sync(); Vehicles.step(dt); this.stepNPCs(dt); this.stepGore(dt); this.stepRockets(dt);
+    this.stepBots(dt); this.stepPhysgun(); this.stepThrusters(dt); this.stepGadgets(dt); this.stepMotors(); this.stepDoors(); this.stepVehicles(dt); Phys.sync(); Vehicles.step(dt); this.stepNPCs(dt); this.stepGore(dt); this.stepRockets(dt);
     for (let i = this.fuses.length - 1; i >= 0; i--) {
       const f = this.fuses[i]; f.t -= dt; if (f.t > 0) continue;
       this.fuses.splice(i, 1);

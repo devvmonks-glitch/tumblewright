@@ -10,7 +10,7 @@ the host runs the physics.
 
 ## Features
 
-- Physics gun, tool gun (weld, rope, thrusters, wheels, motors, seats, painter, duplicator), delete gun and weapons
+- Physics gun, tool gun (weld, rope, thrusters, wheels, motors, seats, balloons, hoverballs, dynamite, painter, duplicator), delete gun and weapons
 - Ragdoll NPCs with gore, voices and AI; zombies; nextbot chase mode
 - Cars with engines you can hear, go-karts, trucks; host-set top speed
 - Maps: gm_construct (with the white room, dark room, mirror room and tunnels), Flatgrass, Big City, Arena and more
