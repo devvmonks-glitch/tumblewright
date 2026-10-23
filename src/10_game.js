@@ -1610,7 +1610,7 @@ const Game = {
   async boot() {
     const lt = $('#loadingText');
     try {
-      UI.init(); Input.init($('#c'));
+      Prog.load(); UI.init(); Input.init($('#c')); Social.init();
       lt.textContent = 'Starting renderer…'; R.init();
       lt.textContent = 'Loading physics engine…'; await Phys.init();
       Players.init(); World.initStatic(); Tools.init(); Editor.init(); FX.init(); Gore.init();
@@ -1632,6 +1632,9 @@ const Game = {
       UI.initUpdates();
       this.state = 'lobby'; UI.onTierChanged(R.tier);
       Owner.restore();
+      if (GAME.discord) DiscordAct.start();   // launched from a voice channel: go straight into its room
+      // crouch (Ctrl) + forward (W) is also the browser's close-tab shortcut: ask first while a game is running
+      addEventListener('beforeunload', e => { if (this.state === 'playing' && Settings.confirmClose !== false && !GAME.discord) { e.preventDefault(); e.returnValue = ''; } });
       addEventListener('pointerdown', () => Audio.ensure(), true); addEventListener('keydown', () => Audio.ensure(), true);
       this.lastRaf = performance.now(); this.startWatchdog();
       $('#c').addEventListener('click', () => { if (this.state === 'playing' && !UI.open && !Editor.active) this.lock(); });
@@ -1657,18 +1660,24 @@ const Game = {
   },
   // ---- room flow ---------------------------------------------------------------------
   profileName() { let n = ($('#inName').value || Settings.name || '').trim().slice(0, 18); if (!n) n = 'Player' + ((Math.random() * 900 + 100) | 0); Settings.name = n; $('#inName').value = n; saveSettings(); return n; },
-  resetForPlay() { World.clear(); for (const id of [...Players.map.keys()]) Players.remove(id); Editor.undo = []; Editor.redo = []; Object.assign(Rules, { combat: false, editPerm: 'all', propLimit: CFG.propLimit, allowNoclip: true, aimAssist: true, dismember: true, env: 'plains', envGone: [], mode: 'sandbox', bots: 3 }); $('#chatLog').innerHTML = ''; Auth.nades = []; Auth.corpses = []; },
-  async createRoom() {
+  resetForPlay() { ZS.st = null; Rules.zs = null; PH.st = null; Rules.ph = null; World.clear(); for (const id of [...Players.map.keys()]) Players.remove(id); Editor.undo = []; Editor.redo = []; Object.assign(Rules, { combat: false, editPerm: 'all', propLimit: CFG.propLimit, allowNoclip: true, aimAssist: true, dismember: true, env: 'plains', envGone: [], mode: 'sandbox', bots: 3 }); $('#chatLog').innerHTML = ''; Auth.nades = []; Auth.corpses = []; },
+  async createRoom(code0) {
     const name = this.profileName(); UI.lobbyStatus('Creating room…');
-    const code = randCode();
+    const code = code0 || randCode();
     try { this.resetForPlay(); await Net.start(code, true); }
     catch (e) { UI.lobbyStatus('Could not reach the network (' + e.message + '). You can still Play Solo.', true); this.startAttract(); return; }
-    Players.add({ id: Net.me, name, color: Settings.color, tier: R.tier, idx: 0, joinOrder: 0, isLocal: true });
+    Players.add({ id: Net.me, name, color: Settings.color, tier: R.tier, idx: 0, joinOrder: 0, isLocal: true, lvl: Prog.level().l });
     this.loadPending();
     try { history.replaceState(null, '', '#room=' + code); } catch (e) { }
     this.enterPlay(Auth.pickSpawn());
     UI.chat({ sys: 1, text: `Room ${fmtCode(code)} created. Share the code or invite link (Esc → Copy invite link).` });
     Net.sendPlayers();
+  },
+  // main menu "Play": join the busiest public room on our version that has space, else host a new one
+  quickPlay() {
+    if (GAME.discord) return DiscordAct.start();
+    const r = [...Online.rooms.values()].filter(r => r.v === GAME.version && (r.n || 0) < (r.max || CFG.maxPlayers)).sort((a, b) => (b.n || 0) - (a.n || 0))[0];
+    if (r) this.joinRoom(r.code); else { UI.lobbyStatus('No open public rooms right now, hosting one…'); this.createRoom(); }
   },
   async joinRoom(raw, retry) {
     const txt = String(raw || ''), link = txt.match(/room=([A-Z0-9]{6})/i);                 // a pasted invite link works too
@@ -1699,7 +1708,7 @@ const Game = {
   startSolo() {
     const name = this.profileName();
     this.resetForPlay(); Net.startOffline();
-    Players.add({ id: 'local', name, color: Settings.color, tier: R.tier, idx: 0, joinOrder: 0, isLocal: true });
+    Players.add({ id: 'local', name, color: Settings.color, tier: R.tier, idx: 0, joinOrder: 0, isLocal: true, lvl: Prog.level().l });
     this.loadPending();
     this.enterPlay(Auth.pickSpawn());
     UI.chat({ sys: 1, text: 'Offline. Create a room from the main menu to play with others.' });
@@ -1716,6 +1725,7 @@ const Game = {
     this.lock();
   },
   toLobby(silent) {
+    UI.refreshProfile();
     DmgNum.clear(); Bots.clear(); Auth.bots = [];
     if (Editor.active) Editor.toggle(false);
     if (Net.online && !silent) this.autosave();
@@ -1784,7 +1794,7 @@ const Game = {
     const h = Tools.cast(40); const o = new V3(), d = new V3(); Tools.aim(o, d);
     const pt = h ? h.point.clone().addScaledVector(h.normal, 0.05) : o.addScaledVector(d, 6);
     if (pt.distanceTo(me.pos) > 40) pt.copy(me.pos).add(new V3(-Math.sin(me.yaw) * 4, 0.5, -Math.cos(me.yaw) * 4));
-    Net.toHost({ t: 'spawn', item: key, p: a3(pt), yaw: me.yaw });
+    Net.toHost({ t: 'spawn', item: key, p: a3(pt), yaw: me.yaw }); Prog.bump('spawns');
     if (ITEM_INDEX[key] && ['props', 'furniture', 'fun'].includes(ITEM_INDEX[key].cat)) store.set('recent', [key, ...store.get('recent', []).filter(k => k !== key)].slice(0, 6));
     Audio.play('place');
   },
@@ -1819,7 +1829,7 @@ const Game = {
     if (Input.hit('reload')) { P.yaw += Math.PI / 4; Audio.play('tick'); }
     if (Input.hit('alt')) { this.cancelPlace(); Audio.play('switch'); return; }
     if (Input.hit('fire') && P.ok) {
-      Net.toHost({ t: 'spawn', item: P.key, p: a3(pt), yaw: me.yaw + P.yaw });
+      Net.toHost({ t: 'spawn', item: P.key, p: a3(pt), yaw: me.yaw + P.yaw }); Prog.bump('spawns');
       if (ITEM_INDEX[P.key] && ITEM_INDEX[P.key].cat !== 'map') store.set('recent', [P.key, ...store.get('recent', []).filter(k => k !== P.key)].slice(0, 6));
       Audio.play('place');
       // stays selected (GoreBox style): keep clicking to place more, alt-fire puts it away
@@ -1882,6 +1892,7 @@ const Game = {
         me.yaw += ey * k; me.pitch += ep * k * 0.85;
       }
       this._wasZoomed = this.zoomed;
+      this.ownerAimbot(me, dt);
       if (me.seat) {   // chase camera settles behind the vehicle when you stop looking around
         if (Math.abs(Input.dx) + Math.abs(Input.dy) > 0 || Math.hypot(Input.axes[2], Input.axes[3]) > 0.15) this.lookT = now();
         const ve = this.seatVeh();
@@ -1898,6 +1909,7 @@ const Game = {
     // movement
     const mv = Input.move(); mi.mx = mv.x; mi.my = mv.y;
     mi.jump = Input.down('jump'); mi.sprint = Input.down('sprint');
+    if (Rules.mode === 'prophunt' && Rules.ph && Rules.ph.phase === 'hide' && me.team === 'hunter') { mi.mx = mi.my = 0; mi.jump = mi.sprint = false; }   // hunters wait, blind
     mi.up = (Input.down('jump') ? 1 : 0) - (Input.down('crouch') ? 1 : 0);
     me.crouch = !me.noclip && !me.seat && Input.down('crouch');
     if (Editor.active) { this.cancelPlace(); Editor.update(dt); }
@@ -1923,7 +1935,8 @@ const Game = {
       if (!this.aimSeat) this.nearbySeat(me);   // standing next to a vehicle counts too
     }
     if (me.seat && Input.hit('reload')) Net.toHost({ t: 'flip' });
-    if (Input.hit('use') && !Editor.active) {
+    if (Input.hit('use') && !Editor.active && Rules.mode === 'prophunt' && me.team === 'prop' && !me.dead && this.aimEnt && this.aimDist < 9) Net.toHost({ t: 'disg', e: this.aimEnt.id });   // become this object
+    else if (Input.hit('use') && !Editor.active) {
       if (me.seat) Net.toHost({ t: 'use' });
       else if (this.aimSeat) Net.toHost({ t: 'use', e: this.aimSeat });
       else if (this.aimUse && this.aimUse.d.door) Net.toHost({ t: 'door', e: this.aimUse.id });
@@ -1995,6 +2008,42 @@ const Game = {
       if (!ok) return null;
     }
     best.s = bestS; return best;
+  },
+  // ---- owner aimbot --------------------------------------------------------------------------
+  // Only for owners (the owner code unlocked on this device). Turns the view onto the target closest to the crosshair
+  // inside Settings.aimbotFov: live NPCs, and other players when combat is on, with line of sight. Head or body.
+  ownerAimbot(me, dt) {
+    const W = W_BY_ID[Tools.weapon], mode = Settings.aimbot | 0;
+    if (!Owner.key || !mode || !W || !(W.range || W.proj) || me.seat || me.dead || Editor.active || UI.open) return;
+    if (mode === 1 && !Input.down('fire') && !Input.down('alt')) return;
+    const eye = R.camera.position, cp = Math.cos(me.pitch), fwd = new V3(-Math.sin(me.yaw) * cp, Math.sin(me.pitch), -Math.cos(me.yaw) * cp);
+    const maxD = Math.min(W.range || 300, 400), minCos = Math.cos(clamp(Settings.aimbotFov || 25, 2, 180) * Math.PI / 360), head = Settings.aimbotBone !== 'body';
+    const cands = [];
+    const consider = (pt, kind, id) => {
+      const dx = pt.x - eye.x, dy = pt.y - eye.y, dz = pt.z - eye.z, d = Math.hypot(dx, dy, dz);
+      if (d < 0.5 || d > maxD) return;
+      const cos = (dx * fwd.x + dy * fwd.y + dz * fwd.z) / d; if (cos < minCos) return;
+      cands.push({ pt: new V3(pt.x, pt.y, pt.z), d, kind, id, cos });
+    };
+    for (const g of World.groups.values()) {
+      if (g.t !== 'npc' || !g.alive) continue;
+      const e = (head && World.ents.get(g.parts[2])) || World.ents.get(g.parts[1]); if (e && e.mesh) consider(e.mesh.position, 'g', g.id);
+    }
+    if (Rules.combat) for (const p of Players.map.values()) if (!p.isLocal && !p.dead) consider({ x: p.renderPos.x, y: p.renderPos.y + (head ? 1.62 : 1.25) - (p.crouch ? 0.3 : 0), z: p.renderPos.z }, 'p', p.id);
+    cands.sort((a, b) => b.cos - a.cos);
+    let best = null;
+    for (const c of cands.slice(0, 6)) {   // nearest to the crosshair that we can actually see
+      const h = Phys.cast(eye, new V3().subVectors(c.pt, eye).normalize(), c.d + 0.5, me.body);
+      if (h && h.dist < c.d - 0.3 && !(c.kind === 'p' ? h.id === 'p:' + c.id : (typeof h.id === 'number' && World.ents.has(h.id) && World.ents.get(h.id).d.g === c.id))) continue;
+      best = c; break;
+    }
+    if (!best) return;
+    const dx = best.pt.x - eye.x, dy = best.pt.y - eye.y, dz = best.pt.z - eye.z;
+    let ey = Math.atan2(-dx, -dz) - me.yaw; while (ey > Math.PI) ey -= Math.PI * 2; while (ey < -Math.PI) ey += Math.PI * 2;
+    const ep = Math.atan2(dy, Math.hypot(dx, dz)) - me.pitch;
+    const sm = [0, 25, 12, 6][Settings.aimbotSmooth | 0], k = sm ? 1 - Math.exp(-sm * dt) : 1;   // instant / fast / medium / smooth
+    me.yaw += ey * k; me.pitch = clamp(me.pitch + ep * k, -1.55, 1.55);
+    R.camera.rotation.set(me.pitch, me.yaw, 0, 'YXZ'); R.camera.updateMatrixWorld();   // so a shot fired this frame goes where we now look
   },
   // ---- fixed 60 Hz step ----------------------------------------------------------------------
   fixedStep(dt) {
@@ -2088,6 +2137,13 @@ const Game = {
         if (h) cam.position.copy(target).addScaledVector(back, Math.max(0.6, h.dist - 0.3));
       }
       cam.lookAt(target);
+    } else if (me.disg && !me.dead && Rules.mode === 'prophunt') {   // disguised: look at yourself from behind
+      const target = _v1.copy(me.renderPos); target.y += Math.max(1.0, me.disg.s[1] + 0.5);
+      cam.position.copy(target).addScaledVector(dir, -4.5);
+      const back = _v4.subVectors(cam.position, target), bl = back.length(); back.divideScalar(bl || 1);
+      const h = Phys.cast(target, back, bl, me.body, c => { const id = Phys.colMap.get(c.handle); return id === 0 || (typeof id === 'number' && World.ents.has(id) && World.ents.get(id).d.k === 'map'); });
+      if (h) cam.position.copy(target).addScaledVector(back, Math.max(0.6, h.dist - 0.3));
+      cam.lookAt(target);
     } else {
       const eh = me.crouch ? CFG.eye - 0.5 : CFG.eye;
       this.eyeH = lerp(this.eyeH || eh, eh, 1 - Math.exp(-14 * dt));
@@ -2106,7 +2162,7 @@ const Game = {
     const scoped = this.fovCur < Settings.fov * 0.55; $('#scope').classList.toggle('on', scoped);
     const vm = this.viewmodel;
     if (vm) {
-      vm.visible = !me.seat && !me.dead && !Editor.active && !scoped;
+      vm.visible = !me.seat && !me.dead && !Editor.active && !scoped && !(me.disg && Rules.mode === 'prophunt');
       const spd = Math.hypot(me.vel.x, me.vel.z); this.bob += dt * spd * (me.grounded ? 1.6 : 0.3);
       const k = Tools.kick;
       const VB = Models.has('wp_' + Tools.weapon) && WEAPON_MODEL[Tools.weapon] ? WEAPON_MODEL[Tools.weapon].vm : [0.26, -0.25, -0.48];
@@ -2189,7 +2245,7 @@ const Game = {
 };
 
 // debug handle for testing from the console
-window.TW = { Owner, Hotbar, Audio, Models, Game, Net, World, Players, R, Auth, Tools, Editor, UI, Rules, Settings, Phys, Input, Admin, Save, FX, Mats, Vehicles, VEH, Gore, Env };
+window.TW = { Social, PH, ZS, Prog, DiscordAct, Online, Owner, Hotbar, Audio, Models, Game, Net, World, Players, R, Auth, Tools, Editor, UI, Rules, Settings, Phys, Input, Admin, Save, FX, Mats, Vehicles, VEH, Gore, Env };
 Game.boot();
 </script>
 

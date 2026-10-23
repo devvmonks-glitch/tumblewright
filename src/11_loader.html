@@ -15,7 +15,13 @@
   var PENDING = 'tw-update-pending';
   // shared across a document.open() swap (same Window), fresh after a reload
   var U = window.TWUpdate = window.TWUpdate || {};
-  U.version = VERSION; U.url = URL_; U.status = URL_ && KEY ? 'idle' : 'off';
+  // inside a Discord Activity the page can only reach the network through Discord's proxy: the site itself serves the
+  // CDN libraries under /npm/ (a Vercel rewrite), and the page is always the deployed latest, so no self-update
+  var DISCORD = /\.discordsays\.com$/.test(location.hostname);
+  // Discord's page security only runs inline scripts carrying its nonce: it stamps one on this script, and the two
+  // scripts boot() creates must carry the same one (read now: currentScript is gone once boot runs asynchronously)
+  var NONCE = (document.currentScript && document.currentScript.nonce) || '';
+  U.version = VERSION; U.url = URL_; U.status = URL_ && KEY && !DISCORD ? 'idle' : 'off';
 
   function cmp(a, b) {   // semver-ish compare: 1.10.0 > 1.9.3
     a = String(a).split('.').map(Number); b = String(b).split('.').map(Number);
@@ -43,8 +49,8 @@
   // ---- start the game contained in THIS document ------------------------------------------
   function boot() {
     var im = document.getElementById('tw-importmap'), main = document.getElementById('tw-main');
-    var s = document.createElement('script'); s.type = 'importmap'; s.textContent = im.textContent; document.head.appendChild(s);
-    var m = document.createElement('script'); m.type = 'module'; m.textContent = main.textContent; document.body.appendChild(m);
+    var s = document.createElement('script'); s.type = 'importmap'; s.textContent = DISCORD ? im.textContent.split('https://cdn.jsdelivr.net/').join('/') : im.textContent; if (NONCE) s.nonce = NONCE; document.head.appendChild(s);
+    var m = document.createElement('script'); m.type = 'module'; m.textContent = main.textContent; if (NONCE) m.nonce = NONCE; document.body.appendChild(m);
   }
   // ---- replace this document with a downloaded newer version --------------------------------
   function swap(rec) {

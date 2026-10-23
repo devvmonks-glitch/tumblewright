@@ -256,7 +256,13 @@ const Admin = {
         Rules.env = m.v; Rules.envGone = []; Auth.bots = []; Net.sendRules(); Net.sysChat(`Map: ${THEMES[m.v].label}.`);
         if (THEMES[m.v].spawns) for (const q of Players.map.values()) { if (q.seat) Auth.exitSeat(q); const sp = Auth.pickSpawn(); q.pos.copy(sp); q.tpGrace = now() + 0.6; Net.sendTo(q.id, { t: 'tp', p: a3(sp) }); }   // hand-built maps: everyone to a spawn
       } break;
-      case 'mode': if (m.v === 'sandbox' || m.v === 'nextbot') { Rules.mode = m.v; Auth.bots = []; Net.sendRules(); Net.sysChat(m.v === 'nextbot' ? 'Nextbot chase! Run. Don\'t let them touch you.' : 'Back to sandbox.'); UI.refreshAdmin && UI.refreshAdmin(); } break;
+      case 'mode': if (m.v === 'sandbox' || m.v === 'nextbot' || m.v === 'zombies' || m.v === 'prophunt') {
+        const was = Rules.mode; Rules.mode = m.v; Auth.bots = [];
+        if (was === 'zombies' && m.v !== 'zombies') ZS.stop();
+        if (was === 'prophunt' && m.v !== 'prophunt') PH.stop();
+        if (m.v === 'zombies') ZS.start(); else if (m.v === 'prophunt') PH.start(); else Net.sysChat(m.v === 'nextbot' ? 'Nextbot chase! Run. Don\'t let them touch you.' : 'Back to sandbox.');
+        Net.sendRules(); UI.refreshAdmin && UI.refreshAdmin();
+      } break;
       case 'bots': Rules.bots = clamp(m.v | 0, 1, 8); Net.sendRules(); break;
       case 'dismember': Rules.dismember = !!m.v; Net.sendRules(); break;
       case 'aimAssist': Rules.aimAssist = !!m.v; Net.sendRules(); Net.sysChat(Rules.aimAssist ? 'Controller aim assist on.' : 'Controller aim assist turned off by the host.'); break;

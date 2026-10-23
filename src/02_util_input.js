@@ -23,12 +23,17 @@ const GAME = { name: 'Tumblewright', version: (document.querySelector('meta[name
 GAME.site = ((document.querySelector('meta[name="tw-update-url"]') || {}).content || 'https://tumblewright.vercel.app/').replace(/\/?$/, '/');
 // matchmaking on Supabase Realtime (public project URL + publishable key; null = public Nostr relays only)
 GAME.supa = { url: 'https://imonuvmxzxdtglxyvdmj.supabase.co', key: 'sb_publishable_LpsLJ5i8_X43A8SjcVhgkw_3gZXVEob' };   // Supabase project 'tumblewright'
+// running as a Discord Activity: Discord loads the site at https://<client id>.discordsays.com/?instance_id=…&frame_id=…
+GAME.discord = (() => {
+  const q = new URLSearchParams(location.search);
+  return q.get('frame_id') && q.get('instance_id') && /\.discordsays\.com$/.test(location.hostname) ? { clientId: location.hostname.split('.')[0], instance: q.get('instance_id'), platform: q.get('platform') || 'desktop' } : null;
+})();
 const newerVer = (x, y) => { const a = String(x).split('.').map(Number), b = String(y).split('.').map(Number); for (let i = 0; i < 3; i++) if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) > (b[i] || 0); return false; };
 const CFG = {
   dt: 1 / 60, snapRate: 20, inputRate: 30, interpDelay: 0.11, keyframeEvery: 2,
   worldHalf: 320, killY: -60, maxBodies: 900, propLimit: 250, maxPlayers: 10,
   walk: 5.2, sprint: 8.8, crouchMul: 0.5, jump: 5.4, gravity: 9.81 * 1.5,
-  eye: 1.62, capR: 0.34, capHalf: 0.56, respawn: 3.0,
+  eye: 1.62, capR: 0.34, capHalf: 0.56, respawn: 3.0, spawnProt: 3.0,
 };
 const V3 = THREE.Vector3, QT = THREE.Quaternion;
 const _v1 = new V3(), _v2 = new V3(), _v3 = new V3(), _v4 = new V3(), _q1 = new QT(), _q2 = new QT(), _q3 = new QT();
@@ -96,6 +101,7 @@ const Settings = Object.assign({
   targetFps: isChromebook ? 30 : 60, fov: 80, sens: 1.0, invertY: false, deadzone: 0.15, padSens: 1.0, aimAssist: 2, flySpeed: 1, volume: 0.6, gore: 'full', bloodColor: 'red', spawnPreview: true, dmgNums: true, publicRoom: true,
   showNet: false, showFps: false, showHints: true, name: '', color: PLAYER_COLORS[(Math.random() * PLAYER_COLORS.length) | 0],
   turnUrl: '', turnUser: '', turnPass: '', binds: {},
+  confirmClose: true, aimbot: 0, aimbotFov: 25, aimbotBone: 'head', aimbotSmooth: 0,   // owner-only (Game.ownerAimbot): 0 off / 1 while aiming or shooting / 2 always
 }, AUDIO_DEFAULTS, store.get('settings', {}));
 Settings.binds = Object.assign({}, DEFAULT_BINDS, Settings.binds || {});
 const saveSettings = () => store.set('settings', Settings);

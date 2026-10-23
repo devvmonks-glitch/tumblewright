@@ -77,6 +77,7 @@ if (cmd === 'publish') {
   html = setMeta(html, 'tw-version', version);
   html = setMeta(html, 'tw-update-url', conf.url);
   html = setMeta(html, 'tw-update-key', conf.publicKey);
+  if (/<meta name="tw-notes"/.test(html)) html = setMeta(html, 'tw-notes', notes || '');   // shown in the main menu's "What's new" card
   const bytes = Buffer.from(html, 'utf8');
   const sig = sign('sha256', bytes, { key: createPrivateKey(pem), dsaEncoding: 'ieee-p1363' });
   if (!verify('sha256', bytes, { key: createPublicKey(pem), dsaEncoding: 'ieee-p1363' }, sig)) die('Signature self-check failed.');
@@ -88,7 +89,7 @@ if (cmd === 'publish') {
   writeFileSync(join(OUT, 'update.json'), JSON.stringify(manifest, null, 2) + '\n');
   // the game file may be opened from disk (origin "null"), so the host must allow cross-origin reads
   // crons: /api/keepalive stops the free Supabase project (matchmaking) from pausing after a week without use
-  writeFileSync(join(OUT, 'vercel.json'), JSON.stringify({ headers: [{ source: '/(.*)', headers: [{ key: 'Access-Control-Allow-Origin', value: '*' }, { key: 'Cache-Control', value: 'no-cache' }] }], crons: [{ path: '/api/keepalive', schedule: '0 15 * * *' }] }, null, 2) + '\n');
+  writeFileSync(join(OUT, 'vercel.json'), JSON.stringify({ rewrites: [{ source: '/npm/:path*', destination: 'https://cdn.jsdelivr.net/npm/:path*' }], headers: [{ source: '/(.*)', headers: [{ key: 'Access-Control-Allow-Origin', value: '*' }, { key: 'Cache-Control', value: 'no-cache' }] }], crons: [{ path: '/api/keepalive', schedule: '0 15 * * *' }] }, null, 2) + '\n');
   // serverless functions: /api/turn (relay credentials for players who can't connect peer-to-peer), /api/keepalive
   const API = join(dirname(fileURLToPath(import.meta.url)), 'api');
   mkdirSync(join(OUT, 'api'), { recursive: true });

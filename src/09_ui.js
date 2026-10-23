@@ -63,7 +63,7 @@ const Thumbs = {
 // ---- gamepad navigation inside menus -------------------------------------------
 const Nav = {
   cur: null, rep: 0,
-  root() { const o = UI.open; if (!o || o === 'radial' || o === 'chat') return Game.state === 'lobby' && !o ? $('#lobby') : null; return { spawn: $('#spawnMenu'), pause: $('#pause'), settings: $('#settings'), admin: $('#admin'), saveload: $('#saveload'), help: $('#help'), hostleft: $('#hostLeft') }[o] || null; },
+  root() { const o = UI.open; if (!o || o === 'radial' || o === 'chat') return Game.state === 'lobby' && !o ? $('#lobby') : null; return { spawn: $('#spawnMenu'), pause: $('#pause'), servers: $('#servers'), friends: $('#friendsMenu'), settings: $('#settings'), admin: $('#admin'), saveload: $('#saveload'), help: $('#help'), hostleft: $('#hostLeft') }[o] || null; },
   items(root) { return [...root.querySelectorAll('button,input,select,.item,[data-nav]')].filter(e => e.offsetParent !== null && !e.disabled && e.type !== 'file'); },
   focus(el) { if (this.cur) this.cur.classList.remove('navfocus'); this.cur = el; if (el) { el.classList.add('navfocus'); el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } },
   update(dt) {
@@ -141,8 +141,11 @@ const UI = {
     // ---- lobby ----
     const nm = $('#inName'); nm.value = Settings.name || '';
     nm.addEventListener('change', () => { Settings.name = nm.value.trim().slice(0, 18); saveSettings(); });
-    const sw = $('#swatches');
-    for (const c of PLAYER_COLORS) sw.append(h('button', { class: 'swatch' + (c === Settings.color ? ' sel' : ''), style: `background:${c}`, title: c, 'data-c': c, onclick: e => { Settings.color = c; saveSettings(); $$('.swatch').forEach(s => s.classList.toggle('sel', s.dataset.c === c)); this.refreshLobbyAvatar(); } }));
+    this.refreshProfile();
+    $('#btnQuick').onclick = () => Game.quickPlay();
+    if (GAME.discord) { $('#btnBrowse').classList.add('hidden'); $('#chkPublic').parentElement.classList.add('hidden'); }
+    $('#btnBrowse').onclick = () => this.openMenu('servers');
+    $('#btnFriends').onclick = () => this.openMenu('friends');
     $('#btnCreate').onclick = () => Game.createRoom();
     $('#btnSolo').onclick = () => Game.startSolo();
     $('#btnJoin').onclick = () => Game.joinRoom($('#inCode').value);
@@ -152,6 +155,17 @@ const UI = {
     $('#btnLobbyHelp').onclick = () => this.openMenu('help');
     $('#btnLobbyAddons').onclick = () => this.openMenu('addons');
     const pub = $('#chkPublic'); pub.checked = Settings.publicRoom !== false; pub.onchange = () => { Settings.publicRoom = pub.checked; saveSettings(); Online.updateRoom(); };
+    // server browser
+    $('#svBack').onclick = () => this.closeMenu();
+    $('#svRefresh').onclick = () => { this.renderRooms(); Audio.play('tick'); };
+    $('#svHost').onclick = () => { this.closeMenu(); Game.createRoom(); };
+    $('#svSearch').addEventListener('input', e => { this.svQuery = e.target.value.trim().toLowerCase(); this.renderRooms(); });
+    const hf = $('#svHideFull'); hf.checked = !!Settings.hideFull; hf.onchange = () => { Settings.hideFull = hf.checked; saveSettings(); this.renderRooms(); };
+    const svJoin = () => { const v = $('#svCode').value; if (!v.trim()) return; this.closeMenu(); Game.joinRoom(v); };
+    $('#svJoin').onclick = svJoin; $('#svCode').addEventListener('keydown', e => { if (e.code === 'Enter') svJoin(); });
+    // "What's new": this build's release notes (stamped by tools/release/release.mjs)
+    const notes = (document.querySelector('meta[name="tw-notes"]') || {}).content || '';
+    $('#newsVer').textContent = 'v' + GAME.version; $('#newsText').textContent = notes || 'Build, weld, drive and blow things up together.';
     Online.onRooms = () => this.renderRooms(); Online.watchRooms(); this.renderRooms();
     const m = location.hash.match(/room=([A-Z0-9]{6})/i);
     if (m) { $('#inCode').value = fmtCode(m[1].toUpperCase()); this.lobbyStatus('Joining from invite link…'); const t0 = now(), go = () => { if (Game.state === 'lobby') Game.joinRoom(m[1]); else if (Game.state === 'loading' && now() - t0 < 30) setTimeout(go, 300); }; setTimeout(go, 300); }
@@ -171,6 +185,104 @@ const UI = {
     Input.onLockChange = locked => { if (!locked && Game.state === 'playing' && !this.open && !Editor.active && Input.device === 'kbm' && !Game.lockReleaseOk) this.openMenu('pause'); Game.lockReleaseOk = false; };
     this.buildSlots();
   },
+  // ---- friends & accounts ----------------------------------------------------------------------
+  refreshSocial() {
+    const S = Social, on = S.friends.filter(f => S.online(f)).length, sub = $('#friendsSub');
+    if (sub) sub.textContent = !GAME.supa ? '' : !S.user ? 'Sign in to add friends' : (S.incoming.length ? `${S.incoming.length} request${S.incoming.length === 1 ? '' : 's'} · ` : '') + `${on} online`;
+    const nm = $('#inName'); if (nm) { nm.readOnly = !!S.profile; const hint = $('.lb-hint'); if (hint) hint.textContent = S.profile ? `Signed in · friend code ${S.code()}` : 'Click your name to change it'; }
+    if (this.open === 'friends' && !this._frTyping) this.buildFriends();
+  },
+  buildFriends() {
+    const s = $('#friendsMenu'), S = Social; s.innerHTML = '';
+    s.append(h('h2', { text: 'Friends' }));
+    const msg = h('div', { class: 'fr-msg muted' }), say = (t, bad) => { msg.textContent = t || ''; msg.style.color = bad ? 'var(--bad)' : ''; };
+    const run = async (btn, fn) => { if (btn) btn.disabled = true; try { const r = await fn(); if (typeof r === 'string') say(r); } catch (e) { say(e.message || String(e), true); } if (btn) btn.disabled = false; };
+    const back = h('div', { class: 'btns', style: 'margin-top:14px' }, h('button', { text: 'Back', onclick: () => this.back() }));
+    if (!GAME.supa) { s.append(h('p', { class: 'muted', text: 'Accounts are not available in this copy of the game.' }), back); return; }
+    if (!S.ready) { s.append(h('p', { class: 'muted', text: 'Connecting…' }), back); return; }
+    if (!S.user || !S.profile) {   // sign in / create account / forgot password
+      const tab = this.frTab || 'in', tabs = h('div', { class: 'tabs' });
+      for (const [k, l] of [['in', 'Sign in'], ['up', 'Create account'], ['reset', 'Forgot password']]) tabs.append(h('button', { class: tab === k ? 'act' : '', text: l, onclick: () => { this.frTab = k; this.buildFriends(); } }));
+      s.append(h('p', { class: 'muted', style: 'font-size:13px;line-height:1.5;margin:8px 0 0', text: 'An account gives you a username and a friend code, so friends can see when you\'re online and join your room. Your email is never shown to other players.' }), tabs);
+      const f = h('form', { class: 'fr-form', onsubmit: e => e.preventDefault() });
+      const email = h('input', { type: 'email', placeholder: 'Email', autocomplete: 'email', 'aria-label': 'Email' });
+      const pass = h('input', { type: 'password', placeholder: tab === 'up' ? 'Password (8+ characters)' : 'Password', autocomplete: tab === 'up' ? 'new-password' : 'current-password', 'aria-label': 'Password' });
+      const user = h('input', { type: 'text', placeholder: 'Username (3-16 letters, numbers, _)', maxlength: 16, autocomplete: 'username', 'aria-label': 'Username' });
+      [email, pass, user].forEach(i => { i.onfocus = () => this._frTyping = true; i.onblur = () => this._frTyping = false; i.onkeydown = e => e.stopPropagation(); });
+      if (tab === 'up') f.append(user);
+      f.append(email); if (tab !== 'reset') f.append(pass);
+      const go = h('button', { class: 'primary', type: 'submit', text: tab === 'in' ? 'Sign in' : tab === 'up' ? 'Create account' : 'Send reset link' });
+      go.onclick = () => run(go, async () => {
+        if (tab === 'in') { await S.signIn(email.value, pass.value); return 'Signed in.'; }
+        if (tab === 'up') { const r = await S.signUp(email.value, pass.value, user.value); if (r.confirm) { this.frTab = 'in'; return 'Account created! Check your email for a confirmation link, then sign in.'; } return 'Welcome to Tumblewright!'; }
+        await S.resetPassword(email.value); return 'If that email has an account, a reset link is on its way.';
+      });
+      f.append(go, msg); s.append(f, back);
+      setTimeout(() => (tab === 'up' ? user : email).focus(), 30);
+      return;
+    }
+    // signed in
+    const copy = h('button', { class: 'small', text: 'Copy code', onclick: () => { navigator.clipboard && navigator.clipboard.writeText(S.code()); this.toast('Friend code copied', 'content_copy'); } });
+    s.append(h('div', { class: 'fr-me' }, h('div', { class: 'grow' }, h('b', { text: S.profile.username }), h('div', { class: 'fr-code', text: S.code() })), copy, h('button', { class: 'small danger', text: 'Sign out', onclick: () => run(null, () => S.signOut()) })));
+    const addIn = h('input', { type: 'text', placeholder: 'Username or friend code', 'aria-label': 'Add a friend by username or friend code' });
+    addIn.onfocus = () => this._frTyping = true; addIn.onblur = () => this._frTyping = false;
+    const addB = h('button', { class: 'primary', text: 'Add friend' });
+    const add = () => run(addB, async () => { const r = await S.addFriend(addIn.value); addIn.value = ''; return r; });
+    addB.onclick = add; addIn.onkeydown = e => { e.stopPropagation(); if (e.key === 'Enter') add(); };
+    s.append(h('div', { class: 'fr-add' }, addIn, addB), msg);
+    if (S.incoming.length) {
+      s.append(h('h3', { text: 'Friend requests' }));
+      for (const r of S.incoming) s.append(h('div', { class: 'fr-row' }, h('span', { class: 'nm', text: r.username }), h('span', { class: 'sp' }),
+        h('button', { class: 'small primary', text: 'Accept', onclick: e => run(e.target, () => S.accept(r.id)) }), h('button', { class: 'small', text: 'Decline', onclick: e => run(e.target, () => S.remove(r.id)) })));
+    }
+    s.append(h('h3', { text: `Friends (${S.friends.length})` }));
+    if (!S.friends.length) s.append(h('p', { class: 'muted', style: 'font-size:13px', text: 'No friends yet. Share your friend code, or add someone by their username.' }));
+    for (const f of S.friends) {
+      const on = S.online(f), inRoom = on && f.room, here = Net.online && Net.code === f.room;
+      s.append(h('div', { class: 'fr-row' }, h('i', { class: 'dot' + (on ? ' on' : '') }),
+        h('span', { class: 'nm', text: f.username }),
+        h('span', { class: 'st', text: !on ? 'offline' : here ? 'in your room' : inRoom ? `playing ${f.mode || ''}`.trim() : 'in the menu' }),
+        h('span', { class: 'sp' }),
+        inRoom && !here ? h('button', { class: 'small primary', text: 'Join', onclick: () => S.join(f.room) }) : null,
+        on && Net.online && !here ? h('button', { class: 'small', text: 'Invite', onclick: e => run(e.target, async () => { await S.invite(f); return `Invite sent to ${f.username}.`; }) }) : null,
+        h('button', { class: 'small', text: 'Remove', title: 'Remove friend', onclick: e => { if (confirm(`Remove ${f.username} from your friends?`)) run(e.target, () => S.remove(f.id)); } })));
+    }
+    if (S.outgoing.length) { s.append(h('h3', { text: 'Sent requests' })); for (const r of S.outgoing) s.append(h('div', { class: 'fr-row' }, h('span', { class: 'nm', text: r.username }), h('span', { class: 'st', text: 'pending' }), h('span', { class: 'sp' }), h('button', { class: 'small', text: 'Cancel', onclick: e => run(e.target, () => S.remove(r.id)) }))); }
+    s.append(back);
+  },
+  showInvite(inv) {
+    const b = $('#inviteBox'); b.innerHTML = '';
+    const close = () => { b.classList.add('hidden'); Social.dismissInvite(inv.id); };
+    b.append(h('div', { class: 'grow' }, h('b', { text: `${inv.from} invited you` }), h('small', { text: `Room ${fmtCode(inv.room)}` })),
+      h('button', { class: 'small primary', text: 'Join', onclick: () => { close(); Social.join(inv.room); } }), h('button', { class: 'small', text: 'Later', onclick: close }));
+    b.classList.remove('hidden'); Audio.play('confirm');
+    clearTimeout(this._invT); this._invT = setTimeout(() => b.classList.add('hidden'), 30000);
+  },
+  // ---- progression: level card, daily challenges, colour swatches (some unlock with levels) -----
+  refreshProfile() {
+    const L = Prog.level(), lvl = L.l;
+    $('#lvNum').textContent = lvl; $('#lvTitle').textContent = Prog.title(lvl);
+    $('#xpText').textContent = `${L.into} / ${L.need} XP`; $('#xpFill').style.width = (100 * L.into / L.need) + '%';
+    Prog.rollDaily();
+    const dl = $('#dailyList'); dl.innerHTML = '';
+    for (const c of Prog.d.daily) {
+      const def = DAILY_POOL.find(p => p.id === c.id); if (!def) continue;
+      const v = Math.min(c.n, Prog.d.dp[c.id] || 0), done = !!Prog.d.done[c.id];
+      dl.append(h('div', { class: 'dl' + (done ? ' done' : '') }, h('div', { class: 'dl-t' }, h('span', { text: def.text(c.n) }), h('b', { text: done ? 'Done · +100 XP' : `${v} / ${c.n}` })), h('div', { class: 'dl-b', html: `<i style="width:${100 * v / c.n}%"></i>` })));
+    }
+    const sw = $('#swatches'); sw.innerHTML = '';
+    const pick = c => { Settings.color = c; saveSettings(); $$('.swatch').forEach(s => s.classList.toggle('sel', s.dataset.c === c)); this.refreshLobbyAvatar(); };
+    for (const c of PLAYER_COLORS) sw.append(h('button', { class: 'swatch' + (c === Settings.color ? ' sel' : ''), style: `background:${c}`, title: c, 'data-c': c, onclick: () => pick(c) }));
+    for (const u of UNLOCK_COLORS) {
+      const locked = lvl < u.lvl;
+      sw.append(h('button', { class: 'swatch' + (locked ? ' locked' : '') + (u.c === Settings.color ? ' sel' : ''), style: `background:${u.c}`, title: locked ? `${u.name}: unlocks at level ${u.lvl}` : u.name, 'data-c': u.c, 'data-l': locked ? u.lvl : '', onclick: () => locked ? this.toast(`${u.name} unlocks at level ${u.lvl}`, 'lock') : pick(u.c) }));
+    }
+  },
+  xpPop(n, why) {
+    const f = $('#xpFeed'); if (!f || Game.state !== 'playing') return;
+    const d = h('div', { class: 'xpp', html: `+${Math.round(n)} XP<small>${esc(why || '')}</small>` }); f.append(d); setTimeout(() => d.remove(), 1900);
+    while (f.children.length > 4) f.firstChild.remove();
+  },
   // ---- auto-update status (driven by the loader at the end of the file) ----------------------
   initUpdates() { window.addEventListener('tw-update', () => this.refreshUpdate()); this.refreshUpdate(); },
   updText(U) {
@@ -179,7 +291,7 @@ const UI = {
   },
   refreshUpdate() {
     const U = window.TWUpdate || { status: 'off' }, t = this.updText(U);
-    $('#verLabel').textContent = `Tumblewright v${GAME.version}` + (t ? ' · ' + t : '');
+    $('#verLabel').textContent = `v${GAME.version}` + (t ? ' · ' + t : '');
     const bar = $('#updateBar'), ready = U.status === 'ready' && U.ready;
     bar.classList.toggle('hidden', !ready);
     if (ready && bar.dataset.v !== U.ready.version) {
@@ -199,14 +311,14 @@ const UI = {
     for (const p of Players.map.values()) Players.updatePlate(p, true);
   },
   // ---- generic menus -----------------------------------------------------------
-  menus: ['spawn', 'pause', 'settings', 'admin', 'saveload', 'help', 'radial', 'hostleft', 'paint', 'cleanup', 'addons', 'inventory', 'owner'],
-  el(name) { return { spawn: '#spawnMenu', pause: '#pause', settings: '#settings', admin: '#admin', saveload: '#saveload', help: '#help', radial: '#radial', hostleft: '#hostLeft', paint: '#paintMenu', cleanup: '#cleanupMenu', addons: '#addonsMenu', inventory: '#inventoryMenu', owner: '#ownerMenu' }[name]; },
+  menus: ['spawn', 'pause', 'settings', 'admin', 'saveload', 'help', 'radial', 'hostleft', 'paint', 'cleanup', 'addons', 'inventory', 'owner', 'servers', 'friends'],
+  el(name) { return { spawn: '#spawnMenu', pause: '#pause', settings: '#settings', admin: '#admin', saveload: '#saveload', help: '#help', radial: '#radial', hostleft: '#hostLeft', paint: '#paintMenu', cleanup: '#cleanupMenu', addons: '#addonsMenu', inventory: '#inventoryMenu', owner: '#ownerMenu', servers: '#servers', friends: '#friendsMenu' }[name]; },
   openMenu(name) {
     if (this.open === 'chat') this.closeChat(false);
     for (const n of this.menus) $(this.el(n)).classList.add('hidden');
     this.open = name;
     if (name !== 'radial') { Game.lockReleaseOk = true; if (document.pointerLockElement) document.exitPointerLock(); Tools.release(); }
-    const b = { owner: () => this.buildOwner(), inventory: () => this.buildInventory(), cleanup: () => this.buildCleanup(), addons: () => this.buildAddons(), spawn: () => this.buildSpawn(), pause: () => this.buildPause(), settings: () => this.buildSettings(), admin: () => this.buildAdmin(), saveload: () => this.buildSaveLoad(), help: () => this.buildHelp(), radial: () => this.buildRadial(), hostleft: () => this.buildHostLeft() }[name];
+    const b = { friends: () => this.buildFriends(), servers: () => { $('#svCode').value = ''; this.renderRooms(); setTimeout(() => $('#svSearch').focus(), 30); }, owner: () => this.buildOwner(), inventory: () => this.buildInventory(), cleanup: () => this.buildCleanup(), addons: () => this.buildAddons(), spawn: () => this.buildSpawn(), pause: () => this.buildPause(), settings: () => this.buildSettings(), admin: () => this.buildAdmin(), saveload: () => this.buildSaveLoad(), help: () => this.buildHelp(), radial: () => this.buildRadial(), hostleft: () => this.buildHostLeft() }[name];
     if (b) b();
     $(this.el(name)).classList.remove('hidden');
     Nav.focus(null);
@@ -220,22 +332,44 @@ const UI = {
   },
   back() {
     const o = this.open;
-    if (o === 'settings' || o === 'admin' || o === 'saveload' || o === 'help' || o === 'cleanup' || o === 'addons' || o === 'inventory' || o === 'owner') { if (Game.state === 'playing') this.openMenu('pause'); else this.closeMenu(); }
+    if (o === 'settings' || o === 'admin' || o === 'saveload' || o === 'help' || o === 'cleanup' || o === 'addons' || o === 'inventory' || o === 'owner' || o === 'friends') { if (Game.state === 'playing') this.openMenu('pause'); else this.closeMenu(); }
     else if (o === 'hostleft') return;
     else this.closeMenu();
   },
-  // public rooms (lobby): live list from the presence channel
+  // public rooms: live list from the presence channel, shown in the server browser
+  svQuery: '', svMode: 'All',
   renderRooms() {
-    const el = $('#roomList'); if (!el) return;
-    const rooms = [...Online.rooms.values()].sort((a, b) => (b.n || 0) - (a.n || 0));
-    el.innerHTML = '';
-    el.append(h('div', { class: 'rl-h', html: `<span>PUBLIC ROOMS</span><span>${rooms.length ? rooms.length + ' open' : ''}</span>` }));
-    if (!rooms.length) { el.append(h('div', { class: 'muted', style: 'font-size:12px', text: GAME.supa ? 'No public rooms right now. Create one and your friends will see it here.' : 'Room list unavailable in this copy.' })); return; }
+    const all = [...Online.rooms.values()].sort((a, b) => (b.v === GAME.version) - (a.v === GAME.version) || (b.n || 0) - (a.n || 0));
+    const open = all.filter(r => r.v === GAME.version && (r.n || 0) < (r.max || CFG.maxPlayers)).length;
+    $('#browseSub').textContent = all.length ? `${all.length} room${all.length === 1 ? '' : 's'}` : '';
+    if (GAME.discord) $('#quickSub').textContent = 'Join your voice channel\'s game';
+    else $('#quickSub').textContent = open ? `Join one of ${open} open room${open === 1 ? '' : 's'}` : 'No open rooms: hosts a new one';
+    $('#netDot').classList.toggle('ok', !!Online.live);
+    $('#netDot').lastChild.textContent = !GAME.supa ? 'Room list off' : Online.live ? 'Matchmaking online' : 'Connecting…';
+    $('#svCount').textContent = `${all.length} public room${all.length === 1 ? '' : 's'}`;
+    // mode filter chips from the modes actually being played
+    const modes = ['All', ...new Set(all.map(r => r.mode || 'Sandbox'))];
+    if (!modes.includes(this.svMode)) this.svMode = 'All';
+    const mc = $('#svModes'); mc.innerHTML = '';
+    for (const m of modes) mc.append(h('button', { class: 'sv-chip' + (m === this.svMode ? ' on' : ''), text: m, onclick: () => { this.svMode = m; this.renderRooms(); } }));
+    const q = this.svQuery;
+    const rooms = all.filter(r => (this.svMode === 'All' || (r.mode || 'Sandbox') === this.svMode)
+      && (!Settings.hideFull || (r.n || 0) < (r.max || CFG.maxPlayers))
+      && (!q || [r.host, r.map, r.mode, r.code].some(x => String(x || '').toLowerCase().includes(q))));
+    const el = $('#roomList'); el.innerHTML = '';
+    if (!rooms.length) {
+      el.append(h('div', { class: 'sv-empty', text: !GAME.supa ? 'The room list is unavailable in this copy. Join with a room code instead.' : !Online.live ? 'Connecting to matchmaking…' : all.length ? 'No rooms match your filters.' : 'No public rooms right now. Host one and it shows up here for everyone.' }));
+      return;
+    }
     for (const r of rooms) {
-      const same = r.v === GAME.version, full = (r.n || 0) >= (r.max || 10);
-      el.append(h('div', { class: 'rl' },
-        h('div', { class: 'nm', html: `<b>${esc(r.host)}'s room</b><br><small>${esc(r.map)} · ${esc(r.mode)} · ${r.n}/${r.max}${same ? '' : ' · v' + esc(r.v)}</small>` }),
-        h('button', { class: 'small' + (same && !full ? ' primary' : ''), text: full ? 'Full' : same ? 'Join' : 'Update', disabled: full, title: same ? '' : 'Different game version: joining will update you first if you can', onclick: () => Game.joinRoom(r.code) })));
+      const same = r.v === GAME.version, full = (r.n || 0) >= (r.max || CFG.maxPlayers), go = () => { if (full) return; this.closeMenu(); Game.joinRoom(r.code); };
+      el.append(h('div', { class: 'sv-row sv-r', onclick: go },
+        h('div', { class: 'nm', html: `<b>${esc(r.host)}'s room</b><small>${fmtCode(r.code)}</small>` }),
+        h('span', { text: r.map || '—' }),
+        h('span', { class: 'sv-mode' + (/nextbot/i.test(r.mode || '') ? ' nb' : ''), text: r.mode || 'Sandbox' }),
+        h('span', { class: 'num', text: `${r.n || 0} / ${r.max || CFG.maxPlayers}` }),
+        h('span', { class: 'num' + (same ? '' : ' old'), text: 'v' + (r.v || '?') }),
+        h('button', { class: same && !full ? 'primary' : '', text: full ? 'Full' : same ? 'Join' : 'Update', disabled: full, title: same ? '' : 'Different game version: joining updates you first if it can', onclick: e => { e.stopPropagation(); go(); } })));
     }
   },
   // cleanup: props grouped by who spawned them
@@ -481,18 +615,56 @@ const UI = {
   },
   showDeath() { $('#deathScreen').classList.remove('hidden'); },
   hideDeath() { $('#deathScreen').classList.add('hidden'); },
-  damageFlash() { const hud = $('#hud'); hud.style.boxShadow = 'inset 0 0 140px rgba(255,30,30,.55)'; clearTimeout(this._df); this._df = setTimeout(() => hud.style.boxShadow = '', 180); if (!this._hurtT || now() - this._hurtT > 0.45) { this._hurtT = now(); Audio.play('pain_m', 0.55); Audio.play('punch', 0.35); } },
+  // red arc pointing toward where a hit came from (f = source position from the host), plus the screen-edge flash
+  damageFlash(f) {
+    const me = Players.local, dd = $('#dmgDir');
+    if (f && me && dd) {
+      const ang = Math.atan2(-(f[0] - me.pos.x), -(f[2] - me.pos.z)) - me.yaw;
+      dd.style.transform = `translate(-50%,-50%) rotate(${-ang}rad)`; dd.classList.remove('on'); void dd.offsetWidth; dd.classList.add('on');
+    }
+    this._damageFlash();
+  },
+  _damageFlash() { const hud = $('#hud'); hud.style.boxShadow = 'inset 0 0 140px rgba(255,30,30,.55)'; clearTimeout(this._df); this._df = setTimeout(() => hud.style.boxShadow = '', 180); if (!this._hurtT || now() - this._hurtT > 0.45) { this._hurtT = now(); Audio.play('pain_m', 0.55); Audio.play('punch', 0.35); } },
   hitmarker() { Audio.play('hitmark'); const hm = $('#hitmarker'); hm.style.opacity = 1; clearTimeout(this._hm); this._hm = setTimeout(() => hm.style.opacity = 0, 140); },
   killfeed(m) {
     const v = Players.map.get(m.v), a = m.a ? Players.map.get(m.a) : null;
     const nm = p => `<span style="color:${esc(p ? p.color : '#fff')}">${esc(p ? p.name : '?')}</span>`;
-    const d = h('div', { class: 'panel', html: a && a !== v ? `${nm(a)} ${ic('skull', '☠')} <span class="muted">${esc(m.w)}</span> ${nm(v)}` : `${ic('skull', '☠')} ${nm(v)} <span class="muted">died</span>` });
+    const d = h('div', { class: 'panel', html: a && a !== v ? `${nm(a)} <span class="kf-w">${esc(m.w || '')}</span> ${nm(v)}` : `${nm(v)} <span class="kf-w">${ic('skull', '☠')}</span> <span class="muted">died</span>` });
     $('#killfeed').prepend(d); setTimeout(() => d.remove(), 6000);
   },
   update(dt) {
     const me = Players.local;
-    if (me) { $('#hpText').textContent = Math.round(me.hp); $('#hpFill').style.width = me.hp + '%'; $('#hpFill').style.background = me.hp > 50 ? 'linear-gradient(90deg,#4ade80,#a3e635)' : me.hp > 25 ? '#fbbf24' : '#ef4444'; }
+    if (me) {   // segmented health bar: 10 cells, colour by how hurt you are
+      const hp = Math.max(0, Math.round(me.hp)), lv = hp > 50 ? 'ok' : hp > 25 ? 'mid' : 'low', n = Math.ceil(hp / 10), key = hp + lv;
+      if (this._hpKey !== key) {
+        this._hpKey = key; $('#hpText').textContent = hp; $('#hpBox').dataset.lv = lv;
+        const sg = $('#hpSegs'); if (sg.children.length !== 10) { sg.innerHTML = ''; for (let i = 0; i < 10; i++) sg.append(h('i')); }
+        [...sg.children].forEach((c, i) => c.classList.toggle('on', i < n));
+      }
+    }
     $('#hpBox').style.display = Rules.combat ? '' : 'none';
+    const pt = $('#protTag'), prot = !!(me && Rules.combat && !me.dead && Players.isProt(me)); if (pt._on !== prot) { pt._on = prot; pt.classList.toggle('hidden', !prot); }
+    // Zombie Survival banner: big number = seconds to the next wave, or zombies left
+    const zh = $('#zsHud'), zs = Rules.mode === 'zombies' && Rules.zs, ph = Rules.mode === 'prophunt' && Rules.ph;
+    zh.classList.toggle('hidden', !zs && !ph);
+    // Prop Hunt banner: your team, the clock, what's happening; hunters see black while props hide
+    if (ph) {
+      const team = me && me.team, fmt = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+      const big = ph.phase === 'end' ? (ph.win === 'hunter' ? 'HUNTERS WIN' : 'PROPS WIN') : ph.phase === 'wait' ? '—' : fmt(ph.t);
+      const right = ph.phase === 'wait' ? 'Waiting for a second player' : ph.phase === 'hide' ? (team === 'prop' ? 'Hide! Press E on an object to become it' : 'Props are hiding') : ph.phase === 'hunt' ? `${ph.left} prop${ph.left === 1 ? '' : 's'} left` : `Round ${ph.round} over`;
+      const label = team === 'hunter' ? 'Hunter' : 'Prop', key = 'ph' + big + right + label;
+      if (zh._k !== key) { zh._k = key; $('#zsL').textContent = `Prop hunt · ${label}`; $('#zsBig').textContent = big; $('#zsR').textContent = right; zh.classList.toggle('over', ph.phase === 'end'); zh.classList.toggle('team-prop', team === 'prop'); zh.classList.toggle('team-hunter', team === 'hunter'); }
+    } else if (zs) $('#zsL').textContent = 'Zombie survival';
+    $('#hud').classList.toggle('ph-prop', !!(ph && me && me.team === 'prop' && ph.phase !== 'wait'));   // props don't use weapons
+    $('#phBlind').classList.toggle('hidden', !(ph && ph.phase === 'hide' && me && me.team === 'hunter'));
+    if (zs) {
+      const big = zs.phase === 'wave' ? `${zs.left}` : zs.phase === 'over' ? 'GAME OVER' : `0:${String(zs.t).padStart(2, '0')}`;
+      const right = zs.phase === 'wave' ? `Wave ${zs.wave} · zombies left` : zs.phase === 'over' ? `Survived ${Math.max(0, zs.wave - 1)} waves` : zs.wave ? `Wave ${zs.wave + 1} incoming · build!` : 'First wave incoming · build!';
+      const key = big + right; if (zh._k !== key) { zh._k = key; $('#zsBig').textContent = big; $('#zsR').textContent = right; zh.classList.toggle('over', zs.phase === 'over'); }
+      const ds = $('#deathScreen'), dt2 = zs.phase === 'wave' ? 'You\'re down. Back when the wave is cleared.' : 'You died';
+      if (me && me.dead && ds.textContent !== dt2) ds.textContent = dt2;
+    }
+    if (Game.state === 'playing' && Prog.d) Prog.tick(dt);
     // nextbot gamemode: how long you've survived since your last death, and your best
     const bh = $('#botHud'), nb = Rules.mode === 'nextbot' && me;
     bh.classList.toggle('hidden', !nb);
@@ -799,6 +971,15 @@ const UI = {
     if (Owner.key) {
       const st = Net.isHost ? 'You are the host, so you already have every setting.' : !Net.online ? 'Unlocked. Join or host a room: the host will verify you automatically.' : Owner.ok ? 'Verified by this room\'s host. Host settings are in the pause menu.' : 'Unlocked. Waiting for the host to verify you…';
       s.append(h('p', { text: st }));
+      // owner aimbot (Game.ownerAimbot); saved per device like the other settings
+      const row = (label, ctl) => h('div', { class: 'setrow' }, h('span', { html: label }), ctl);
+      const sel = (key, opts, num) => { const el = h('select', { onchange: () => { Settings[key] = num ? +el.value : el.value; saveSettings(); } }); opts.forEach(([v, l]) => el.append(h('option', { value: v, text: l, selected: Settings[key] === v }))); return el; };
+      s.append(h('h3', { text: 'Aimbot', style: 'margin:14px 0 6px' }),
+        row('Aimbot', sel('aimbot', [[0, 'Off'], [1, 'While aiming or shooting'], [2, 'Always on']], true)),
+        row('Target', sel('aimbotBone', [['head', 'Head'], ['body', 'Body']])),
+        row('Field of view', sel('aimbotFov', [[10, '10°'], [25, '25°'], [45, '45°'], [90, '90°'], [180, '180°']], true)),
+        row('Smoothing', sel('aimbotSmooth', [[0, 'Instant'], [1, 'Fast'], [2, 'Medium'], [3, 'Smooth']], true)),
+        h('p', { class: 'muted', style: 'font-size:13px', text: 'Locks onto NPCs, and players when combat is on. Only works on your device while owner access is unlocked.' }));
       s.append(h('div', { class: 'btns' },
         !Owner.ok && Net.online && !Net.isHost ? h('button', { text: 'Ask the host again', onclick: () => { Owner.okHost = null; Owner.hello(); } }) : null,
         h('button', { class: 'danger', text: 'Forget on this device', onclick: () => Owner.forget() }),
@@ -820,27 +1001,46 @@ const UI = {
       h('div', { class: 'btns' }, h('button', { text: 'Back', onclick: () => this.back() }), btn));
     setTimeout(() => inp.focus(), 50);
   },
+  // pause: menu down the left, players + invite on the right
   buildPause() {
     const p = $('#pause'); p.innerHTML = '';
-    p.append(h('h2', { text: 'Paused' }));
-    if (Net.online) p.append(h('div', { class: 'psub' }, h('span', { text: 'Room' }), h('b', { text: fmtCode(Net.code) }), h('span', { text: `${Players.map.size} player${Players.map.size === 1 ? '' : 's'}` })));
-    else p.append(h('div', { class: 'psub', text: 'Offline' }));
-    const list = h('div', { class: 'mlist' }), item = (label, fn, cls) => list.append(h('button', { class: 'mitem' + (cls ? ' ' + cls : ''), text: label, onclick: fn }));
-    item('Resume', () => this.closeMenu());
-    item('Spawn menu', () => this.openMenu('spawn'));
-    item('Inventory / hotbar', () => this.openMenu('inventory'));
-    if (Net.online) item('Copy invite link', () => this.copyInvite());
-    if (Net.online) item('Copy network report', () => this.copyReport());
+    const left = h('div', { class: 'ps-left panel' }), right = h('div', { class: 'ps-right' });
+    left.append(h('h2', { text: 'Paused' }));
+    if (Net.online) left.append(h('div', { class: 'psub' }, h('span', { text: 'Room' }), h('b', { text: fmtCode(Net.code) }), h('span', { text: `${Players.map.size} player${Players.map.size === 1 ? '' : 's'}` })));
+    else left.append(h('div', { class: 'psub', text: 'Solo sandbox' }));
+    const list = h('div', { class: 'mlist' }), item = (label, fn, cls, key) => list.append(h('button', { class: 'mitem' + (cls ? ' ' + cls : ''), onclick: fn, html: esc(label) + (key ? `<kbd>${esc(key)}</kbd>` : '') }));
+    item('Resume', () => this.closeMenu(), '', 'Esc');
+    item('Spawn menu', () => this.openMenu('spawn'), '', keyLabel(Settings.binds.spawnMenu));
+    item('Inventory / hotbar', () => this.openMenu('inventory'), '', keyLabel(Settings.binds.inventory));
+    item('Friends', () => this.openMenu('friends'));
     item('Save / load', () => this.openMenu('saveload'));
     item('Clean up props', () => this.openMenu('cleanup'));
-    item('Community addons', () => this.openMenu('addons'));
+    item('Workshop', () => this.openMenu('addons'));
     if (Net.isHost) item('Host settings', () => this.openMenu('admin'));
     else if (Owner.ok) item('Host settings (owner)', () => this.openMenu('admin'));
     item('Settings', () => this.openMenu('settings'));
-    item('Controls', () => this.openMenu('help'));
+    item('Controls', () => this.openMenu('help'), '', keyLabel(Settings.binds.help));
     item(Owner.key ? 'Owner access ✓' : 'Owner access', () => this.openMenu('owner'));
-    item(Net.online ? 'Leave room' : 'Quit to menu', () => Game.toLobby(), 'danger');
-    p.append(list);
+    left.append(list, h('div', { class: 'ps-leave' }, h('button', { class: 'mitem danger', text: Net.online ? 'Leave room' : 'Quit to menu', onclick: () => Game.toLobby() })));
+    // players
+    const th = THEMES[Rules.env], card = h('div', { class: 'ps-card panel' });
+    card.append(h('div', { class: 'ps-card-h' }, h('h3', { text: 'Players' }), h('span', { text: [th && th.label, Rules.mode !== 'sandbox' ? modeLabel() : Rules.combat ? 'Combat on' : 'Sandbox'].filter(Boolean).join(' · ') })));
+    for (const pl of [...Players.map.values()].sort((a, b) => (b.kills || 0) - (a.kills || 0) || a.joinOrder - b.joinOrder)) {
+      const ping = pl.isLocal && Net.isHost ? 0 : Math.round(pl.ping || 0);
+      card.append(h('div', { class: 'ps-pl' + (pl.isLocal ? ' me' : '') },
+        h('i', { style: `background:${pl.color}` }),
+        h('span', { class: 'lv', text: pl.isLocal ? Prog.level().l : (pl.lvl || 1) }),
+        h('span', { class: 'nm', text: pl.name }),
+        Net.online && Net.hostId === pl.id ? h('span', { class: 'badge ps-host', text: 'HOST' }) : null,
+        h('span', { class: 'k', text: Rules.combat || Rules.mode !== 'sandbox' ? `${pl.kills || 0} kills · ${pl.deaths || 0} deaths` : '' }),
+        Net.online ? h('span', { class: 'png ' + (ping < 80 ? 'ok' : ping < 150 ? 'mid' : 'bad'), text: ping + ' ms' }) : null));
+    }
+    right.append(card);
+    if (Net.online) right.append(h('div', { class: 'ps-card panel ps-inv' },
+      h('div', { class: 'grow' }, h('b', { text: 'Invite friends' }), h('span', { text: 'Anyone with the link joins this room' })),
+      h('button', { class: 'primary', text: 'Copy invite link', onclick: () => this.copyInvite() })));
+    if (Net.online) right.append(h('button', { class: 'ps-report', text: 'Copy network report', onclick: () => this.copyReport() }));
+    p.append(left, right);
   },
   // player preview in the lobby (renders the avatar model in the chosen color)
   refreshLobbyAvatar() {
@@ -849,7 +1049,8 @@ const UI = {
     if (gun && Models.has('wp_physgun')) { gun.traverse(o => { if (o.isMesh) o.visible = false; }); const W = WEAPON_MODEL.physgun, wm = Models.instance('wp_physgun', W.t, W.c), hand = wm.getObjectByName('wp_physgun_hand'); if (hand) hand.visible = false; wm.position.set(0, 0.03, -0.12); gun.add(wm); }
     Models.plain(g);
     const url = Thumbs.snap(g, new V3(0.5, 0.18, -1), 150, 0.95);
-    if (url) $('#lobbyAvatar').innerHTML = `<img src="${url}" alt="Your character">`;
+    if (url) { this._avTry = 0; $("#lobbyAvatar").innerHTML = `<img src="${url}" alt="Your character">`; }
+    else if ((this._avTry = (this._avTry || 0) + 1) < 30) setTimeout(() => this.refreshLobbyAvatar(), 1000);   // the renderer can still be warming up at startup
   },
   buildSettings() {
     const s = $('#settings'); s.innerHTML = '';
@@ -908,6 +1109,7 @@ const UI = {
       s.append(row('Field of view', ...range('fov', 60, 110, 1, v => v + '°', () => R.setFov(Settings.fov))));
       s.append(row('Mouse sensitivity', ...range('sens', 0.1, 3, 0.05, v => v.toFixed(2))));
       s.append(row('Invert look Y', check('invertY')));
+      s.append(row('Ask before closing the tab during a game', check('confirmClose')));
       s.append(row('Show control hints', check('showHints', () => { this.hintKey = ''; })));
       s.append(row('Spawn with hologram preview', check('spawnPreview')));
       s.append(row('Damage numbers', check('dmgNums')));
@@ -962,7 +1164,7 @@ const UI = {
     for (const k in THEMES) th.append(h('option', { value: k, text: THEMES[k].label, selected: (Rules.env || 'plains') === k }));
     s.append(row('Map', th));
     const gm = h('select', { onchange: () => Admin.req('mode', { v: gm.value }) });
-    for (const [k, l] of [['sandbox', 'Sandbox'], ['nextbot', 'Nextbot chase']]) gm.append(h('option', { value: k, text: l, selected: (Rules.mode || 'sandbox') === k }));
+    for (const [k, l] of [['sandbox', 'Sandbox'], ['nextbot', 'Nextbot chase'], ['zombies', 'Zombie survival'], ['prophunt', 'Prop hunt']]) gm.append(h('option', { value: k, text: l, selected: (Rules.mode || 'sandbox') === k }));
     s.append(row('Gamemode', gm));
     if (Rules.mode === 'nextbot') { const bc = h('input', { type: 'range', min: 1, max: 8, value: Rules.bots || 3, onchange: () => Admin.req('bots', { v: +bc.value }) }); s.append(row(`Nextbots <span class="muted">(${Rules.bots || 3})</span>`, bc)); }
     s.append(row('Dismemberment (NPC limbs can come off)', h('input', { type: 'checkbox', checked: Rules.dismember !== false, onchange: e => Admin.req('dismember', { v: e.target.checked }) })));

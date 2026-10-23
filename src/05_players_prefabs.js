@@ -28,7 +28,7 @@ const Players = {
     let p = this.map.get(o.id);
     if (!p) { p = new Player(o); this.map.set(o.id, p); this.makeBody(p); this.makeAvatar(p); this.makePlate(p); }
     else { p.name = o.name ?? p.name; p.color = o.color ?? p.color; p.tier = o.tier ?? p.tier; if (o.idx != null) p.idx = o.idx; if (o.joinOrder != null) p.joinOrder = o.joinOrder; this.refreshLook(p); }
-    if (o.canEdit != null) p.canEdit = o.canEdit; if (o.muted != null) p.muted = o.muted;
+    if (o.canEdit != null) p.canEdit = o.canEdit; if (o.muted != null) p.muted = o.muted; if (o.lvl != null) p.lvl = o.lvl; if ('team' in o) p.team = o.team; if ('disg' in o) p.disg = o.disg;
     if (o.kills != null) p.kills = o.kills; if (o.deaths != null) p.deaths = o.deaths;
     if (o.isLocal) { p.isLocal = true; this.local = p; }
     if (p.avatar) p.avatar.visible = !p.isLocal;
@@ -38,6 +38,7 @@ const Players = {
     const p = this.map.get(id); if (!p) return;
     if (p.body) { Phys.colMap.delete(p.col.handle); Phys.world.removeRigidBody(p.body); Phys.qDirty = true; }
     if (p.avatar) R.scene.remove(p.avatar);
+    if (p.disgMesh) R.scene.remove(p.disgMesh);
     if (p.plate) p.plate.remove();
     this.map.delete(id);
     if (this.local === p) this.local = null;
@@ -84,12 +85,27 @@ const Players = {
   },
   updatePlate(p, full) {
     if (!p.plate) return;
-    if (full || p._plateKey !== p.name + p.tier + p.color + (Net.hostId === p.id) + p.muted) {
-      p._plateKey = p.name + p.tier + p.color + (Net.hostId === p.id) + p.muted;
-      p.plate.querySelector('.nm').innerHTML = `${Net.hostId === p.id ? '👑' : ''}<span style="color:${esc(p.color)}">${esc(p.name)}</span>${tierBadge(p.tier)}${p.muted ? '🔇' : ''}`;
+    if (full || p._plateKey !== p.name + p.tier + p.color + (Net.hostId === p.id) + p.muted + p.lvl) {
+      p._plateKey = p.name + p.tier + p.color + (Net.hostId === p.id) + p.muted + p.lvl;
+      p.plate.querySelector('.nm').innerHTML = `<span class="lv">${p.lvl || 1}</span>${Net.hostId === p.id ? '👑' : ''}<span style="color:${esc(p.color)}">${esc(p.name)}</span>${tierBadge(p.tier)}${p.muted ? '🔇' : ''}`;
     }
     const hb = p.plate.querySelector('.hb i'); hb.style.width = p.hp + '%'; hb.style.background = p.hp > 50 ? '#4ade80' : p.hp > 25 ? '#fbbf24' : '#ef4444';
   },
+  // Prop Hunt disguise: swap the body for the object's model (built from the same data as the real prop)
+  disguise(p) {
+    const D = !p.dead && Rules.mode === 'prophunt' ? p.disg : null, key = D ? JSON.stringify(D.d) : '';
+    if (p._dk !== key) {
+      p._dk = key;
+      if (p.disgMesh) { R.scene.remove(p.disgMesh); p.disgMesh = null; }
+      if (D) { try { p.disgMesh = buildVisual(D.d); p.disgMesh.traverse(o => { if (o.isMesh) o.castShadow = o.receiveShadow = true; }); R.scene.add(p.disgMesh); } catch (e) { p.disgMesh = null; } }
+    }
+    if (!p.disgMesh) return false;
+    p.avatar.visible = false;
+    p.disgMesh.position.set(p.renderPos.x, p.renderPos.y - D.b, p.renderPos.z); p.disgMesh.rotation.set(0, p.renderYaw, 0);
+    return true;
+  },
+  // spawn protection: the host knows the deadline, everyone else gets a snapshot flag
+  isProt(p) { return Net.isHost ? !!(p.protUntil && now() < p.protUntil) : !!p.prot; },
   eyePos(p, out) { return out.set(p.renderPos.x, p.renderPos.y + (p.crouch ? CFG.eye - 0.5 : CFG.eye), p.renderPos.z); },
   aimDir(p, out) { const cp = Math.cos(p.pitch); return out.set(-Math.sin(p.yaw) * cp, Math.sin(p.pitch), -Math.cos(p.yaw) * cp); },
   // ---- local movement (client-side prediction; host validates) ------------
@@ -136,6 +152,7 @@ const Players = {
   },
   updateAvatar(p, dt) {
     const a = p.avatar; if (!a) return;
+    if (this.disguise(p)) return;
     const se = p.seat ? World.ents.get(p.seat) : null, seated = !!(se && se.mesh);
     a.visible = (!p.isLocal || seated) && !p.dead;   // your own body shows in the third-person vehicle camera
     if (!a.visible) { if (p.plate && !p.isLocal) p.plate.style.display = 'none'; return; }
@@ -174,7 +191,7 @@ const Players = {
     const cam = R.camera, W = innerWidth, H = innerHeight;
     for (const p of this.map.values()) {
       if (!p.plate) continue;
-      if (p.isLocal || p.dead) { p.plate.style.display = 'none'; continue; }
+      if (p.isLocal || p.dead || (Rules.mode === 'prophunt' && p.team === 'prop' && (this.local || {}).team !== 'prop')) { p.plate.style.display = 'none'; continue; }
       _v1.copy(p.renderPos); _v1.y += 2.05;
       const dist = _v1.distanceTo(cam.position);
       _v1.project(cam);
@@ -183,6 +200,7 @@ const Players = {
       const sc = clamp(1.2 - dist / 120, 0.6, 1);
       p.plate.style.transform = `translate(${(_v1.x * 0.5 + 0.5) * W}px,${(-_v1.y * 0.5 + 0.5) * H}px) translate(-50%,-100%) scale(${sc})`;
       p.plate.style.left = '0'; p.plate.style.top = '0';
+      const pr = this.isProt(p); if (p._pr !== pr) { p._pr = pr; p.plate.classList.toggle('prot', pr); }
       this.updatePlate(p);
     }
   },

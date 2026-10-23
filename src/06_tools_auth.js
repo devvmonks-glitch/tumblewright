@@ -191,7 +191,7 @@ const Tools = {
         if (h && typeof h.id === 'string' && Rules.combat) UI.hitmarker();
       }
     }
-    Net.toHost({ t: 'fire', w: W.id, o: a3(o), d: a3(d) });
+    Net.toHost({ t: 'fire', w: W.id, o: a3(o), d: a3(d), i: r4(Net.interp || CFG.interpDelay) });
   },
   // beams for every player grabbing something (local one is predicted)
   updateBeams() {
@@ -236,6 +236,7 @@ const Vehicles = {
   },
   drop(id) { const c = this.ctl.get(id); if (!c) return; try { Phys.world.removeVehicleController(c.vc); } catch (err) { } this.ctl.delete(id); },
   step(dt) {
+    ZS.step(dt); PH.step(dt);
     const send = ++this.n % 4 === 0 && Net.online, out = [];
     for (const id of World.vehicles) {
       const e = World.ents.get(id); if (!e) continue;
@@ -419,6 +420,13 @@ function guChan(K, t, f) {
   return (2 * s3 - 3 * s2 + 1) * f(k0) + (s3 - 2 * s2 + s) * h * tan(i) + (-2 * s3 + 3 * s2) * f(k1) + (s3 - s2) * h * tan(i + 1);
 }
 const smooth01 = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
+// ray (o + d*t, d normalised) vs a vertical capsule from (x, y0, z) to (x, y1, z) of radius r: nearest t >= 0, or -1
+function rayCapsule(o, d, x, y0, z, y1, r) {   // the capsule is a cylinder plus two end spheres: take the nearest entry
+  let best = -1; const ox = o.x - x, oz = o.z - z, a = d.x * d.x + d.z * d.z;
+  if (a > 1e-9) { const b = ox * d.x + oz * d.z, c = ox * ox + oz * oz - r * r, hh = b * b - a * c; if (hh >= 0) { const t = (-b - Math.sqrt(hh)) / a, yy = o.y + d.y * t; if (t >= 0 && yy >= y0 && yy <= y1) best = t; } }
+  for (const cy of [y0, y1]) { const oy = o.y - cy, b = ox * d.x + oy * d.y + oz * d.z, c = ox * ox + oy * oy + oz * oz - r * r, hh = b * b - c; if (hh >= 0) { const t = -b - Math.sqrt(hh); if (t >= 0 && (best < 0 || t < best)) best = t; } }
+  return best;
+}
 const Rules = { combat: false, editPerm: 'all', propLimit: CFG.propLimit, allowNoclip: true, aimAssist: true, dismember: true, env: 'plains', envGone: [], mode: 'sandbox', bots: 3, carMph: 0, npcHp: 100 };   // npcHp: NPC health (100 = normal); damage to NPCs is scaled by 100 / npcHp
 const npcDmgK = () => 100 / clamp(Rules.npcHp || 100, 10, 2000);   // carMph 0 = each vehicle's own top speed
 const MPH = 0.44704;   // m/s per mph
@@ -461,6 +469,8 @@ const Auth = {
       case 'ownerHello': return Owner.hostHello(p);
       case 'ownerProof': return Owner.hostProof(p, m);
       case 'respawnme': if (!p.dead) this.respawn(p); return;
+      case 'lvl': p.lvl = clamp(m.v | 0, 1, 999); Net.sendPlayers(); return;
+      case 'disg': return PH.disguise(p, m.e);
       case 'cleanme': { const ids = [...World.ents.values()].filter(e => e.d.o === p.id && e.d.k !== 'map').map(e => e.id); if (ids.length) this.removeEnts(ids); Net.notify(p.id, ids.length ? 'Your props were cleaned up' : 'You have no props to clean up'); return; }
       case 'flip': return this.flipVehicle(p);
       case 'del': return this.deleteGun(p, m);
@@ -1004,24 +1014,43 @@ const Auth = {
   // ---- combat ---------------------------------------------------------------
   fire(p, m) {
     const W = W_BY_ID[m.w]; if (!W || !(W.range || W.proj) || p.dead || p.seat) return;
-    const t = now(); if (p.nextFire && t < p.nextFire - 0.05) return; p.nextFire = t + W.rate;
+    if (PH.live() && (p.team === 'prop' || PH.st.phase === 'hide')) return;   // props don't shoot; nobody shoots while they hide
+    // rate limit as a small token bucket: shots that arrive bunched up by the network still count, the average can't beat W.rate
+    const t = now(); p.fireTok = Math.min(2, (p.fireTok ?? 2) + (t - (p.fireT ?? t)) / W.rate); p.fireT = t;
+    if (p.fireTok < 0.9) return; p.fireTok -= 1;
     const o = new V3().fromArray(m.o), d = new V3().fromArray(m.d).normalize();
-    if (!isFinite(o.x + o.y + o.z + d.x + d.y + d.z) || o.distanceTo(p.pos) > 4) return;
+    if (!isFinite(o.x + o.y + o.z + d.x + d.y + d.z) || o.distanceTo(p.pos) > 7) return;   // the shooter's own view runs ahead of our copy of them
+    p.protUntil = 0;   // shooting ends spawn protection
+    // lag compensation: judge the shot against where targets were on the shooter's screen (their ping + interpolation delay)
+    const rw = p.isLocal ? 0 : clamp((p.ping || 0) / 1000 + clamp(+m.i || CFG.interpDelay, 0.05, 0.3), 0, 0.4);
     if (W.proj === 'rocket') return this.launchRocket(p, o, d);
     if (W.proj === 'prop') return this.launchProp(p, o, d);
     const n = W.pellets || 1, ends = []; let last = null;
-    for (let i = 0; i < n; i++) { const r = this.hitscan(p, W, o, n > 1 ? jitter(d.clone(), W.spread) : d); ends.push(a3(r.end)); if (r.h) last = r; }
+    for (let i = 0; i < n; i++) { const r = this.hitscan(p, W, o, n > 1 ? jitter(d.clone(), W.spread) : d, rw); ends.push(a3(r.end)); if (r.h) last = r; }
     if (W.id !== 'crowbar') Net.bcastExcept(p.id, { t: 'fx', k: 'shot', o: a3(o.clone().addScaledVector(d, 0.6)), e: n > 1 ? ends : ends[0], w: W.id, n: n === 1 && last ? a3(last.h.normal) : null });
     else if (last) Net.bcastExcept(p.id, { t: 'fx', k: 'spark', e: a3(last.end), n: a3(last.h.normal) });
     this.scare(last ? last.end : o.clone().addScaledVector(d, 30), 9); this.scare(o, 6);
   },
   // one hitscan ray: knock the prop, hurt the NPC / player, set off explosives, break breakables
-  hitscan(p, W, o, d) {
-    const h = Phys.cast(o, d, W.range, p.body);
+  hitscan(p, W, o, d, rw = 0) {
+    // the world (props, map, NPCs) as it is now; players as they were rw seconds ago (see histPos)
+    const wh = Phys.cast(o, d, W.range, p.body, c => { const id = Phys.colMap.get(c.handle); return !(typeof id === 'string' && id.startsWith('p:')); });
+    let h = wh, best = wh ? wh.dist : W.range;
+    for (const v of Players.map.values()) {
+      if (v === p || v.dead || v.seat || v.noclip) continue;
+      const vp = this.histPos(v, now() - rw), hs = v.disg ? PH.hitShape(v) : null;
+      const y0 = hs ? hs.y0 + vp.y - v.pos.y : vp.y + CFG.capR, y1 = hs ? hs.y1 + vp.y - v.pos.y : vp.y + CFG.capR + CFG.capHalf * 2;
+      const tt = rayCapsule(o, d, vp.x, y0, vp.z, y1, hs ? hs.r : CFG.capR);
+      if (tt >= 0 && tt < best) {
+        best = tt; const pt = o.clone().addScaledVector(d, tt);
+        h = { id: 'p:' + v.id, point: pt, normal: new V3(pt.x - vp.x, 0, pt.z - vp.z).normalize(), dist: tt, rewound: vp };
+      }
+    }
     const end = h ? h.point : o.clone().addScaledVector(d, W.range);
     if (!h) return { h, end };
     if (typeof h.id === 'number' && h.id > 0) {
       const e = World.ents.get(h.id); if (e && e.d.k === 'part') this.wakePart(e);
+      if (PH.live() && p.team === 'hunter' && e && e.d.k !== 'map') this.damagePlayer(p, 4, null, 'Wrong prop');   // guessing costs health
       if (e && e.body && e.body.isDynamic()) {
         const imp = Math.min(W.imp, e.body.mass() * W.dv);
         e.body.applyImpulseAtPoint({ x: d.x * imp, y: d.y * imp, z: d.z * imp }, { x: h.point.x, y: h.point.y, z: h.point.z }, true);
@@ -1032,7 +1061,7 @@ const Auth = {
       if (e) this.propHit(e, p.id, W.dmg);
     } else if (typeof h.id === 'string') {
       const victim = Players.map.get(h.id.slice(2));
-      if (victim) { const head = h.point.y > victim.pos.y + 1.42; this.damagePlayer(victim, W.dmg * (head ? 1.8 : 1), p, W.name, d.clone().multiplyScalar(W.push || 1.2), { p: h.point, head }); if (Rules.combat) Net.bcastAll({ t: 'fx', k: 'gore', p: a3(h.point), d: a3(d), s: 0.6, w: 'bullet' }); }
+      if (victim) { const head = h.point.y > (h.rewound || victim.pos).y + 1.42; this.damagePlayer(victim, W.dmg * (head ? 1.8 : 1), p, W.name, d.clone().multiplyScalar(W.push || 1.2), { p: h.point, head }); if (Rules.combat) Net.bcastAll({ t: 'fx', k: 'gore', p: a3(h.point), d: a3(d), s: 0.6, w: 'bullet' }); }
     }
     return { h, end };
   },
@@ -1081,6 +1110,7 @@ const Auth = {
     this.corpses.push({ ents: r2.ents, t: ['brick', 'wood', 'concrete'].includes(kind) ? 25 : 12 });   // debris cleans itself up
   },
   launchRocket(p, o, d) {
+    p.protUntil = 0;
     const pos = o.clone().addScaledVector(d, 0.9), q = new QT().setFromUnitVectors(new V3(0, 0, -1), d);
     const r = this.spawnPrefab(single({ k: 'rocket', sh: { t: 'rocket' }, m: 'metal', c: '#55653f', vis: 'rocket', gs: 0, den: 2, q: a4(q) }), pos, 0, p.id, { noLift: true, vel: a3(d.clone().multiplyScalar(34)) });
     if (r.ents[0]) this.rockets.push({ id: r.ents[0], owner: p.id, t: 6 });
@@ -1112,6 +1142,8 @@ const Auth = {
     }
   },
   throwNade(p, m) {
+    p.protUntil = 0;
+    if (PH.live() && (p.team === 'prop' || PH.st.phase === 'hide')) return;
     const t = now(); if (p.dead || p.seat || (p.nextNade && t < p.nextNade)) return; p.nextNade = t + 2.3;
     const o = new V3().fromArray(m.o), d = new V3().fromArray(m.d).normalize(); if (o.distanceTo(p.pos) > 4) return;
     const pos = o.addScaledVector(d, 0.7), v = d.multiplyScalar(15).add(p.vel.clone().multiplyScalar(0.5)); v.y += 2;
@@ -1171,19 +1203,22 @@ const Auth = {
     Net.sendTo(pid, { t: 'dn', p: [r4(p.x), r4(p.y), r4(p.z)], v: Math.max(1, Math.round(dmg)), g: tgt, h: head ? 1 : 0, k: kill ? 1 : 0 });
   },
   damagePlayer(v, dmg, att, wname, push, at) {
-    if (!Rules.combat || v.dead || dmg <= 0) return;
+    if (!Rules.combat || v.dead || dmg <= 0 || (v.protUntil && now() < v.protUntil)) return;
     const hp0 = v.hp;
     v.hp = Math.max(0, Math.round(v.hp - dmg));
     if (att && att !== v) this.dmgNum(att.id, at ? at.p : { x: v.pos.x, y: v.pos.y + 1.5, z: v.pos.z }, hp0 - v.hp || dmg, 'p' + v.id, at && at.head, v.hp <= 0);
     if (push && !v.seat) Net.sendTo(v.id, { t: 'kb', v: a3(push) });
-    Net.sendTo(v.id, { t: 'hurt', hp: v.hp });
+    const src = att && att !== v ? att.pos : push ? new V3(v.pos.x - push.x, v.pos.y, v.pos.z - push.z) : null;
+    Net.sendTo(v.id, src ? { t: 'hurt', hp: v.hp, f: a3(src) } : { t: 'hurt', hp: v.hp });
     if (att && att !== v) Net.sendTo(att.id, { t: 'hm' });
     if (v.hp <= 0) this.kill(v, att, wname);
   },
   kill(v, att, wname) {
     v.dead = true; v.deadT = CFG.respawn; v.deaths++; v.grab = null;
     if (v.seat) this.exitSeat(v);
-    if (att && att !== v) att.kills++;
+    if (att && att !== v) { att.kills++; Prog.award(att.id, 'pkill'); }
+    if (Rules.mode === 'zombies' && ZS.st && ZS.st.phase === 'wave') v.deadT = 1e9;   // down until the wave is cleared
+    if (PH.live()) { v.deadT = 1e9; v.disg = null; Net.sendPlayers(); }   // out until the next round
     // leave a ragdoll corpse in the player's colors
     const pf = npcPrefab('ragdoll');
     pf.groups[0].n = v.name;
@@ -1195,10 +1230,19 @@ const Auth = {
     Net.bcastAll(msg);
     Net.sendPlayers();
   },
+  // where player v was at time t (host clock), interpolated from step history; current position if we have nothing older
+  histPos(v, t) {
+    const hs = v.hist; if (!hs || !hs.length || t >= hs[hs.length - 1].t) return v.pos.clone();
+    if (t <= hs[0].t) return new V3(hs[0].x, hs[0].y, hs[0].z);
+    let i = hs.length - 1; while (i > 0 && hs[i - 1].t > t) i--;
+    const a = hs[i - 1], b = hs[i], k = (t - a.t) / Math.max(1e-6, b.t - a.t);
+    return new V3(a.x + (b.x - a.x) * k, a.y + (b.y - a.y) * k, a.z + (b.z - a.z) * k);
+  },
   respawn(p) {
     const sp = this.pickSpawn();
-    p.dead = false; p.hp = 100; p.pos.copy(sp); p.tpGrace = now() + 0.6; p.vel.set(0, 0, 0);
-    Net.sendTo(p.id, { t: 'tp', p: a3(sp), respawn: 1 });
+    p.dead = false; p.hp = 100; p.pos.copy(sp); p.tpGrace = now() + 0.6; p.vel.set(0, 0, 0); p.hist = null;
+    p.protUntil = now() + CFG.spawnProt;   // can't be hurt for a few seconds (ends early if they shoot)
+    Net.sendTo(p.id, { t: 'tp', p: a3(sp), respawn: 1, prot: CFG.spawnProt });
   },
   pickSpawn() {
     const sps = [...World.ents.values()].filter(e => e.d.sh.t === 'spawn');
@@ -1458,7 +1502,7 @@ const Auth = {
             if (T.d < 1.25) { speed = 0; g.atk = (g.atk || 0) - dt; if (g.atk <= 0) { g.atk = 1.3; g.swing = 0.45; if (Math.random() < 0.5) this.npcSay(g, 'attack'); const dx = T.pos.x - pt.x, dz = T.pos.z - pt.z, L = Math.hypot(dx, dz) || 1; this.hurtPart(T.g, 1, 18, { kind: 'blunt', dir: new V3(dx / L, 0.2, dz / L), stun: 1.2, by: 'g:' + g.id, bite: 1 }); } }
             else speed = T.d < 16 ? 2.7 : 1.3;   // lunges at nearby prey, faster than a fleeing civilian
             if ((g.groan = (g.groan || 3) - dt) <= 0) { g.groan = 4 + Math.random() * 6; Net.bcastAll({ t: 'fx', k: 'sfx', n: 'z_groan', p: [r4(pt.x), r4(pt.y), r4(pt.z)] }); }
-          } else if (nearest && nd < 35 && (!T || T.p)) {
+          } else if (nearest && (nd < 35 || g.zs) && (!T || T.p)) {   // wave zombies hunt from any distance
             yaw = Math.atan2(-(nearest.pos.x - pt.x), -(nearest.pos.z - pt.z)); lookAt = nearest;
             if (nd < 1.3) { attack = true; speed = 0; g.atk = (g.atk || 0) - dt; if (g.atk <= 0) { g.atk = 1.3; g.swing = 0.45; if (Math.random() < 0.5) this.npcSay(g, 'attack'); const dx = nearest.pos.x - pt.x, dz = nearest.pos.z - pt.z, L = Math.hypot(dx, dz) || 1; this.damagePlayer(nearest, 12, null, 'Zombie', new V3(dx / L * 3, 1.5, dz / L * 3)); } }
             else speed = nd < 12 ? 2.0 : 1.2;
@@ -1550,7 +1594,11 @@ const Auth = {
       if (n.t <= 0) { const e = World.ents.get(n.id); this.nades.splice(i, 1); if (e && e.body) { const t = e.body.translation(); this.removeEnts([n.id]); this.explode(new V3(t.x, t.y, t.z), n.owner); } }
     }
     for (let i = this.corpses.length - 1; i >= 0; i--) { const c = this.corpses[i]; c.t -= dt; if (c.t <= 0) { this.corpses.splice(i, 1); const ids = c.ents.filter(id => World.ents.has(id)); if (ids.length) this.removeEnts(ids); } }
-    for (const p of Players.map.values()) if (p.dead) { p.deadT -= dt; if (p.deadT <= 0) this.respawn(p); }
+    for (const p of Players.map.values()) {
+      if (p.dead) { p.deadT -= dt; if (p.deadT <= 0) this.respawn(p); }
+      const hs = p.hist || (p.hist = []), t = now();   // ~0.6 s of positions for lag-compensated hits
+      hs.push({ t, x: p.pos.x, y: p.pos.y, z: p.pos.z }); while (hs.length > 2 && hs[0].t < t - 0.6) hs.shift();
+    }
   },
   // ---- ragdoll safety net ----------------------------------------------------------
   // Clamp ragdoll part speeds, and if the joints ever get torn apart anyway (huge impacts,
@@ -1589,6 +1637,7 @@ const Auth = {
   // hit: { kind: bullet|blunt|blast|crush, point, normal, dir, stun, overall (default true), quiet }
   hurtPart(g, i, dmg, hit) {
     if (i < 0 || !(dmg > 0)) return;
+    if (hit && hit.by) g._lastBy = hit.by;   // who gets the kill (XP, Zombie Survival)
     const raw = dmg; dmg *= npcDmgK();   // host's NPC health setting: tougher NPCs take proportionally less from every hit (limbs too)
     if (!g.lh) g.lh = PART_HP.slice();
     if (hit.kind === 'bullet' || hit.kind === 'blunt') g._blastT = now();   // the hit's own shove isn't an impact injury

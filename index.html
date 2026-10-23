@@ -3,9 +3,10 @@
 <head>
 <meta charset="utf-8">
 <!-- auto-update config: stamped by tools/release/release.mjs (version, update server, public signing key) -->
-<meta name="tw-version" content="1.5.0">
+<meta name="tw-version" content="1.9.0">
 <meta name="tw-update-url" content="https://tumblewright.vercel.app/">
 <meta name="tw-update-key" content="MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEY+Cnn8Lm7Qg8qyzAHUGYObpBjSgdckeo7PetlABb0TomToEhaMbLW/zaRHOAbvsMn1TRCb4I/cPFv1ghZ6CgWw==">
+<meta name="tw-notes" content="Accounts and friends (usernames, friend codes, invites). New owner code.">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Tumblewright — Multiplayer Physics Sandbox</title>
 <meta name="description" content="Tumblewright: a multiplayer 3D physics sandbox. Build, weld, drive and blow things up together in your browser.">
@@ -499,6 +500,208 @@ kbd,.glyph{border-radius:2px;background:#2b2f35;border-color:#454b53}
 #scope .sc-h{width:68vmin;height:1.5px;transform:translate(-50%,-50%)}
 #scope .sc-v{width:1.5px;height:68vmin;transform:translate(-50%,-50%)}
 #scope .sc-dot{position:absolute;left:50%;top:50%;width:5px;height:5px;border-radius:50%;background:#ff3b30;transform:translate(-50%,-50%);box-shadow:0 0 6px #ff3b30}
+/* =================== UI v4: main menu, server browser, HUD, pause (2026-10 redesign) =================== */
+/* main menu */
+#lobby{display:block;padding:0;background:linear-gradient(90deg,rgba(12,13,15,.97) 0%,rgba(12,13,15,.88) 30%,rgba(12,13,15,.2) 62%,rgba(12,13,15,0) 100%)}
+#lobby .lb-left{position:absolute;left:clamp(16px,5vw,72px);top:clamp(24px,7vh,64px);bottom:clamp(20px,5vh,48px);width:min(460px,calc(100vw - 32px));display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden}
+#lobby .logo{display:flex;align-items:center;gap:14px}
+#lobby .logo .cube{display:block;width:34px;height:34px;flex:none;border-radius:0;background:var(--acc);box-shadow:none;animation:none;transform:rotate(18deg)}
+#lobby .logo .cube:after{inset:11px;border-radius:0;background:var(--ink)}
+#lobby .logo h1{font-size:clamp(40px,5.2vw,64px);line-height:.9}
+#lobby .tagline{margin:10px 0 0 48px;letter-spacing:.32em;color:var(--muted)}
+.lb-nav{display:flex;flex-direction:column;gap:2px;margin-top:clamp(20px,6vh,52px)}
+.lb-item{display:flex;align-items:center;justify-content:flex-start!important;gap:16px;width:100%;padding:11px 20px 11px 17px;background:none;border:0;border-left:3px solid transparent;border-radius:0;color:var(--text);font:700 clamp(22px,2.4vw,30px)/1.1 var(--title);text-transform:uppercase;letter-spacing:.03em;text-align:left}
+.lb-item:hover,.lb-item.navfocus{background:rgba(255,255,255,.05);border-left-color:var(--acc);outline:none!important}
+.lb-item.act{background:rgba(242,194,48,.1);border-left-color:var(--acc)}
+#lobby .lb-item .lb-ic{display:inline-flex;width:28px;font-size:26px;color:var(--text)}
+#lobby .lb-item .lb-ic .ms{font-size:28px}
+.lb-item.act .lb-ic{color:var(--acc)!important}
+.lb-item small{margin-left:auto;font:500 14px var(--font);text-transform:none;letter-spacing:0;color:var(--muted);white-space:nowrap}
+#lobby .joinrow{margin-top:22px;padding-left:20px;max-width:340px}
+#lobby .joinrow input{height:44px;font-family:var(--title);font-size:16px}
+#lobby .joinrow button{height:44px;padding:0 22px;font:700 16px var(--title);letter-spacing:.08em;text-transform:uppercase}
+#lobby .pubrow{padding-left:20px;margin-top:10px;text-transform:none;letter-spacing:0;font-weight:500;font-size:13px}
+#lobbyStatus{padding-left:20px}
+#lobby #updateBar{margin:10px 0 0 20px}
+#lobby .lobby-links{margin-top:auto!important;padding:18px 0 0 20px;gap:26px!important}
+.lb-right{position:absolute;right:clamp(16px,4vw,56px);top:clamp(24px,7vh,56px);width:340px;display:flex;flex-direction:column;gap:14px}
+.lb-card{background:rgba(21,23,26,.94);border:1px solid var(--line);padding:18px}
+.lb-player{border-top:3px solid var(--acc);display:flex;gap:16px;align-items:center}
+.lb-player #lobbyAvatar{width:78px;min-width:78px;height:96px;flex:none;align-items:center!important;border:1px solid var(--line);overflow:hidden;display:flex;align-items:center;justify-content:center}
+.lb-player #lobbyAvatar img{width:100%;height:100%;object-fit:cover}
+.lb-player #inName{width:100%;background:transparent;border:1px solid transparent;padding:2px 4px;margin-left:-5px;font:700 24px var(--title);letter-spacing:.02em}
+.lb-player #inName:hover{border-color:var(--line2)}.lb-player #inName:focus{border-color:var(--acc);background:#0f1113}
+.lb-hint{font-size:12px;color:var(--muted);margin:2px 0 10px}
+.lb-player .swatches{gap:6px}.lb-player .swatch{width:22px;height:22px}
+.lb-news-h{display:flex;align-items:baseline;justify-content:space-between}
+.lb-news h3{margin:0;color:var(--muted)}
+#newsVer{font:700 13px var(--title);letter-spacing:.1em;color:var(--acc)}
+#newsText{margin:10px 0 0;font-size:14px;line-height:1.5;color:#c9c5bb}
+.lb-foot{position:absolute;right:clamp(16px,4vw,56px);bottom:clamp(16px,4vh,40px);display:flex;gap:22px;align-items:center;font:500 13px var(--title);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.lb-foot #verLabel,.lb-foot #lobbyTier{margin:0;font:inherit;letter-spacing:inherit;color:inherit}
+#netDot{display:flex;align-items:center;gap:8px}#netDot i{width:8px;height:8px;border-radius:50%;background:var(--dim)}#netDot.ok i{background:var(--good)}
+@media (max-width:980px){.lb-right{display:none}.lb-foot{left:16px;right:auto;flex-wrap:wrap;gap:12px}#lobby{background:rgba(12,13,15,.9)}}
+@media (max-height:640px){.lb-item{padding-top:7px;padding-bottom:7px}#lobby .tagline{display:none}}
+/* server browser */
+#servers{position:absolute;inset:0;background:#101113;display:flex;flex-direction:column;padding:clamp(16px,5vh,48px) clamp(16px,5vw,72px);z-index:5}
+.sv-head{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.sv-head h1{font-size:clamp(30px,3.4vw,44px);line-height:1}
+.sv-count{font:600 15px var(--title);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-top:6px}
+.sv-head button{height:44px;padding:0 20px;font:700 16px var(--title);letter-spacing:.08em;text-transform:uppercase}
+.sv-back{width:44px;padding:0!important;display:flex;align-items:center;justify-content:center}
+#servers .sv-back .ic{display:inline-flex;font-size:22px}
+.sv-filters{display:flex;gap:8px;align-items:center;margin-top:24px;flex-wrap:wrap}
+.sv-filters input[type=text]{width:min(320px,100%);height:36px;padding:0 12px}
+.sv-chip{height:36px;padding:0 14px;font:600 14px var(--title);letter-spacing:.08em;text-transform:uppercase;color:#c9c5bb}
+.sv-chip.on{background:rgba(242,194,48,.14);border-color:var(--acc);color:var(--acc)}
+#servers .pubrow{margin:0;text-transform:none;letter-spacing:0;font-weight:500;font-size:14px;color:#c9c5bb}
+.sv-table{margin-top:16px;border:1px solid var(--line);background:#15171a;flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+#servers #roomList{flex:1;overflow-y:auto;margin:0;max-height:none;display:block}
+.sv-row{display:grid;grid-template-columns:minmax(0,2.4fr) minmax(0,1.3fr) minmax(0,1fr) 90px 80px 110px;gap:16px;padding:0 20px;align-items:center}
+.sv-th{padding-top:12px;padding-bottom:12px;border-bottom:1px solid var(--line);font:700 12px var(--title);letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.sv-r{height:58px;border-bottom:1px solid #22262a;border-left:3px solid transparent;cursor:pointer}
+.sv-r:hover,.sv-r.navfocus{background:#1f2226;border-left-color:var(--acc)}
+.sv-r .nm{min-width:0}
+.sv-r .nm b{display:block;font:700 18px var(--title);letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sv-r .nm small{font-size:12px;color:var(--muted)}
+.sv-mode{justify-self:start;font:700 12px var(--title);letter-spacing:.12em;text-transform:uppercase;padding:3px 8px;background:#262a2f}
+.sv-mode.nb{color:#f0a597}
+.sv-r .num{font:600 16px var(--title);font-variant-numeric:tabular-nums}
+.sv-r .old{color:#f0a597}
+.sv-r button{height:36px;font:700 14px var(--title);letter-spacing:.1em;text-transform:uppercase}
+.sv-empty{padding:40px 20px;text-align:center;color:var(--muted);font-size:15px}
+.sv-foot{display:flex;align-items:center;gap:10px;margin-top:14px;font-size:14px;flex-wrap:wrap}
+.sv-foot input{width:170px;height:36px;text-align:center;font:700 15px var(--title);letter-spacing:.3em;text-transform:uppercase}
+.sv-foot button{height:36px;font:600 14px var(--title);letter-spacing:.08em;text-transform:uppercase}
+@media (max-width:820px){.sv-row{grid-template-columns:minmax(0,1fr) 70px 90px}.sv-row>:nth-child(2),.sv-row>:nth-child(3),.sv-row>:nth-child(5){display:none}}
+/* HUD (v4) */
+#hpBox{min-width:300px;padding:10px 14px;background:rgba(21,23,26,.9)}
+.hp-top{display:flex;align-items:baseline;gap:8px}
+.hp-ic{width:16px;height:16px;align-self:center;background:var(--good);clip-path:polygon(35% 0,65% 0,65% 35%,100% 35%,100% 65%,65% 65%,65% 100%,35% 100%,35% 65%,0 65%,0 35%,35% 35%)}
+#hpText{font:800 34px/1 var(--title);font-variant-numeric:tabular-nums}
+.hp-lb{font:700 12px var(--title);letter-spacing:.16em;color:var(--muted)}
+#hpSegs{display:flex;gap:2px;height:6px;margin-top:8px;background:#30353b}
+#hpSegs i{flex:1;background:transparent}
+#hpSegs i.on{background:var(--good)}
+#hpBox[data-lv=mid] #hpSegs i.on,#hpBox[data-lv=mid] .hp-ic{background:var(--acc)}
+#hpBox[data-lv=low] #hpSegs i.on,#hpBox[data-lv=low] .hp-ic{background:var(--bad)}
+#hpBox[data-lv=low] #hpText{color:#f0a597}
+#dmgDir{position:absolute;left:50%;top:50%;width:240px;height:240px;border-radius:50%;border:6px solid transparent;border-top-color:rgba(226,85,63,.85);transform:translate(-50%,-50%);opacity:0;pointer-events:none}
+#dmgDir.on{animation:dmgDir 1.1s ease-out forwards}
+@keyframes dmgDir{0%{opacity:1}60%{opacity:.85}100%{opacity:0}}
+#slots{gap:4px;bottom:24px}
+#slots .slot{box-sizing:border-box;width:clamp(44px,calc((100vw - 780px) / 10),62px);height:clamp(44px,calc((100vw - 780px) / 10),62px);min-width:0;padding:4px;border-radius:0;background:rgba(21,23,26,.88);border:1px solid var(--line);border-bottom:3px solid var(--line);transform:none}
+#slots .slot img{width:52px;height:38px}
+#slots .slot b{top:3px;left:5px;font:700 11px var(--title);color:var(--muted)}
+#slots .slot.act{background:rgba(242,194,48,.16);border-color:var(--acc);border-bottom-color:var(--acc);transform:none}
+#slots .slot.act b{color:var(--acc)}
+@media (max-width:1100px) and (min-width:701px){#slots{top:14px;bottom:auto}#slots .slot{width:46px;height:46px}#slots .slot img{width:40px;height:30px}}
+#slotName{bottom:96px;font:700 20px var(--title);letter-spacing:.06em;text-shadow:0 2px 4px rgba(0,0,0,.8)}
+#toolBox{right:24px;bottom:24px;background:rgba(21,23,26,.9)}
+#toolIcon{border-radius:0;background:#0f1113}
+#toolName{font:700 20px var(--title);text-transform:uppercase;letter-spacing:.03em}
+#toolDesc{font-size:12px}
+#vitals{left:24px;bottom:24px}
+#roomInfo{background:rgba(21,23,26,.9)}
+#killfeed{top:62px;right:18px;gap:6px}
+#killfeed div{display:flex;align-items:center;gap:8px;padding:5px 10px;background:rgba(21,23,26,.82);border:0;font:600 14px var(--title);letter-spacing:.03em}
+.kf-w{font:700 11px var(--title);letter-spacing:.1em;text-transform:uppercase;padding:1px 6px;background:#30353b;color:#c9c5bb;display:inline-flex;align-items:center}
+.kf-w .ms{font-size:13px}
+#botHud,#modeTag{top:18px;border:1px solid var(--line);background:rgba(21,23,26,.9);font:700 15px var(--title);letter-spacing:.12em;text-transform:uppercase;padding:7px 16px}
+#botHud b{background:var(--bad);color:#fff;padding:2px 8px;margin-right:4px}
+#chatLog .msg{background:rgba(10,11,13,.6)}
+/* pause (v4) */
+#pause{position:absolute;inset:0;width:auto;padding:0;border:0;background:rgba(8,9,11,.72);display:flex;gap:clamp(16px,4vw,48px)}
+#pause .ps-left{position:relative;margin-left:clamp(0px,5vw,72px);width:min(380px,100vw);height:100%;display:flex;flex-direction:column;padding:clamp(20px,7vh,56px) 0 0;border:0;border-right:1px solid var(--line);border-top:3px solid var(--acc);box-shadow:none;overflow-y:auto}
+#pause .ps-left h2{padding:0 24px;font-size:44px;line-height:1}
+#pause .psub{padding:10px 24px 0;font-size:14px}
+#pause .psub b{color:var(--acc)}
+#pause .mlist{margin-top:22px}
+#pause .mitem{display:flex;align-items:center;width:100%;padding:10px 24px 10px 21px;font-size:21px}
+#pause .mitem kbd{margin:0 0 0 auto;font:600 11px var(--font);color:var(--muted);background:#2b2f35;border:1px solid #454b53;border-bottom-width:2px}
+#pause .ps-leave{margin-top:auto;border-top:1px solid var(--line);padding:6px 0 18px}
+#pause .ps-leave .mitem{margin:0;border-top:0}
+#pause .ps-right{padding-top:clamp(20px,7vh,56px);width:min(540px,calc(100vw - 460px));display:flex;flex-direction:column;gap:14px}
+.ps-card{background:rgba(21,23,26,.96);border:1px solid var(--line);box-shadow:none}
+.ps-card-h{display:flex;align-items:baseline;justify-content:space-between;padding:16px 20px 10px;gap:12px}
+.ps-card-h h3{margin:0;color:var(--muted)}
+.ps-card-h span{font:600 13px var(--title);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);text-align:right}
+.ps-pl{display:flex;align-items:center;gap:12px;padding:10px 20px;border-top:1px solid #22262a}
+.ps-pl.me{background:rgba(242,194,48,.06)}
+.ps-pl i{width:10px;height:28px;flex:none}
+.ps-pl .nm{font:700 18px var(--title);letter-spacing:.02em;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ps-host{background:#b8911c;color:var(--ink)}
+.ps-pl .k{margin-left:auto;font:600 15px var(--title);color:#c9c5bb;white-space:nowrap}
+.ps-pl .png{width:64px;text-align:right;font:600 15px var(--title)}
+.png.ok{color:var(--good)}.png.mid{color:var(--acc)}.png.bad{color:var(--bad)}
+.ps-inv{display:flex;align-items:center;gap:14px;padding:16px 20px}
+.ps-inv b{display:block;font:700 18px var(--title);text-transform:uppercase;letter-spacing:.03em}
+.ps-inv span{font-size:13px;color:var(--muted)}
+.ps-inv button{height:44px;padding:0 20px;font:700 15px var(--title);letter-spacing:.08em;text-transform:uppercase}
+.ps-report{align-self:flex-start;background:none;border:0;padding:0;color:var(--muted);font:600 13px var(--title);letter-spacing:.1em;text-transform:uppercase}
+.ps-report:hover{background:none;color:var(--text)}
+@media (max-width:900px){#pause .ps-right{display:none}#pause .ps-left{margin:0;width:100%}}
+/* spawn protection */
+#protTag{position:absolute;left:24px;bottom:96px;padding:6px 12px;background:rgba(21,23,26,.9);border:1px solid var(--acc2);color:var(--acc2);font:700 13px var(--title);letter-spacing:.14em;text-transform:uppercase;animation:protPulse 1s ease-in-out infinite}
+@keyframes protPulse{50%{opacity:.55}}
+.nameplate.prot .nm:after{content:'PROTECTED';margin-left:6px;font:700 10px var(--title);letter-spacing:.12em;padding:1px 5px;background:rgba(108,193,207,.2);color:var(--acc2);border:1px solid var(--acc2)}
+/* Zombie Survival banner */
+#zsHud{position:absolute;top:18px;left:50%;transform:translateX(-50%);display:flex;align-items:stretch;background:rgba(21,23,26,.9);border:1px solid var(--line);white-space:nowrap}
+#zsHud span{display:flex;align-items:center;padding:6px 16px;font:700 13px var(--title);letter-spacing:.16em;text-transform:uppercase}
+#zsHud .zs-l{color:var(--muted)}
+#zsHud b{padding:4px 20px;background:var(--acc);color:var(--ink);font:800 26px/1.1 var(--title);font-variant-numeric:tabular-nums}
+#zsHud.over b{background:var(--bad);color:#fff}
+#roomInfo{z-index:1}
+/* XP pop-ups */
+#xpFeed{position:absolute;left:calc(50% + 40px);top:calc(50% + 30px);display:flex;flex-direction:column;gap:2px;pointer-events:none}
+.xpp{font:700 15px var(--title);letter-spacing:.06em;text-transform:uppercase;color:var(--acc);text-shadow:0 1px 3px #000;animation:xpp 1.8s ease-out forwards}
+.xpp small{color:#e9e6de;font-weight:600;margin-left:6px}
+@keyframes xpp{0%{opacity:0;transform:translateY(6px)}12%{opacity:1;transform:none}75%{opacity:1}100%{opacity:0;transform:translateY(-10px)}}
+/* main menu progression */
+.lb-lv{display:flex;align-items:center;gap:14px}
+#lvNum{width:48px;height:48px;flex:none;display:flex;align-items:center;justify-content:center;background:var(--acc);color:var(--ink);font:800 26px var(--title)}
+.lb-lvt{display:flex;justify-content:space-between;align-items:baseline}
+#lvTitle{font:700 18px var(--title);text-transform:uppercase;letter-spacing:.04em}
+#xpText{font:600 12px var(--title);letter-spacing:.08em;color:var(--muted)}
+.lb-xp{height:6px;background:#30353b;margin-top:6px}.lb-xp i{display:block;height:100%;background:var(--acc);width:0}
+#dailyReset{font:600 12px var(--title);letter-spacing:.08em;color:var(--muted);text-transform:uppercase}
+.dl{margin-top:10px}
+.dl-t{display:flex;justify-content:space-between;gap:10px;font-size:13px;color:#c9c5bb}
+.dl-t b{font:600 13px var(--title);letter-spacing:.06em;color:var(--muted);white-space:nowrap}
+.dl.done .dl-t{color:var(--good)}.dl.done .dl-t b{color:var(--good)}
+.dl-b{height:4px;background:#30353b;margin-top:5px}.dl-b i{display:block;height:100%;background:var(--acc2)}.dl.done .dl-b i{background:var(--good)}
+.swatch.locked{position:relative;opacity:.35;cursor:not-allowed}
+.swatch.locked:after{content:attr(data-l);position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:800 9px var(--title);color:#fff;text-shadow:0 0 3px #000}
+/* level badge on nameplates / pause list */
+.nameplate .lv,.ps-pl .lv{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:18px;padding:0 4px;margin-right:5px;background:var(--acc);color:var(--ink);font:800 11px var(--title)}
+@media (max-height:760px){.lb-news{display:none}}
+/* Prop Hunt */
+#phBlind{position:absolute;inset:0;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;z-index:0}
+#phBlind b{font:800 44px var(--title);text-transform:uppercase;letter-spacing:.04em;color:var(--bad)}
+#phBlind span{font:600 16px var(--title);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+@media (max-width:1100px) and (min-width:701px){#zsHud,#botHud{top:66px}}
+#hud.ph-prop #slots,#hud.ph-prop #slotName,#hud.ph-prop #toolBox{display:none}
+#zsHud.team-prop .zs-l{color:var(--acc2)}#zsHud.team-hunter .zs-l{color:#f0a597}
+/* friends / accounts */
+input[type=email],input[type=password]{font-family:var(--font);font-size:14px;color:var(--text);background:#0f1113;border:1px solid var(--line2);border-radius:2px;padding:10px 12px;outline:none;min-width:0}
+input[type=email]:focus,input[type=password]:focus{border-color:var(--acc)}
+#friendsMenu{max-height:88vh;overflow-y:auto}
+.fr-me{display:flex;align-items:center;gap:12px;padding:12px 14px;background:#1c1f23;border:1px solid var(--line);margin-top:12px}
+.fr-me b{font:700 22px var(--title);letter-spacing:.02em}
+.fr-code{font:700 15px var(--title);letter-spacing:.16em;color:var(--acc)}
+.fr-add{display:flex;gap:8px;margin-top:14px}.fr-add input{flex:1}
+.fr-row{display:flex;align-items:center;gap:10px;padding:9px 2px;border-bottom:1px solid #24282c}
+.fr-row .dot{width:9px;height:9px;border-radius:50%;background:var(--dim);flex:none}.fr-row .dot.on{background:var(--good)}
+.fr-row .nm{font:700 17px var(--title);letter-spacing:.02em}
+.fr-row .st{font-size:12px;color:var(--muted);margin-left:2px}
+.fr-row .sp{flex:1}
+.fr-msg{min-height:1.3em;font-size:13px;margin-top:8px}
+.fr-form{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.fr-form input{width:100%}
+#inviteBox{position:absolute;left:50%;transform:translateX(-50%);top:72px;z-index:6;display:flex;align-items:center;gap:12px;padding:12px 14px;border-left:3px solid var(--acc);max-width:min(92vw,420px)}
+#inviteBox b{font:700 17px var(--title);letter-spacing:.02em}
+#inviteBox small{display:block;font-size:12px;color:var(--muted)}
+#inName[readonly]{cursor:default}
 </style>
 <!-- import map: installed by the loader at the end of the file -->
 <script id="tw-importmap" type="text/tw-importmap">
@@ -509,7 +712,8 @@ kbd,.glyph{border-radius:2px;background:#2b2f35;border-color:#454b53}
     "@dimforge/rapier3d-compat": "https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.14.0/rapier.es.js",
     "trystero": "https://cdn.jsdelivr.net/npm/trystero@0.25.4/+esm",
     "trystero/supabase": "https://cdn.jsdelivr.net/npm/@trystero-p2p/supabase@0.25.4/+esm",
-    "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4/+esm"
+    "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4/+esm",
+    "@discord/embedded-app-sdk": "https://cdn.jsdelivr.net/npm/@discord/embedded-app-sdk@2.5.0/+esm"
   }
 }
 </script>
@@ -520,42 +724,79 @@ kbd,.glyph{border-radius:2px;background:#2b2f35;border-color:#454b53}
   <!-- Loading -->
   <div id="loading" class="screen"><div class="spinner"></div><div id="loadingText">Loading physics engine…</div></div>
 
-  <!-- Lobby / title -->
+  <!-- Lobby / title (the live map scene renders behind it) -->
   <div id="lobby" class="screen hidden">
-    <div class="card panel">
+    <div class="lb-left">
       <div class="logo"><div class="cube"></div><h1>TUMBLEWRIGHT</h1></div>
-      <div class="tagline">Physics sandbox</div>
-      <div class="lobby-top">
-        <div class="col">
-          <label for="inName">Nickname</label>
-          <input id="inName" type="text" maxlength="18" placeholder="Your name" autocomplete="off">
-          <label style="margin-top:6px">Player color</label>
-          <div class="swatches" id="swatches"></div>
-        </div>
-        <div id="lobbyAvatar"></div>
-      </div>
-      <div class="lobby-actions">
-        <button class="primary" id="btnCreate"><span class="ic"><span class="ms">add_circle</span><span class="em">+</span></span>Create Room</button>
-        <button id="btnSolo"><span class="ic"><span class="ms">person</span><span class="em"></span></span>Play Solo</button>
-      </div>
+      <div class="tagline">Multiplayer physics sandbox</div>
+      <nav class="lb-nav" aria-label="Main">
+        <button class="lb-item act" id="btnQuick"><span class="lb-ic ic"><span class="ms">play_arrow</span><span class="em">▶</span></span>Play<small id="quickSub">Quick join a public room</small></button>
+        <button class="lb-item" id="btnBrowse"><span class="lb-ic ic"><span class="ms">dns</span><span class="em">☰</span></span>Server browser<small id="browseSub"></small></button>
+        <button class="lb-item" id="btnCreate"><span class="lb-ic ic"><span class="ms">add</span><span class="em">+</span></span>Host a room</button>
+        <button class="lb-item" id="btnSolo"><span class="lb-ic ic"><span class="ms">person</span><span class="em">●</span></span>Play solo</button>
+        <button class="lb-item" id="btnFriends"><span class="lb-ic ic"><span class="ms">group</span><span class="em">☺</span></span>Friends<small id="friendsSub">Sign in to add friends</small></button>
+        <button class="lb-item" id="btnLobbyAddons"><span class="lb-ic ic"><span class="ms">deployed_code</span><span class="em">◆</span></span>Workshop<small>Dupes and worlds</small></button>
+      </nav>
       <div class="joinrow">
-        <input id="inCode" type="text" maxlength="7" placeholder="ROOM CODE" autocomplete="off">
-        <button id="btnJoin"><span class="ic"><span class="ms">login</span><span class="em"></span></span>Join</button>
+        <input id="inCode" type="text" maxlength="7" placeholder="ROOM CODE" autocomplete="off" aria-label="Room code">
+        <button id="btnJoin">Join</button>
       </div>
-      <label class="pubrow"><input type="checkbox" id="chkPublic"> List my room in the public room list</label>
+      <label class="pubrow"><input type="checkbox" id="chkPublic"> List rooms I host in the server browser</label>
       <div id="lobbyStatus" class="muted"></div>
-      <div id="roomList"></div>
       <div id="updateBar" class="hidden"></div>
       <div class="row lobby-links">
-        <button class="small" id="btnLobbySettings"><span class="ic"><span class="ms">settings</span><span class="em">⚙</span></span>Settings</button>
-        <button class="small" id="btnLobbyLoad"><span class="ic"><span class="ms">folder_open</span><span class="em">📂</span></span>Load world</button>
-        <button class="small" id="btnLobbyHelp"><span class="ic"><span class="ms">sports_esports</span><span class="em">🎮</span></span>Controls</button>
-        <button class="small" id="btnLobbyAddons"><span class="ic"><span class="ms">extension</span><span class="em">🧩</span></span>Addons</button>
+        <button class="small" id="btnLobbySettings">Settings</button>
+        <button class="small" id="btnLobbyLoad">Load world</button>
+        <button class="small" id="btnLobbyHelp">Controls</button>
       </div>
-      <div id="verLabel"></div>
-      <div id="lobbyTier"></div>
     </div>
-    <div id="lobbyFooter">Peer-to-peer · no account needed · share the room code with friends</div>
+    <div class="lb-right">
+      <div class="lb-card lb-player">
+        <div id="lobbyAvatar"></div>
+        <div class="grow" style="min-width:0">
+          <input id="inName" type="text" maxlength="18" placeholder="Your name" autocomplete="off" aria-label="Nickname">
+          <div class="lb-hint">Click your name to change it</div>
+          <div class="swatches" id="swatches"></div>
+        </div>
+      </div>
+      <div class="lb-card lb-prog">
+        <div class="lb-lv"><b id="lvNum">1</b><div class="grow"><div class="lb-lvt"><span id="lvTitle">Rookie</span><span id="xpText"></span></div><div class="lb-xp"><i id="xpFill"></i></div></div></div>
+        <div class="lb-news-h" style="margin-top:16px"><h3>Daily challenges</h3><span id="dailyReset">New ones every day</span></div>
+        <div id="dailyList"></div>
+      </div>
+      <div class="lb-card lb-news" id="lobbyNews">
+        <div class="lb-news-h"><h3>What's new</h3><span id="newsVer"></span></div>
+        <p id="newsText"></p>
+      </div>
+    </div>
+    <div class="lb-foot"><span id="netDot"><i></i>Matchmaking</span><span id="lobbyTier"></span><span id="verLabel"></span></div>
+    <div id="lobbyFooter"></div>
+  </div>
+
+  <!-- Server browser -->
+  <div id="servers" class="screen hidden">
+    <div class="sv-head">
+      <button class="sv-back" id="svBack" aria-label="Back"><span class="ic"><span class="ms">arrow_back</span><span class="em">‹</span></span></button>
+      <h1>Server browser</h1><span class="sv-count" id="svCount"></span>
+      <div class="grow"></div>
+      <button id="svRefresh">Refresh</button>
+      <button class="primary" id="svHost">Host a room</button>
+    </div>
+    <div class="sv-filters">
+      <input id="svSearch" type="text" placeholder="Search rooms or players" autocomplete="off" aria-label="Search rooms">
+      <div id="svModes" class="row" style="gap:6px"></div>
+      <div class="grow"></div>
+      <label class="pubrow"><input type="checkbox" id="svHideFull"> Hide full rooms</label>
+    </div>
+    <div class="sv-table">
+      <div class="sv-row sv-th"><span>Room</span><span>Map</span><span>Mode</span><span>Players</span><span>Version</span><span></span></div>
+      <div id="roomList"></div>
+    </div>
+    <div class="sv-foot">
+      <span class="muted">Got a code from a friend?</span>
+      <input id="svCode" type="text" maxlength="7" placeholder="ROOM CODE" autocomplete="off" aria-label="Room code">
+      <button id="svJoin">Join by code</button>
+    </div>
   </div>
 
   <!-- HUD -->
@@ -564,16 +805,16 @@ kbd,.glyph{border-radius:2px;background:#2b2f35;border-color:#454b53}
     <div id="speedo" class="panel hidden"><b>0</b><small>MPH</small></div>
     <div id="scope"><div class="sc-ring"></div><div class="sc-h"></div><div class="sc-v"></div><div class="sc-dot"></div></div>
     <div id="crosshair"></div><div id="aimLabel"></div>
-    <div id="hitmarker"></div>
+    <div id="hitmarker"></div><div id="dmgDir"></div>
     <div id="dmgNums"></div>
-    <div id="modeTag" class="panel hidden"></div>
-    <div id="botHud" class="panel hidden"></div>
+    <div id="modeTag" class="panel hidden"></div><div id="protTag" class="panel hidden">Spawn protection</div>
+    <div id="botHud" class="panel hidden"></div><div id="phBlind" class="hidden"><b>You are a hunter</b><span>The props are hiding. Get ready…</span></div><div id="zsHud" class="hidden"><span class="zs-l" id="zsL">Zombie survival</span><b id="zsBig"></b><span id="zsR"></span></div><div id="xpFeed"></div>
     <div id="notify"></div>
     <div id="killfeed"></div>
     <div id="roomInfo" class="panel pe"><span class="ri"><span class="ic"><span class="ms">tag</span><span class="em">#</span></span><span id="roomCode">—</span></span><span class="ri"><span class="ic"><span class="ms">group</span><span class="em">👥</span></span><span id="playerCount">1</span></span><span class="ri"><i id="pingDot"></i><b id="pingVal">0</b>&nbsp;ms</span><span id="hostTag" class="badge" style="background:#b8911c">HOST</span><button class="small" id="btnCopyCode" title="Copy invite link"><span class="ic"><span class="ms">link</span><span class="em">🔗</span></span>Invite</button></div>
     <div id="netStats" class="panel hidden"></div>
     <div id="fpsBox" class="panel hidden"></div>
-    <div id="vitals"><div id="hpBox" class="panel"><div class="row"><span id="hpText">100</span><span class="muted" style="font-size:11px;margin-top:8px">HEALTH</span></div><div id="hpBar"><div id="hpFill"></div></div></div></div>
+    <div id="vitals"><div id="hpBox" class="panel"><div class="hp-top"><span class="hp-ic"></span><span id="hpText">100</span><span class="hp-lb">HEALTH</span></div><div id="hpSegs"></div></div></div>
     <div id="slots"></div><div id="slotName"></div>
     <div id="toolBox" class="panel"><div id="toolHead"><div id="toolIcon"></div><div class="grow"><div id="toolName">Physics Gun</div><div id="toolMode"></div></div></div><div id="toolDesc"></div><div id="toolModes"></div><div id="hints"></div></div>
     <div id="seatHint" class="panel hidden"></div>
@@ -598,7 +839,7 @@ kbd,.glyph{border-radius:2px;background:#2b2f35;border-color:#454b53}
   <div id="scoreboard" class="panel center hidden"></div>
 
   <!-- Pause -->
-  <div id="pause" class="panel menu center hidden"></div>
+  <div id="pause" class="screen hidden"></div>
   <!-- Settings -->
   <div id="settings" class="panel menu center hidden"></div>
   <!-- Admin -->
@@ -613,6 +854,8 @@ kbd,.glyph{border-radius:2px;background:#2b2f35;border-color:#454b53}
   <div id="addonsMenu" class="panel menu center hidden" style="width:min(96vw,860px)"></div>
   <div id="inventoryMenu" class="panel menu center hidden"></div>
   <div id="ownerMenu" class="panel menu center hidden" style="width:min(94vw,460px)"></div>
+  <div id="friendsMenu" class="panel menu center hidden" style="width:min(94vw,520px)"></div>
+  <div id="inviteBox" class="panel pe hidden"></div>
   <!-- Host left -->
   <div id="hostLeft" class="screen hidden" style="position:absolute;inset:0;background:rgba(5,6,10,.7)"><div class="panel menu center"></div></div>
   <input type="file" id="fileIn" accept=".json,application/json" class="hidden">
@@ -628,13 +871,13 @@ kbd,.glyph{border-radius:2px;background:#2b2f35;border-color:#454b53}
  "pub": {
   "kty": "EC",
   "crv": "P-256",
-  "x": "hwy0q_IwfBSsfDxMVzcesIHpxJcOjzPV9u6iy_1MU5A",
-  "y": "dchDJlIZNV2VnEmWXe2vvtvSkQUj8dmXluM38mgbY-8"
+  "x": "8UxHaY4UfsJwyc0CVMxmJjHK1vFGh5uwAddfnLVxAeU",
+  "y": "XZawCjlqNzbS8trWOpU4A0xf7tXaXI5O35UY4SjdqJY"
  },
- "salt": "aUSuCZtxXIChltgcZ6lelw==",
+ "salt": "V14NQfpsKRtvTRldasDXgg==",
  "iter": 600000,
- "iv": "Vo8TugUQHZlDSOo4",
- "ct": "BGNdu81mGo4FzIxosc5Q5S6QRRHCgMYsnmnBC/ckmNIcuw93z6MmYEwP/EIy1C/wNdZ7R2FxH391AR4yrVfzLzKtI7sihpfNPmxrqctsYbOo59LiMsY0+cWgYnkseZdfe8rGIUKflx2r3dKhR8v1DsdhVlf8R6X6AGDRUHz6lROKmxVIyxHWaMf3+DijsgDMwQUsxzLVYrh2YBDvyBX+2YXRPKvtSvB+/l0TsxT04zO81iwQ3fKfgNU8ZrXbOJKm"
+ "iv": "j4O5sWN5/DxBzopC",
+ "ct": "IaqHYJqcu8AWcq2qZcIeQp1sYueas80gjwE3QZk7oCjV2DV8elJRd8++Zq9jhRNhOR+Hy+2xZNATEjWSgUHkg2gWVuV2O2T4K73M8cBrvhV3jIxZP6JvM7OUnH1F41/JaK7l/QIaYCDmlr4Seg7MimtKI6rEFgJvOxK7jcdT0vuBIEI++5JKoLEwZOIQPPUnZA24gfF3N0hPm8+ubywxCUfmuC3kehHkCWQUgDC2jzqr3+kmUMN5eu9m0D2wXBMi"
 }</script>
 <!-- game module: started by the loader at the end of the file -->
 <script id="tw-main" type="text/tw-module">
@@ -661,12 +904,17 @@ const GAME = { name: 'Tumblewright', version: (document.querySelector('meta[name
 GAME.site = ((document.querySelector('meta[name="tw-update-url"]') || {}).content || 'https://tumblewright.vercel.app/').replace(/\/?$/, '/');
 // matchmaking on Supabase Realtime (public project URL + publishable key; null = public Nostr relays only)
 GAME.supa = { url: 'https://imonuvmxzxdtglxyvdmj.supabase.co', key: 'sb_publishable_LpsLJ5i8_X43A8SjcVhgkw_3gZXVEob' };   // Supabase project 'tumblewright'
+// running as a Discord Activity: Discord loads the site at https://<client id>.discordsays.com/?instance_id=…&frame_id=…
+GAME.discord = (() => {
+  const q = new URLSearchParams(location.search);
+  return q.get('frame_id') && q.get('instance_id') && /\.discordsays\.com$/.test(location.hostname) ? { clientId: location.hostname.split('.')[0], instance: q.get('instance_id'), platform: q.get('platform') || 'desktop' } : null;
+})();
 const newerVer = (x, y) => { const a = String(x).split('.').map(Number), b = String(y).split('.').map(Number); for (let i = 0; i < 3; i++) if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) > (b[i] || 0); return false; };
 const CFG = {
   dt: 1 / 60, snapRate: 20, inputRate: 30, interpDelay: 0.11, keyframeEvery: 2,
   worldHalf: 320, killY: -60, maxBodies: 900, propLimit: 250, maxPlayers: 10,
   walk: 5.2, sprint: 8.8, crouchMul: 0.5, jump: 5.4, gravity: 9.81 * 1.5,
-  eye: 1.62, capR: 0.34, capHalf: 0.56, respawn: 3.0,
+  eye: 1.62, capR: 0.34, capHalf: 0.56, respawn: 3.0, spawnProt: 3.0,
 };
 const V3 = THREE.Vector3, QT = THREE.Quaternion;
 const _v1 = new V3(), _v2 = new V3(), _v3 = new V3(), _v4 = new V3(), _q1 = new QT(), _q2 = new QT(), _q3 = new QT();
@@ -734,6 +982,7 @@ const Settings = Object.assign({
   targetFps: isChromebook ? 30 : 60, fov: 80, sens: 1.0, invertY: false, deadzone: 0.15, padSens: 1.0, aimAssist: 2, flySpeed: 1, volume: 0.6, gore: 'full', bloodColor: 'red', spawnPreview: true, dmgNums: true, publicRoom: true,
   showNet: false, showFps: false, showHints: true, name: '', color: PLAYER_COLORS[(Math.random() * PLAYER_COLORS.length) | 0],
   turnUrl: '', turnUser: '', turnPass: '', binds: {},
+  confirmClose: true, aimbot: 0, aimbotFov: 25, aimbotBone: 'head', aimbotSmooth: 0,   // owner-only (Game.ownerAimbot): 0 off / 1 while aiming or shooting / 2 always
 }, AUDIO_DEFAULTS, store.get('settings', {}));
 Settings.binds = Object.assign({}, DEFAULT_BINDS, Settings.binds || {});
 const saveSettings = () => store.set('settings', Settings);
@@ -1959,7 +2208,7 @@ const Players = {
     let p = this.map.get(o.id);
     if (!p) { p = new Player(o); this.map.set(o.id, p); this.makeBody(p); this.makeAvatar(p); this.makePlate(p); }
     else { p.name = o.name ?? p.name; p.color = o.color ?? p.color; p.tier = o.tier ?? p.tier; if (o.idx != null) p.idx = o.idx; if (o.joinOrder != null) p.joinOrder = o.joinOrder; this.refreshLook(p); }
-    if (o.canEdit != null) p.canEdit = o.canEdit; if (o.muted != null) p.muted = o.muted;
+    if (o.canEdit != null) p.canEdit = o.canEdit; if (o.muted != null) p.muted = o.muted; if (o.lvl != null) p.lvl = o.lvl; if ('team' in o) p.team = o.team; if ('disg' in o) p.disg = o.disg;
     if (o.kills != null) p.kills = o.kills; if (o.deaths != null) p.deaths = o.deaths;
     if (o.isLocal) { p.isLocal = true; this.local = p; }
     if (p.avatar) p.avatar.visible = !p.isLocal;
@@ -1969,6 +2218,7 @@ const Players = {
     const p = this.map.get(id); if (!p) return;
     if (p.body) { Phys.colMap.delete(p.col.handle); Phys.world.removeRigidBody(p.body); Phys.qDirty = true; }
     if (p.avatar) R.scene.remove(p.avatar);
+    if (p.disgMesh) R.scene.remove(p.disgMesh);
     if (p.plate) p.plate.remove();
     this.map.delete(id);
     if (this.local === p) this.local = null;
@@ -2015,12 +2265,27 @@ const Players = {
   },
   updatePlate(p, full) {
     if (!p.plate) return;
-    if (full || p._plateKey !== p.name + p.tier + p.color + (Net.hostId === p.id) + p.muted) {
-      p._plateKey = p.name + p.tier + p.color + (Net.hostId === p.id) + p.muted;
-      p.plate.querySelector('.nm').innerHTML = `${Net.hostId === p.id ? '👑' : ''}<span style="color:${esc(p.color)}">${esc(p.name)}</span>${tierBadge(p.tier)}${p.muted ? '🔇' : ''}`;
+    if (full || p._plateKey !== p.name + p.tier + p.color + (Net.hostId === p.id) + p.muted + p.lvl) {
+      p._plateKey = p.name + p.tier + p.color + (Net.hostId === p.id) + p.muted + p.lvl;
+      p.plate.querySelector('.nm').innerHTML = `<span class="lv">${p.lvl || 1}</span>${Net.hostId === p.id ? '👑' : ''}<span style="color:${esc(p.color)}">${esc(p.name)}</span>${tierBadge(p.tier)}${p.muted ? '🔇' : ''}`;
     }
     const hb = p.plate.querySelector('.hb i'); hb.style.width = p.hp + '%'; hb.style.background = p.hp > 50 ? '#4ade80' : p.hp > 25 ? '#fbbf24' : '#ef4444';
   },
+  // Prop Hunt disguise: swap the body for the object's model (built from the same data as the real prop)
+  disguise(p) {
+    const D = !p.dead && Rules.mode === 'prophunt' ? p.disg : null, key = D ? JSON.stringify(D.d) : '';
+    if (p._dk !== key) {
+      p._dk = key;
+      if (p.disgMesh) { R.scene.remove(p.disgMesh); p.disgMesh = null; }
+      if (D) { try { p.disgMesh = buildVisual(D.d); p.disgMesh.traverse(o => { if (o.isMesh) o.castShadow = o.receiveShadow = true; }); R.scene.add(p.disgMesh); } catch (e) { p.disgMesh = null; } }
+    }
+    if (!p.disgMesh) return false;
+    p.avatar.visible = false;
+    p.disgMesh.position.set(p.renderPos.x, p.renderPos.y - D.b, p.renderPos.z); p.disgMesh.rotation.set(0, p.renderYaw, 0);
+    return true;
+  },
+  // spawn protection: the host knows the deadline, everyone else gets a snapshot flag
+  isProt(p) { return Net.isHost ? !!(p.protUntil && now() < p.protUntil) : !!p.prot; },
   eyePos(p, out) { return out.set(p.renderPos.x, p.renderPos.y + (p.crouch ? CFG.eye - 0.5 : CFG.eye), p.renderPos.z); },
   aimDir(p, out) { const cp = Math.cos(p.pitch); return out.set(-Math.sin(p.yaw) * cp, Math.sin(p.pitch), -Math.cos(p.yaw) * cp); },
   // ---- local movement (client-side prediction; host validates) ------------
@@ -2067,6 +2332,7 @@ const Players = {
   },
   updateAvatar(p, dt) {
     const a = p.avatar; if (!a) return;
+    if (this.disguise(p)) return;
     const se = p.seat ? World.ents.get(p.seat) : null, seated = !!(se && se.mesh);
     a.visible = (!p.isLocal || seated) && !p.dead;   // your own body shows in the third-person vehicle camera
     if (!a.visible) { if (p.plate && !p.isLocal) p.plate.style.display = 'none'; return; }
@@ -2105,7 +2371,7 @@ const Players = {
     const cam = R.camera, W = innerWidth, H = innerHeight;
     for (const p of this.map.values()) {
       if (!p.plate) continue;
-      if (p.isLocal || p.dead) { p.plate.style.display = 'none'; continue; }
+      if (p.isLocal || p.dead || (Rules.mode === 'prophunt' && p.team === 'prop' && (this.local || {}).team !== 'prop')) { p.plate.style.display = 'none'; continue; }
       _v1.copy(p.renderPos); _v1.y += 2.05;
       const dist = _v1.distanceTo(cam.position);
       _v1.project(cam);
@@ -2114,6 +2380,7 @@ const Players = {
       const sc = clamp(1.2 - dist / 120, 0.6, 1);
       p.plate.style.transform = `translate(${(_v1.x * 0.5 + 0.5) * W}px,${(-_v1.y * 0.5 + 0.5) * H}px) translate(-50%,-100%) scale(${sc})`;
       p.plate.style.left = '0'; p.plate.style.top = '0';
+      const pr = this.isProt(p); if (p._pr !== pr) { p._pr = pr; p.plate.classList.toggle('prot', pr); }
       this.updatePlate(p);
     }
   },
@@ -2639,7 +2906,7 @@ const Tools = {
         if (h && typeof h.id === 'string' && Rules.combat) UI.hitmarker();
       }
     }
-    Net.toHost({ t: 'fire', w: W.id, o: a3(o), d: a3(d) });
+    Net.toHost({ t: 'fire', w: W.id, o: a3(o), d: a3(d), i: r4(Net.interp || CFG.interpDelay) });
   },
   // beams for every player grabbing something (local one is predicted)
   updateBeams() {
@@ -2684,6 +2951,7 @@ const Vehicles = {
   },
   drop(id) { const c = this.ctl.get(id); if (!c) return; try { Phys.world.removeVehicleController(c.vc); } catch (err) { } this.ctl.delete(id); },
   step(dt) {
+    ZS.step(dt); PH.step(dt);
     const send = ++this.n % 4 === 0 && Net.online, out = [];
     for (const id of World.vehicles) {
       const e = World.ents.get(id); if (!e) continue;
@@ -2867,6 +3135,13 @@ function guChan(K, t, f) {
   return (2 * s3 - 3 * s2 + 1) * f(k0) + (s3 - 2 * s2 + s) * h * tan(i) + (-2 * s3 + 3 * s2) * f(k1) + (s3 - s2) * h * tan(i + 1);
 }
 const smooth01 = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
+// ray (o + d*t, d normalised) vs a vertical capsule from (x, y0, z) to (x, y1, z) of radius r: nearest t >= 0, or -1
+function rayCapsule(o, d, x, y0, z, y1, r) {   // the capsule is a cylinder plus two end spheres: take the nearest entry
+  let best = -1; const ox = o.x - x, oz = o.z - z, a = d.x * d.x + d.z * d.z;
+  if (a > 1e-9) { const b = ox * d.x + oz * d.z, c = ox * ox + oz * oz - r * r, hh = b * b - a * c; if (hh >= 0) { const t = (-b - Math.sqrt(hh)) / a, yy = o.y + d.y * t; if (t >= 0 && yy >= y0 && yy <= y1) best = t; } }
+  for (const cy of [y0, y1]) { const oy = o.y - cy, b = ox * d.x + oy * d.y + oz * d.z, c = ox * ox + oy * oy + oz * oz - r * r, hh = b * b - c; if (hh >= 0) { const t = -b - Math.sqrt(hh); if (t >= 0 && (best < 0 || t < best)) best = t; } }
+  return best;
+}
 const Rules = { combat: false, editPerm: 'all', propLimit: CFG.propLimit, allowNoclip: true, aimAssist: true, dismember: true, env: 'plains', envGone: [], mode: 'sandbox', bots: 3, carMph: 0, npcHp: 100 };   // npcHp: NPC health (100 = normal); damage to NPCs is scaled by 100 / npcHp
 const npcDmgK = () => 100 / clamp(Rules.npcHp || 100, 10, 2000);   // carMph 0 = each vehicle's own top speed
 const MPH = 0.44704;   // m/s per mph
@@ -2909,6 +3184,8 @@ const Auth = {
       case 'ownerHello': return Owner.hostHello(p);
       case 'ownerProof': return Owner.hostProof(p, m);
       case 'respawnme': if (!p.dead) this.respawn(p); return;
+      case 'lvl': p.lvl = clamp(m.v | 0, 1, 999); Net.sendPlayers(); return;
+      case 'disg': return PH.disguise(p, m.e);
       case 'cleanme': { const ids = [...World.ents.values()].filter(e => e.d.o === p.id && e.d.k !== 'map').map(e => e.id); if (ids.length) this.removeEnts(ids); Net.notify(p.id, ids.length ? 'Your props were cleaned up' : 'You have no props to clean up'); return; }
       case 'flip': return this.flipVehicle(p);
       case 'del': return this.deleteGun(p, m);
@@ -3452,24 +3729,43 @@ const Auth = {
   // ---- combat ---------------------------------------------------------------
   fire(p, m) {
     const W = W_BY_ID[m.w]; if (!W || !(W.range || W.proj) || p.dead || p.seat) return;
-    const t = now(); if (p.nextFire && t < p.nextFire - 0.05) return; p.nextFire = t + W.rate;
+    if (PH.live() && (p.team === 'prop' || PH.st.phase === 'hide')) return;   // props don't shoot; nobody shoots while they hide
+    // rate limit as a small token bucket: shots that arrive bunched up by the network still count, the average can't beat W.rate
+    const t = now(); p.fireTok = Math.min(2, (p.fireTok ?? 2) + (t - (p.fireT ?? t)) / W.rate); p.fireT = t;
+    if (p.fireTok < 0.9) return; p.fireTok -= 1;
     const o = new V3().fromArray(m.o), d = new V3().fromArray(m.d).normalize();
-    if (!isFinite(o.x + o.y + o.z + d.x + d.y + d.z) || o.distanceTo(p.pos) > 4) return;
+    if (!isFinite(o.x + o.y + o.z + d.x + d.y + d.z) || o.distanceTo(p.pos) > 7) return;   // the shooter's own view runs ahead of our copy of them
+    p.protUntil = 0;   // shooting ends spawn protection
+    // lag compensation: judge the shot against where targets were on the shooter's screen (their ping + interpolation delay)
+    const rw = p.isLocal ? 0 : clamp((p.ping || 0) / 1000 + clamp(+m.i || CFG.interpDelay, 0.05, 0.3), 0, 0.4);
     if (W.proj === 'rocket') return this.launchRocket(p, o, d);
     if (W.proj === 'prop') return this.launchProp(p, o, d);
     const n = W.pellets || 1, ends = []; let last = null;
-    for (let i = 0; i < n; i++) { const r = this.hitscan(p, W, o, n > 1 ? jitter(d.clone(), W.spread) : d); ends.push(a3(r.end)); if (r.h) last = r; }
+    for (let i = 0; i < n; i++) { const r = this.hitscan(p, W, o, n > 1 ? jitter(d.clone(), W.spread) : d, rw); ends.push(a3(r.end)); if (r.h) last = r; }
     if (W.id !== 'crowbar') Net.bcastExcept(p.id, { t: 'fx', k: 'shot', o: a3(o.clone().addScaledVector(d, 0.6)), e: n > 1 ? ends : ends[0], w: W.id, n: n === 1 && last ? a3(last.h.normal) : null });
     else if (last) Net.bcastExcept(p.id, { t: 'fx', k: 'spark', e: a3(last.end), n: a3(last.h.normal) });
     this.scare(last ? last.end : o.clone().addScaledVector(d, 30), 9); this.scare(o, 6);
   },
   // one hitscan ray: knock the prop, hurt the NPC / player, set off explosives, break breakables
-  hitscan(p, W, o, d) {
-    const h = Phys.cast(o, d, W.range, p.body);
+  hitscan(p, W, o, d, rw = 0) {
+    // the world (props, map, NPCs) as it is now; players as they were rw seconds ago (see histPos)
+    const wh = Phys.cast(o, d, W.range, p.body, c => { const id = Phys.colMap.get(c.handle); return !(typeof id === 'string' && id.startsWith('p:')); });
+    let h = wh, best = wh ? wh.dist : W.range;
+    for (const v of Players.map.values()) {
+      if (v === p || v.dead || v.seat || v.noclip) continue;
+      const vp = this.histPos(v, now() - rw), hs = v.disg ? PH.hitShape(v) : null;
+      const y0 = hs ? hs.y0 + vp.y - v.pos.y : vp.y + CFG.capR, y1 = hs ? hs.y1 + vp.y - v.pos.y : vp.y + CFG.capR + CFG.capHalf * 2;
+      const tt = rayCapsule(o, d, vp.x, y0, vp.z, y1, hs ? hs.r : CFG.capR);
+      if (tt >= 0 && tt < best) {
+        best = tt; const pt = o.clone().addScaledVector(d, tt);
+        h = { id: 'p:' + v.id, point: pt, normal: new V3(pt.x - vp.x, 0, pt.z - vp.z).normalize(), dist: tt, rewound: vp };
+      }
+    }
     const end = h ? h.point : o.clone().addScaledVector(d, W.range);
     if (!h) return { h, end };
     if (typeof h.id === 'number' && h.id > 0) {
       const e = World.ents.get(h.id); if (e && e.d.k === 'part') this.wakePart(e);
+      if (PH.live() && p.team === 'hunter' && e && e.d.k !== 'map') this.damagePlayer(p, 4, null, 'Wrong prop');   // guessing costs health
       if (e && e.body && e.body.isDynamic()) {
         const imp = Math.min(W.imp, e.body.mass() * W.dv);
         e.body.applyImpulseAtPoint({ x: d.x * imp, y: d.y * imp, z: d.z * imp }, { x: h.point.x, y: h.point.y, z: h.point.z }, true);
@@ -3480,7 +3776,7 @@ const Auth = {
       if (e) this.propHit(e, p.id, W.dmg);
     } else if (typeof h.id === 'string') {
       const victim = Players.map.get(h.id.slice(2));
-      if (victim) { const head = h.point.y > victim.pos.y + 1.42; this.damagePlayer(victim, W.dmg * (head ? 1.8 : 1), p, W.name, d.clone().multiplyScalar(W.push || 1.2), { p: h.point, head }); if (Rules.combat) Net.bcastAll({ t: 'fx', k: 'gore', p: a3(h.point), d: a3(d), s: 0.6, w: 'bullet' }); }
+      if (victim) { const head = h.point.y > (h.rewound || victim.pos).y + 1.42; this.damagePlayer(victim, W.dmg * (head ? 1.8 : 1), p, W.name, d.clone().multiplyScalar(W.push || 1.2), { p: h.point, head }); if (Rules.combat) Net.bcastAll({ t: 'fx', k: 'gore', p: a3(h.point), d: a3(d), s: 0.6, w: 'bullet' }); }
     }
     return { h, end };
   },
@@ -3529,6 +3825,7 @@ const Auth = {
     this.corpses.push({ ents: r2.ents, t: ['brick', 'wood', 'concrete'].includes(kind) ? 25 : 12 });   // debris cleans itself up
   },
   launchRocket(p, o, d) {
+    p.protUntil = 0;
     const pos = o.clone().addScaledVector(d, 0.9), q = new QT().setFromUnitVectors(new V3(0, 0, -1), d);
     const r = this.spawnPrefab(single({ k: 'rocket', sh: { t: 'rocket' }, m: 'metal', c: '#55653f', vis: 'rocket', gs: 0, den: 2, q: a4(q) }), pos, 0, p.id, { noLift: true, vel: a3(d.clone().multiplyScalar(34)) });
     if (r.ents[0]) this.rockets.push({ id: r.ents[0], owner: p.id, t: 6 });
@@ -3560,6 +3857,8 @@ const Auth = {
     }
   },
   throwNade(p, m) {
+    p.protUntil = 0;
+    if (PH.live() && (p.team === 'prop' || PH.st.phase === 'hide')) return;
     const t = now(); if (p.dead || p.seat || (p.nextNade && t < p.nextNade)) return; p.nextNade = t + 2.3;
     const o = new V3().fromArray(m.o), d = new V3().fromArray(m.d).normalize(); if (o.distanceTo(p.pos) > 4) return;
     const pos = o.addScaledVector(d, 0.7), v = d.multiplyScalar(15).add(p.vel.clone().multiplyScalar(0.5)); v.y += 2;
@@ -3619,19 +3918,22 @@ const Auth = {
     Net.sendTo(pid, { t: 'dn', p: [r4(p.x), r4(p.y), r4(p.z)], v: Math.max(1, Math.round(dmg)), g: tgt, h: head ? 1 : 0, k: kill ? 1 : 0 });
   },
   damagePlayer(v, dmg, att, wname, push, at) {
-    if (!Rules.combat || v.dead || dmg <= 0) return;
+    if (!Rules.combat || v.dead || dmg <= 0 || (v.protUntil && now() < v.protUntil)) return;
     const hp0 = v.hp;
     v.hp = Math.max(0, Math.round(v.hp - dmg));
     if (att && att !== v) this.dmgNum(att.id, at ? at.p : { x: v.pos.x, y: v.pos.y + 1.5, z: v.pos.z }, hp0 - v.hp || dmg, 'p' + v.id, at && at.head, v.hp <= 0);
     if (push && !v.seat) Net.sendTo(v.id, { t: 'kb', v: a3(push) });
-    Net.sendTo(v.id, { t: 'hurt', hp: v.hp });
+    const src = att && att !== v ? att.pos : push ? new V3(v.pos.x - push.x, v.pos.y, v.pos.z - push.z) : null;
+    Net.sendTo(v.id, src ? { t: 'hurt', hp: v.hp, f: a3(src) } : { t: 'hurt', hp: v.hp });
     if (att && att !== v) Net.sendTo(att.id, { t: 'hm' });
     if (v.hp <= 0) this.kill(v, att, wname);
   },
   kill(v, att, wname) {
     v.dead = true; v.deadT = CFG.respawn; v.deaths++; v.grab = null;
     if (v.seat) this.exitSeat(v);
-    if (att && att !== v) att.kills++;
+    if (att && att !== v) { att.kills++; Prog.award(att.id, 'pkill'); }
+    if (Rules.mode === 'zombies' && ZS.st && ZS.st.phase === 'wave') v.deadT = 1e9;   // down until the wave is cleared
+    if (PH.live()) { v.deadT = 1e9; v.disg = null; Net.sendPlayers(); }   // out until the next round
     // leave a ragdoll corpse in the player's colors
     const pf = npcPrefab('ragdoll');
     pf.groups[0].n = v.name;
@@ -3643,10 +3945,19 @@ const Auth = {
     Net.bcastAll(msg);
     Net.sendPlayers();
   },
+  // where player v was at time t (host clock), interpolated from step history; current position if we have nothing older
+  histPos(v, t) {
+    const hs = v.hist; if (!hs || !hs.length || t >= hs[hs.length - 1].t) return v.pos.clone();
+    if (t <= hs[0].t) return new V3(hs[0].x, hs[0].y, hs[0].z);
+    let i = hs.length - 1; while (i > 0 && hs[i - 1].t > t) i--;
+    const a = hs[i - 1], b = hs[i], k = (t - a.t) / Math.max(1e-6, b.t - a.t);
+    return new V3(a.x + (b.x - a.x) * k, a.y + (b.y - a.y) * k, a.z + (b.z - a.z) * k);
+  },
   respawn(p) {
     const sp = this.pickSpawn();
-    p.dead = false; p.hp = 100; p.pos.copy(sp); p.tpGrace = now() + 0.6; p.vel.set(0, 0, 0);
-    Net.sendTo(p.id, { t: 'tp', p: a3(sp), respawn: 1 });
+    p.dead = false; p.hp = 100; p.pos.copy(sp); p.tpGrace = now() + 0.6; p.vel.set(0, 0, 0); p.hist = null;
+    p.protUntil = now() + CFG.spawnProt;   // can't be hurt for a few seconds (ends early if they shoot)
+    Net.sendTo(p.id, { t: 'tp', p: a3(sp), respawn: 1, prot: CFG.spawnProt });
   },
   pickSpawn() {
     const sps = [...World.ents.values()].filter(e => e.d.sh.t === 'spawn');
@@ -3906,7 +4217,7 @@ const Auth = {
             if (T.d < 1.25) { speed = 0; g.atk = (g.atk || 0) - dt; if (g.atk <= 0) { g.atk = 1.3; g.swing = 0.45; if (Math.random() < 0.5) this.npcSay(g, 'attack'); const dx = T.pos.x - pt.x, dz = T.pos.z - pt.z, L = Math.hypot(dx, dz) || 1; this.hurtPart(T.g, 1, 18, { kind: 'blunt', dir: new V3(dx / L, 0.2, dz / L), stun: 1.2, by: 'g:' + g.id, bite: 1 }); } }
             else speed = T.d < 16 ? 2.7 : 1.3;   // lunges at nearby prey, faster than a fleeing civilian
             if ((g.groan = (g.groan || 3) - dt) <= 0) { g.groan = 4 + Math.random() * 6; Net.bcastAll({ t: 'fx', k: 'sfx', n: 'z_groan', p: [r4(pt.x), r4(pt.y), r4(pt.z)] }); }
-          } else if (nearest && nd < 35 && (!T || T.p)) {
+          } else if (nearest && (nd < 35 || g.zs) && (!T || T.p)) {   // wave zombies hunt from any distance
             yaw = Math.atan2(-(nearest.pos.x - pt.x), -(nearest.pos.z - pt.z)); lookAt = nearest;
             if (nd < 1.3) { attack = true; speed = 0; g.atk = (g.atk || 0) - dt; if (g.atk <= 0) { g.atk = 1.3; g.swing = 0.45; if (Math.random() < 0.5) this.npcSay(g, 'attack'); const dx = nearest.pos.x - pt.x, dz = nearest.pos.z - pt.z, L = Math.hypot(dx, dz) || 1; this.damagePlayer(nearest, 12, null, 'Zombie', new V3(dx / L * 3, 1.5, dz / L * 3)); } }
             else speed = nd < 12 ? 2.0 : 1.2;
@@ -3998,7 +4309,11 @@ const Auth = {
       if (n.t <= 0) { const e = World.ents.get(n.id); this.nades.splice(i, 1); if (e && e.body) { const t = e.body.translation(); this.removeEnts([n.id]); this.explode(new V3(t.x, t.y, t.z), n.owner); } }
     }
     for (let i = this.corpses.length - 1; i >= 0; i--) { const c = this.corpses[i]; c.t -= dt; if (c.t <= 0) { this.corpses.splice(i, 1); const ids = c.ents.filter(id => World.ents.has(id)); if (ids.length) this.removeEnts(ids); } }
-    for (const p of Players.map.values()) if (p.dead) { p.deadT -= dt; if (p.deadT <= 0) this.respawn(p); }
+    for (const p of Players.map.values()) {
+      if (p.dead) { p.deadT -= dt; if (p.deadT <= 0) this.respawn(p); }
+      const hs = p.hist || (p.hist = []), t = now();   // ~0.6 s of positions for lag-compensated hits
+      hs.push({ t, x: p.pos.x, y: p.pos.y, z: p.pos.z }); while (hs.length > 2 && hs[0].t < t - 0.6) hs.shift();
+    }
   },
   // ---- ragdoll safety net ----------------------------------------------------------
   // Clamp ragdoll part speeds, and if the joints ever get torn apart anyway (huge impacts,
@@ -4037,6 +4352,7 @@ const Auth = {
   // hit: { kind: bullet|blunt|blast|crush, point, normal, dir, stun, overall (default true), quiet }
   hurtPart(g, i, dmg, hit) {
     if (i < 0 || !(dmg > 0)) return;
+    if (hit && hit.by) g._lastBy = hit.by;   // who gets the kill (XP, Zombie Survival)
     const raw = dmg; dmg *= npcDmgK();   // host's NPC health setting: tougher NPCs take proportionally less from every hit (limbs too)
     if (!g.lh) g.lh = PART_HP.slice();
     if (hit.kind === 'bullet' || hit.kind === 'blunt') g._blastT = now();   // the hit's own shove isn't an impact injury
@@ -4249,7 +4565,7 @@ const Net = {
     this._iceP = (async () => {
       try {
         const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 4000);
-        const r = await fetch(GAME.site + 'api/turn', { signal: ctl.signal, cache: 'no-store' }); clearTimeout(to);
+        const r = await fetch(GAME.discord ? '/api/turn' : GAME.site + 'api/turn', { signal: ctl.signal, cache: 'no-store' }); clearTimeout(to);
         const j = r.ok ? await r.json() : null, list = j && Array.isArray(j.iceServers) ? j.iceServers.filter(s => s && s.urls) : [];
         if (list.length) { this._ice = list; this._iceT = now(); }
         return list;
@@ -4261,8 +4577,9 @@ const Net = {
   // realtime channel (GAME.supa). Some networks block Nostr; whichever service connects two players first wins.
   async libs() {
     if (this._libs) return this._libs;
+    await DiscordAct.boot();
     const tryImport = (spec, ms) => Promise.race([import(spec), new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
-    const [nostr, supa] = await Promise.allSettled([tryImport('trystero', 15000), GAME.supa ? tryImport('trystero/supabase', 15000) : Promise.reject(new Error('off'))]);
+    const [nostr, supa] = await Promise.allSettled([GAME.discord ? Promise.reject(new Error('Nostr relays are unreachable from Discord')) : tryImport('trystero', 15000), GAME.supa ? tryImport('trystero/supabase', 15000) : Promise.reject(new Error('off'))]);
     const out = [];
     if (nostr.status === 'fulfilled') out.push({ kind: 'nostr', T: nostr.value });
     if (supa.status === 'fulfilled' && (!out.length || supa.value.selfId === out[0].T.selfId)) out.push({ kind: 'supabase', T: supa.value });
@@ -4335,7 +4652,7 @@ const Net = {
     for (const r of this.rooms || []) { try { r.leave(); } catch (e) { } }
     this.rooms = []; if (this.via) this.via.clear(); this.online = false; this.isHost = true; this.hostId = this.me = 'local'; this.peers.clear(); this.ready = false;
   },
-  hello() { return { name: Settings.name, color: Settings.color, tier: R.tier, host: this.isHost, v: GAME.version }; },
+  hello() { return { name: Settings.name, color: Settings.color, tier: R.tier, host: this.isHost, v: GAME.version, lvl: Prog.level().l }; },
   // ---- sending --------------------------------------------------------------------
   countIn(d) { this.stats.inB += typeof d === 'string' ? d.length : (d && d.byteLength) || 64; },
   send(action, data, target) {
@@ -4358,7 +4675,7 @@ const Net = {
   notify(pid, text) { this.sendTo(pid, { t: 'note', text }); },
   sysChat(text, cls) { this.bcastAll({ t: 'chat', sys: 1, cls: cls || 'sys', text }); },
   playerList() {
-    return [...Players.map.values()].map(p => ({ id: p.id, name: p.name, color: p.color, tier: p.tier, idx: p.idx, joinOrder: p.joinOrder, kills: p.kills, deaths: p.deaths, canEdit: p.canEdit, muted: p.muted }));
+    return [...Players.map.values()].map(p => ({ id: p.id, name: p.name, color: p.color, tier: p.tier, idx: p.idx, joinOrder: p.joinOrder, kills: p.kills, deaths: p.deaths, canEdit: p.canEdit, muted: p.muted, lvl: p.lvl || 1, team: p.team || null, disg: p.disg || null }));
   },
   sendPlayers() { this.bcastAll({ t: 'pl', list: this.playerList(), host: this.me }); if (this.isHost) Online.updateRoom(); },
   sendRules() { this.bcastAll({ t: 'rules', rules: Rules }); if (this.isHost) Online.updateRoom(); },
@@ -4377,7 +4694,7 @@ const Net = {
       if (Players.map.size >= CFG.maxPlayers) { this.send('ev', { t: 'full' }, pid); return; }
       const used = new Set([...Players.map.values()].map(p => p.idx)); let idx = 1; while (used.has(idx)) idx++;
       const name = String(d.name || 'Player').replace(/[<>]/g, '').slice(0, 18) || 'Player';
-      const p = Players.add({ id: pid, name, color: /^#[0-9a-f]{6}$/i.test(d.color) ? d.color : '#ff9f43', tier: TIERS[d.tier] ? d.tier : 'medium', idx, joinOrder: ++this.joinCounter });
+      const p = Players.add({ id: pid, name, color: /^#[0-9a-f]{6}$/i.test(d.color) ? d.color : '#ff9f43', tier: TIERS[d.tier] ? d.tier : 'medium', idx, joinOrder: ++this.joinCounter, lvl: clamp(d.lvl | 0, 1, 999) });
       const sp = Auth.pickSpawn(); p.pos.copy(sp); p.tpGrace = now() + 1.5;
       this.send('ws', { hostId: this.me, rules: Rules, players: this.playerList(), world: World.serialize(), you: { spawn: a3(sp) }, code: this.code }, pid);
       this.sendPlayers();
@@ -4460,8 +4777,9 @@ const Net = {
       case 'fx': FX.remote(m); break;
       case 'vs': Vehicles.recv(m); break;
       case 'tp': Game.teleport(new V3().fromArray(m.p), m.respawn); break;
+      case 'xp': Prog.onXp(m); break;
       case 'kb': if (me && !me.noclip) { me.kb = new V3().fromArray(m.v); me.grounded = false; } break;
-      case 'hurt': if (me) { me.hp = m.hp; UI.damageFlash(); } break;
+      case 'hurt': if (me) { me.hp = m.hp; UI.damageFlash(m.f); } break;
       case 'hm': UI.hitmarker(); break;
       case 'dn': DmgNum.add(m); Audio.play('hitmark', 0.8); break;
       case 'bots': Bots.recv(m.b); break;
@@ -4521,7 +4839,7 @@ const Net = {
       let y = p.yaw % (Math.PI * 2); if (y > Math.PI) y -= Math.PI * 2; if (y < -Math.PI) y += Math.PI * 2;
       dv.setInt16(o, Math.round(y * 10000)); dv.setInt16(o + 2, Math.round(clamp(p.pitch, -1.6, 1.6) * 10000)); o += 4;
       dv.setUint8(o, clamp(Math.round(p.hp), 0, 255)); o++;
-      dv.setUint8(o, (p.dead ? 1 : 0) | (p.seat ? 2 : 0) | (p.crouch ? 4 : 0) | (p.noclip ? 8 : 0) | (p.beamEnd && p.grab ? 16 : 0) | (p.firing ? 32 : 0)); o++;
+      dv.setUint8(o, (p.dead ? 1 : 0) | (p.seat ? 2 : 0) | (p.crouch ? 4 : 0) | (p.noclip ? 8 : 0) | (p.beamEnd && p.grab ? 16 : 0) | (p.firing ? 32 : 0) | (p.protUntil && now() < p.protUntil ? 64 : 0)); o++;
       dv.setUint8(o, W_BY_ID[p.weapon] ? W_BY_ID[p.weapon].idx : 0); o++;
       dv.setUint16(o, clamp(Math.round(p.ping || 0), 0, 65535)); o += 2;
       const b = p.beamEnd || p.pos; dv.setInt16(o, i16(b.x)); dv.setInt16(o + 2, i16(b.y)); dv.setInt16(o + 4, i16(b.z)); o += 6;
@@ -4555,7 +4873,7 @@ const Net = {
       const be = new V3(dv.getInt16(o) / 100, dv.getInt16(o + 2) / 100, dv.getInt16(o + 4) / 100); o += 6;
       const p = Players.byIdx(idx); if (!p) continue;
       p.hp = hp; p.ping = ping;
-      const wasDead = p.dead; p.dead = !!(fl & 1);
+      const wasDead = p.dead; p.dead = !!(fl & 1); p.prot = !!(fl & 64);
       if (p.isLocal) { if (wasDead && !p.dead) UI.hideDeath(); if (!wasDead && p.dead) UI.showDeath(); continue; }
       p.crouch = !!(fl & 4); p.noclip = !!(fl & 8); p.firing = !!(fl & 32); p.weapon = (WEAPONS[w] || WEAPONS[0]).id;
       p.beamEnd = (fl & 16) ? be : null;
@@ -4605,11 +4923,71 @@ function cleanText(t) {
   const s = String(t || '').toLowerCase().replace(/[013457@$!|]/g, c => ({ 0: 'o', 1: 'i', 3: 'e', 4: 'a', 5: 's', 7: 't', '@': 'a', '$': 's', '!': 'i', '|': 'i' }[c]));
   return !BAD_LONG.test(s.replace(/[^a-z]/g, '')) && !BAD_SHORT.test(s);
 }
+/* ============================================================================
+   Discord Activity: everyone who launches the game in the same voice channel lands in the same room.
+   The room code comes from Discord's instance id; a presence channel on Supabase picks who hosts
+   (whoever arrived first) and tells late arrivals there is a host to join.
+   Developer Portal URL mappings needed: "/" -> the site, "/supabase" -> the Supabase project host.
+   ========================================================================== */
+const modeLabel = (m = Rules.mode) => ({ nextbot: 'Nextbot chase', zombies: 'Zombie survival', prophunt: 'Prop hunt' })[m] || 'Sandbox';
+const DiscordAct = {
+  sdk: null, _p: null, ch: null, busy: false,
+  boot() {
+    if (!GAME.discord) return Promise.resolve(null);
+    return this._p || (this._p = (async () => {
+      const { DiscordSDK, patchUrlMappings } = await import('@discord/embedded-app-sdk');
+      patchUrlMappings([{ prefix: '/supabase', target: new URL(GAME.supa.url).host }]);   // fetch + WebSocket go through Discord's proxy
+      this.sdk = new DiscordSDK(GAME.discord.clientId);
+      await this.sdk.ready();
+      return this.sdk;
+    })().catch(e => { console.warn('Discord SDK', e); return null; }));
+  },
+  code() {   // the same 6-character room code for everyone in this Activity instance
+    const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let h = 2166136261, s = '';
+    for (const c of GAME.discord.instance) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); }
+    for (let i = 0; i < 6; i++) { h = Math.imul(h ^ (h >>> 15), 2246822507) ^ i; s += A[(h >>> 0) % A.length]; }
+    return s;
+  },
+  async start() {
+    if (this.busy || Game.state !== 'lobby') return; this.busy = true;
+    const code = this.code(), since = this._since || (this._since = Date.now()), k = Online.key;
+    UI.lobbyStatus('Joining the game in your voice channel…');
+    try {
+      const c = await Online.client();
+      if (!this.ch) {
+        const ch = this.ch = c.channel('tw-di-' + code, { config: { presence: { key: k } } });
+        await new Promise((res, rej) => {
+          const t = setTimeout(() => rej(new Error('matchmaking did not answer')), 12000);
+          ch.subscribe(st => { if (st === 'SUBSCRIBED') { clearTimeout(t); res(); } });
+        });
+        setInterval(() => this.track(code), 4000);   // keep "who hosts" current, also after a host migration
+      }
+      await this.ch.track({ k, since, hosting: false });
+      const members = () => Object.values(this.ch.presenceState()).flat().filter(m => m && m.k);
+      const t0 = now();
+      await new Promise(r => setTimeout(r, 1500));   // let presence sync
+      for (;;) {
+        const ms = members();
+        if (ms.some(m => m.hosting && m.k !== k)) { this.busy = false; return Game.joinRoom(code); }
+        const first = ms.sort((a, b) => a.since - b.since || (a.k < b.k ? -1 : 1))[0];
+        if (!first || first.k === k || now() - t0 > 12) break;   // we arrived first (or nobody stepped up): host it
+        await new Promise(r => setTimeout(r, 500));
+      }
+      await Game.createRoom(code);
+      this.track(code);
+    } catch (e) {
+      UI.lobbyStatus('Could not set up the voice channel game (' + (e.message || e) + '). Press Play to try again.', true);
+    }
+    this.busy = false;
+  },
+  track(code) { if (this.ch) this.ch.track({ k: Online.key, since: this._since || (this._since = Date.now()), hosting: Net.online && Net.isHost && Net.code === code }).catch(() => { }); },
+};
 const Online = {
   sb: null, lobby: null, rooms: new Map(), key: Math.random().toString(36).slice(2, 10), listed: null, onRooms: null, trackT: null,
   async client() {
     if (!GAME.supa) throw new Error('Online features are off in this copy');
-    if (!this.sb) { const { createClient } = await import('@supabase/supabase-js'); this.sb = createClient(GAME.supa.url, GAME.supa.key, { auth: { persistSession: false } }); }
+    await DiscordAct.boot();
+    if (!this.sb) { const { createClient } = await import('@supabase/supabase-js'); this.sb = createClient(GAME.supa.url, GAME.supa.key, { auth: { persistSession: true, storageKey: 'tw-auth', autoRefreshToken: true, detectSessionInUrl: true } }); }
     return this.sb;
   },
   async watchRooms() {
@@ -4621,7 +4999,7 @@ const Online = {
         for (const k in st) for (const m of st[k]) if (m && /^[A-Z0-9]{6}$/.test(m.code || '')) this.rooms.set(m.code, m);
         if (this.onRooms) this.onRooms();
       });
-      ch.subscribe(st => { if (st === 'SUBSCRIBED' && this.listed) ch.track(this.listed).catch(() => { }); });
+      ch.subscribe(st => { this.live = st === 'SUBSCRIBED'; if (this.onRooms) this.onRooms(); if (st === 'SUBSCRIBED' && this.listed) ch.track(this.listed).catch(() => { }); });
     } catch (e) { this.lobby = null; }
   },
   // host: put the room in the list (or take it out with null); rapid changes are batched
@@ -4630,8 +5008,8 @@ const Online = {
     this.trackT = setTimeout(async () => { await this.watchRooms(); const ch = this.lobby; if (!ch) return; try { if (this.listed) await ch.track(this.listed); else await ch.untrack(); } catch (e) { } }, info ? 400 : 0);
   },
   roomInfo() {
-    if (!Net.online || !Net.isHost || !Settings.publicRoom) return null;
-    return { code: Net.code, host: String(Settings.name || 'Player').slice(0, 18), n: Players.map.size, max: CFG.maxPlayers, map: (THEMES[Rules.env] || {}).label || '', mode: Rules.mode === 'nextbot' ? 'Nextbot chase' : 'Sandbox', v: GAME.version };
+    if (!Net.online || !Net.isHost || !Settings.publicRoom || GAME.discord) return null;   // Activity rooms stay private to the voice channel
+    return { code: Net.code, host: String(Settings.name || 'Player').slice(0, 18), n: Players.map.size, max: CFG.maxPlayers, map: (THEMES[Rules.env] || {}).label || '', mode: modeLabel(), v: GAME.version };
   },
   updateRoom() { this.listRoom(this.roomInfo()); },
   async addons(q, sort) {
@@ -4910,7 +5288,13 @@ const Admin = {
         Rules.env = m.v; Rules.envGone = []; Auth.bots = []; Net.sendRules(); Net.sysChat(`Map: ${THEMES[m.v].label}.`);
         if (THEMES[m.v].spawns) for (const q of Players.map.values()) { if (q.seat) Auth.exitSeat(q); const sp = Auth.pickSpawn(); q.pos.copy(sp); q.tpGrace = now() + 0.6; Net.sendTo(q.id, { t: 'tp', p: a3(sp) }); }   // hand-built maps: everyone to a spawn
       } break;
-      case 'mode': if (m.v === 'sandbox' || m.v === 'nextbot') { Rules.mode = m.v; Auth.bots = []; Net.sendRules(); Net.sysChat(m.v === 'nextbot' ? 'Nextbot chase! Run. Don\'t let them touch you.' : 'Back to sandbox.'); UI.refreshAdmin && UI.refreshAdmin(); } break;
+      case 'mode': if (m.v === 'sandbox' || m.v === 'nextbot' || m.v === 'zombies' || m.v === 'prophunt') {
+        const was = Rules.mode; Rules.mode = m.v; Auth.bots = [];
+        if (was === 'zombies' && m.v !== 'zombies') ZS.stop();
+        if (was === 'prophunt' && m.v !== 'prophunt') PH.stop();
+        if (m.v === 'zombies') ZS.start(); else if (m.v === 'prophunt') PH.start(); else Net.sysChat(m.v === 'nextbot' ? 'Nextbot chase! Run. Don\'t let them touch you.' : 'Back to sandbox.');
+        Net.sendRules(); UI.refreshAdmin && UI.refreshAdmin();
+      } break;
       case 'bots': Rules.bots = clamp(m.v | 0, 1, 8); Net.sendRules(); break;
       case 'dismember': Rules.dismember = !!m.v; Net.sendRules(); break;
       case 'aimAssist': Rules.aimAssist = !!m.v; Net.sendRules(); Net.sysChat(Rules.aimAssist ? 'Controller aim assist on.' : 'Controller aim assist turned off by the host.'); break;
@@ -4984,6 +5368,376 @@ const Owner = {
 };
 
 /* ============================================================================
+   GAME MODES (host) + PROGRESSION (each player, saved on their own device)
+   ========================================================================== */
+// ---- Zombie Survival -------------------------------------------------------------------------
+// Build between waves, then hold out. Players who go down stay down until the wave is cleared;
+// everyone down = game over, and it starts again from wave 1. The host runs it; Rules.zs carries
+// the state to everyone (wave, phase, seconds left, zombies left).
+const ZS = {
+  PREP0: 30, PREP: 20, OVER: 12, MAXALIVE: 14,
+  st: null, best: 0,
+  start() {
+    this.clearZombies(true);
+    this.st = { wave: 0, phase: 'prep', t: this.PREP0, toSpawn: 0, ids: new Set(), spawnT: 0 };
+    Rules.combat = true;
+    for (const p of Players.map.values()) if (p.dead) Auth.respawn(p);
+    Net.sysChat(`Zombie Survival! Build your defences: the first wave comes in ${this.PREP0} seconds.`);
+    this.publish();
+  },
+  stop() { this.clearZombies(true); this.st = null; Rules.zs = null; },
+  publish() {
+    const s = this.st;
+    Rules.zs = s ? { wave: s.wave, phase: s.phase, t: Math.max(0, Math.ceil(s.t)), left: s.toSpawn + s.ids.size, best: this.best } : null;
+    Net.sendRules();
+  },
+  step(dt) {
+    if (Rules.mode !== 'zombies') return;
+    const s = this.st; if (!s) return this.start();   // e.g. we just became host after a migration
+    s.t -= dt; this._pub = (this._pub || 0) - dt;
+    for (const gid of s.ids) {   // wave zombies that died since last step: credit whoever hit them last
+      const g = World.groups.get(gid);
+      if (!g || !g.alive) { s.ids.delete(gid); if (g && g._lastBy) Prog.award(g._lastBy, 'zkill'); }
+    }
+    if (s.phase === 'prep') { if (s.t <= 0) this.nextWave(); }
+    else if (s.phase === 'wave') {
+      s.spawnT -= dt;
+      if (s.toSpawn > 0 && s.spawnT <= 0 && s.ids.size < this.MAXALIVE) { if (this.spawnZombie()) s.toSpawn--; s.spawnT = Math.max(0.35, 1.6 - s.wave * 0.1); }
+      if (![...Players.map.values()].some(p => !p.dead)) this.gameOver();
+      else if (s.toSpawn === 0 && s.ids.size === 0) this.waveCleared();
+    } else if (s.phase === 'over' && s.t <= 0) return this.start();
+    if (this._pub <= 0) { this._pub = 1; this.publish(); }
+  },
+  nextWave() {
+    const s = this.st; s.wave++; s.phase = 'wave'; s.toSpawn = 4 + s.wave * 3; s.spawnT = 0;
+    Net.sysChat(`Wave ${s.wave}: ${s.toSpawn} zombies incoming!`); this.publish();
+  },
+  waveCleared() {
+    const s = this.st; s.phase = 'prep'; s.t = this.PREP; this.best = Math.max(this.best, s.wave);
+    this.clearZombies(false);   // tidy up this wave's bodies
+    for (const p of Players.map.values()) { if (p.dead) Auth.respawn(p); Prog.award(p.id, 'wave', s.wave); }
+    Net.sysChat(`Wave ${s.wave} cleared! Next wave in ${this.PREP} seconds.`); this.publish();
+  },
+  gameOver() {
+    const s = this.st, n = s.wave - 1; s.phase = 'over'; s.t = this.OVER;
+    Net.sysChat(`Everyone is down. You survived ${n} wave${n === 1 ? '' : 's'}. Restarting in ${this.OVER} seconds.`); this.publish();
+  },
+  // a zombie on solid ground 18-30 m from a random living player (or at one of the map's bot spawns)
+  spawnZombie() {
+    const ps = [...Players.map.values()].filter(p => !p.dead), th = THEMES[Rules.env];
+    const c = ps.length ? ps[(Math.random() * ps.length) | 0].pos : new V3();
+    let pos = null;
+    for (let k = 0; k < 10 && !pos; k++) {
+      const a = Math.random() * Math.PI * 2, r = 18 + Math.random() * 12, x = c.x + Math.cos(a) * r, z = c.z + Math.sin(a) * r;
+      if (Math.abs(x) > CFG.worldHalf - 5 || Math.abs(z) > CFG.worldHalf - 5) continue;
+      const h = Phys.cast(new V3(x, c.y + 25, z), new V3(0, -1, 0), 60);
+      if (h && h.normal.y > 0.7 && Math.abs(h.point.y - c.y) < 8 && !(typeof h.id === 'string')) pos = h.point;
+    }
+    if (!pos && th && th.botSpawns) { const b = th.botSpawns[(Math.random() * th.botSpawns.length) | 0]; pos = new V3(b[0], b[1], b[2]); }
+    if (!pos) return false;
+    const r = Auth.spawnPrefab(npcPrefab('zombie'), pos, Math.random() * Math.PI * 2, 'sys');
+    const e = r && World.ents.get(r.ents[0]), g = e && World.groups.get(e.d.g);
+    if (!g) return false;
+    g.zs = 1; g.hp = Math.round(100 * (1 + 0.12 * (this.st.wave - 1)));   // tougher every wave
+    this.st.ids.add(g.id);
+    return true;
+  },
+  clearZombies(all) {
+    const ids = [];
+    for (const g of World.groups.values()) if (g.zs && (all || !g.alive)) ids.push(...g.parts.filter(id => World.ents.has(id)));
+    if (ids.length) Auth.removeEnts(ids);
+  },
+};
+
+// ---- Prop Hunt ---------------------------------------------------------------------------------
+// Props press E on any small object to become it; hunters are blind for the hide phase, then have
+// HUNT seconds to find them. Shooting the wrong object costs hunters health. Teams rotate each round.
+const PH_SCATTER = ['crate', 'crate_s', 'crate_l', 'barrel', 'drum', 'cone', 'tire', 'chair', 'table', 'pallet', 'melon', 'tv', 'bookshelf', 'fridge', 'couch', 'cblock', 'ball', 'beachball', 'vending', 'dumpster'];
+const PH = {
+  HIDE: 30, HUNT: 180, END: 8,
+  st: null, spawned: [],
+  start() {
+    this.scatter();
+    Rules.combat = true; this.st = null;
+    Net.sysChat('Prop Hunt! Props: press E on an object to become it. Hunters: find them, but wrong guesses hurt.');
+    this.newRound();
+  },
+  stop() {
+    this.st = null; Rules.ph = null;
+    for (const p of Players.map.values()) { p.team = null; p.disg = null; if (p.dead) Auth.respawn(p); }
+    const ids = this.spawned.filter(id => World.ents.has(id)); if (ids.length) Auth.removeEnts(ids); this.spawned = [];
+    Net.sendPlayers();
+  },
+  // hiding spots: a spread of everyday objects around the spawn area
+  scatter() {
+    const c = Auth.pickSpawn();
+    for (let i = 0; i < 34; i++) {
+      const a = Math.random() * Math.PI * 2, r = 5 + Math.random() * 30, x = c.x + Math.cos(a) * r, z = c.z + Math.sin(a) * r;
+      const h = Phys.cast(new V3(x, c.y + 20, z), new V3(0, -1, 0), 50);
+      if (!h || h.normal.y < 0.7 || Math.abs(h.point.y - c.y) > 6) continue;
+      const it = ITEM_INDEX[PH_SCATTER[(Math.random() * PH_SCATTER.length) | 0]]; if (!it || !it.pf) continue;
+      const res = Auth.spawnPrefab(it.pf(), h.point, Math.random() * Math.PI * 2, 'sys');
+      if (res) this.spawned.push(...res.ents);
+    }
+  },
+  publish() {
+    const s = this.st, ps = [...Players.map.values()];
+    Rules.ph = s ? { phase: s.phase, t: Math.max(0, Math.ceil(s.t)), round: s.round || 0, left: ps.filter(p => p.team === 'prop' && !p.dead).length, win: s.win || null } : null;
+    Net.sendRules();
+  },
+  newRound() {
+    const ps = [...Players.map.values()], round = ((this.st && this.st.round) || 0) + 1;
+    for (const p of ps) { p.disg = null; if (p.dead) Auth.respawn(p); p.hp = 100; }
+    if (ps.length < 2) { for (const p of ps) p.team = 'prop'; this.st = { phase: 'wait', t: 0, round: round - 1 }; Net.sendPlayers(); return this.publish(); }
+    const nH = Math.max(1, Math.round(ps.length / 3));   // about a third hunt; whoever hunted least goes first
+    ps.sort((a, b) => (a.phH || 0) - (b.phH || 0) || Math.random() - 0.5)
+      .forEach((p, i) => { p.team = i < nH ? 'hunter' : 'prop'; if (p.team === 'hunter') p.phH = (p.phH || 0) + 1; });
+    this.st = { phase: 'hide', t: this.HIDE, round };
+    Net.sendPlayers(); Net.sysChat(`Round ${round}: props have ${this.HIDE} seconds to hide.`); this.publish();
+  },
+  step(dt) {
+    if (Rules.mode !== 'prophunt') return;
+    const s = this.st; if (!s) return this.start();
+    s.t -= dt; this._pub = (this._pub || 0) - dt;
+    const ps = [...Players.map.values()];
+    for (const p of ps) if (!p.team) { p.team = s.phase === 'hide' ? 'prop' : 'hunter'; Net.sendPlayers(); }   // joined mid-round
+    if (s.phase === 'wait') { if (ps.length >= 2) return this.newRound(); }
+    else if (s.phase === 'hide') { if (s.t <= 0) { s.phase = 'hunt'; s.t = this.HUNT; Net.sysChat('Ready or not, here come the hunters!'); this.publish(); } }
+    else if (s.phase === 'hunt') {
+      const props = ps.filter(p => p.team === 'prop'), hunters = ps.filter(p => p.team === 'hunter' && !p.dead);
+      if (!props.some(p => !p.dead)) this.end('hunter');
+      else if (!hunters.length || s.t <= 0) this.end('prop');
+    } else if (s.phase === 'end' && s.t <= 0) return this.newRound();
+    if (this._pub <= 0) { this._pub = 1; this.publish(); }
+  },
+  end(win) {
+    const s = this.st; s.phase = 'end'; s.t = this.END; s.win = win;
+    for (const p of Players.map.values()) if (p.team === win) Prog.award(p.id, 'phwin', win === 'prop' && !p.dead ? 60 : 40);
+    Net.sysChat(win === 'hunter' ? 'Hunters win! Every prop was found.' : 'Props win! The hunters ran out of time.'); this.publish();
+  },
+  live() { return Rules.mode === 'prophunt' && this.st && (this.st.phase === 'hide' || this.st.phase === 'hunt'); },
+  // a prop asks to become entity eid
+  disguise(p, eid) {
+    if (!this.live() || p.team !== 'prop' || p.dead) return;
+    const e = World.ents.get(eid); if (!e || !e.mesh || e.d.k === 'part' || e.d.veh || e.d.sh.t === 'spawn') return;
+    if (e.mesh.position.distanceTo(p.pos) > 9) return;
+    const box = new THREE.Box3().setFromObject(e.mesh), s = box.getSize(new V3());
+    if (Math.max(s.x, s.y, s.z) > 3.2 || Math.max(s.x, s.y, s.z) < 0.15) return Net.notify(p.id, 'Too big or too small to hide as.');
+    const d = {}; for (const k of ['sh', 'm', 'c', 'c2', 'vis', 'hc']) if (e.d[k] !== undefined) d[k] = e.d[k];
+    p.disg = { d, s: [r4(s.x), r4(s.y), r4(s.z)], b: r4(box.min.y - e.mesh.position.y) };
+    Net.sendPlayers();
+  },
+  // host hit test size for a disguised player: a capsule roughly the object's size
+  hitShape(v) {
+    const s = v.disg.s, r = clamp(Math.max(s[0], s[2]) / 2, 0.15, 1.3), h = Math.max(s[1], r * 2);
+    return { r, y0: v.pos.y + r, y1: v.pos.y + h - r };
+  },
+};
+
+// ---- Progression: XP, levels, unlocks and daily challenges --------------------------------------
+// Kept on this device (no accounts yet). The host tells each player what they earned ('xp' messages);
+// levels are shown to everyone on nameplates.
+const UNLOCK_COLORS = [
+  { lvl: 3, c: '#c0c6cc', name: 'Steel' }, { lvl: 5, c: '#e8b923', name: 'Gold' }, { lvl: 8, c: '#7fffd4', name: 'Aqua' },
+  { lvl: 12, c: '#ff4fa3', name: 'Neon pink' }, { lvl: 16, c: '#1a1a1a', name: 'Midnight' }, { lvl: 20, c: '#fffaf0', name: 'Pearl' },
+];
+const TITLES = [[1, 'Rookie'], [5, 'Builder'], [10, 'Survivor'], [15, 'Veteran'], [20, 'Elite'], [30, 'Legend']];
+const XP_FOR = { zkill: 10, pkill: 25, npc: 5 };
+const DAILY_POOL = [
+  { id: 'zkills', text: n => `Kill ${n} zombies`, n: [15, 25, 40] },
+  { id: 'wave', text: n => `Reach wave ${n} in Zombie Survival`, n: [3, 5, 7], max: true },
+  { id: 'pkills', text: n => `Get ${n} player kills`, n: [3, 5, 8] },
+  { id: 'mins', text: n => `Play for ${n} minutes`, n: [10, 20, 30] },
+  { id: 'mpmins', text: n => `Play ${n} minutes in a room with others`, n: [10, 15, 25] },
+  { id: 'spawns', text: n => `Spawn ${n} things`, n: [20, 40, 60] },
+  { id: 'phwins', text: n => `Win ${n} Prop Hunt round${n === 1 ? '' : 's'}`, n: [1, 2, 3] },
+];
+const Prog = {
+  d: null,
+  load() {
+    this.d = Object.assign({ xp: 0, stats: {}, day: '', daily: [], dp: {}, done: {} }, store.get('profile', {}));
+    this.rollDaily();
+  },
+  save() { store.set('profile', this.d); },
+  today() { const t = new Date(); return `${t.getFullYear()}-${t.getMonth() + 1}-${t.getDate()}`; },
+  // three challenges per day, the same for everyone on that date
+  rollDaily() {
+    const day = this.today(); if (this.d.day === day && this.d.daily.length) return;
+    let h = 0; for (const c of day) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+    const pool = DAILY_POOL.slice(), out = [];
+    while (out.length < 3 && pool.length) { h = (Math.imul(h, 1103515245) + 12345) >>> 0; const c = pool.splice(h % pool.length, 1)[0]; out.push({ id: c.id, n: c.n[(h >>> 8) % c.n.length] }); }
+    Object.assign(this.d, { day, daily: out, dp: {}, done: {} }); this.save();
+  },
+  level(xp = this.d ? this.d.xp : 0) { let l = 1, need = 100; while (xp >= need) { xp -= need; l++; need = 100 + (l - 1) * 50; } return { l, into: xp, need }; },
+  title(l = this.level().l) { let t = TITLES[0][1]; for (const [n, s] of TITLES) if (l >= n) t = s; return t; },
+  gain(n, why) {
+    if (!(n > 0)) return;
+    const before = this.level().l; this.d.xp += Math.round(n); this.save();
+    UI.xpPop(n, why);
+    const after = this.level().l;
+    if (after > before) {
+      const un = UNLOCK_COLORS.filter(u => u.lvl > before && u.lvl <= after).map(u => u.name + ' colour');
+      UI.toast(`Level ${after}! ${this.title(after)}` + (un.length ? ` · Unlocked: ${un.join(', ')}` : ''), 'military_tech'); Audio.play('confirm');
+      if (Net.online && !Net.isHost) Net.toHost({ t: 'lvl', v: after });
+      else { const me = Players.local; if (me) { me.lvl = after; Net.sendPlayers(); } }
+      UI.refreshProfile();
+    }
+  },
+  // a stat moved: lifetime stats + today's challenges
+  bump(id, v = 1, isMax) {
+    const s = this.d.stats; s[id] = isMax ? Math.max(s[id] || 0, v) : (s[id] || 0) + v;
+    this.rollDaily();
+    const c = this.d.daily.find(x => x.id === id);
+    if (c && !this.d.done[id]) {
+      this.d.dp[id] = isMax ? Math.max(this.d.dp[id] || 0, v) : (this.d.dp[id] || 0) + v;
+      if (this.d.dp[id] >= c.n) { this.d.done[id] = 1; this.save(); UI.toast(`Daily challenge done: ${DAILY_POOL.find(p => p.id === id).text(c.n)}`, 'task_alt'); this.gain(100, 'Daily challenge'); }
+    }
+    this.save();
+  },
+  // host: tell player pid (an id or 'p:id') what they earned
+  award(pid, kind, n) {
+    if (!Net.isHost) return;
+    const p = Players.map.get(String(pid).replace(/^p:/, '')); if (!p) return;
+    const m = { t: 'xp', k: kind, n: n || 0 };
+    if (p.isLocal) this.onXp(m); else Net.sendTo(p.id, m);
+  },
+  onXp(m) {
+    if (m.k === 'zkill') { this.bump('zkills'); this.gain(XP_FOR.zkill, 'Zombie'); }
+    else if (m.k === 'pkill') { this.bump('pkills'); this.gain(XP_FOR.pkill, 'Player kill'); }
+    else if (m.k === 'phwin') { this.bump('phwins'); this.gain(m.n || 40, 'Round won'); }
+    else if (m.k === 'wave') { this.bump('wave', m.n, true); this.gain(20 + 10 * (m.n | 0), `Wave ${m.n | 0} survived`); }
+  },
+  // called every frame while playing: playtime XP each minute (more with other people)
+  tick(dt) {
+    this._acc = (this._acc || 0) + dt; if (this._acc < 60) return; this._acc -= 60;
+    const mp = Net.online && Players.map.size > 1;
+    this.bump('mins'); if (mp) this.bump('mpmins');
+    this.gain(mp ? 6 : 3, mp ? 'Playing together' : 'Playtime');
+  },
+};
+
+/* ============================================================================
+   ACCOUNTS + FRIENDS (Supabase Auth + tables profiles / friends / presence / invites)
+   Email + password accounts with a unique username and a friend code. Friends see whether you're
+   online and which room you're in (row-level security keeps that to accepted friends only), and
+   can invite each other into rooms.
+   ========================================================================== */
+const USERNAME_RE = /^[A-Za-z0-9_]{3,16}$/;
+const Social = {
+  user: null, profile: null, friends: [], incoming: [], outgoing: [], ready: false, _room: undefined, _seenInv: new Set(),
+  async init() {
+    if (!GAME.supa) return;
+    try {
+      const c = await Online.client();
+      const { data } = await c.auth.getSession();
+      await this.setUser(data && data.session ? data.session.user : null);
+      c.auth.onAuthStateChange((_e, s) => { this.setUser(s ? s.user : null); });
+    } catch (e) { console.warn('accounts', e); }
+    this.ready = true; UI.refreshSocial();
+    setInterval(() => this.tick(), 3000);
+  },
+  async db() { return Online.client(); },
+  async setUser(u) {
+    if ((u ? u.id : null) === (this.user ? this.user.id : null) && (this.profile || !u)) return;
+    this.user = u || null; this.profile = null; this.friends = []; this.incoming = []; this.outgoing = [];
+    if (u) {
+      const c = await this.db();
+      const { data } = await c.from('profiles').select('id,username,friend_code').eq('id', u.id).maybeSingle();
+      this.profile = data || null;
+      if (data) { Settings.name = data.username; saveSettings(); const nm = $('#inName'); if (nm) nm.value = data.username; }
+      this._room = undefined; this.tick(); this.refresh();
+    }
+    UI.refreshSocial();
+  },
+  code() { return this.profile ? 'TW-' + this.profile.friend_code : ''; },
+  // ---- account -------------------------------------------------------------------------------
+  async usernameFree(name) {
+    const c = await this.db();
+    const { data } = await c.from('profiles').select('id').ilike('username', name.replace(/[\\%_]/g, m => '\\' + m)).limit(1);
+    return !(data && data.length);
+  },
+  async signUp(email, password, username) {
+    username = String(username || '').trim();
+    if (!USERNAME_RE.test(username)) throw new Error('Usernames are 3-16 letters, numbers or _.');
+    if (String(password || '').length < 8) throw new Error('Use a password of at least 8 characters.');
+    if (!(await this.usernameFree(username))) throw new Error('That username is taken.');
+    const c = await this.db();
+    const { data, error } = await c.auth.signUp({ email: String(email).trim(), password, options: { data: { username }, emailRedirectTo: GAME.site } });
+    if (error) throw new Error(/Database error/i.test(error.message) ? 'That username is taken or not allowed.' : error.message);
+    return { confirm: !data.session };
+  },
+  async signIn(email, password) {
+    const c = await this.db();
+    const { error } = await c.auth.signInWithPassword({ email: String(email).trim(), password });
+    if (error) throw new Error(/not confirmed/i.test(error.message) ? 'Confirm your email first: check your inbox for the link.' : /invalid/i.test(error.message) ? 'Wrong email or password.' : error.message);
+  },
+  async resetPassword(email) {
+    const c = await this.db();
+    const { error } = await c.auth.resetPasswordForEmail(String(email).trim(), { redirectTo: GAME.site });
+    if (error) throw new Error(error.message);
+  },
+  async signOut() {
+    try { if (this.user) { const c = await this.db(); await c.from('presence').update({ room: null }).eq('id', this.user.id); await c.auth.signOut(); } } catch (e) { }
+    await this.setUser(null);
+  },
+  // ---- friends ------------------------------------------------------------------------------
+  online(f) { return f.seen && Date.now() - new Date(f.seen).getTime() < 100000; },
+  async refresh() {
+    if (!this.user || this._busy) return; this._busy = true;
+    try {
+      const c = await this.db(), me = this.user.id;
+      const { data: fr } = await c.from('friends').select('a,b,status');
+      const rows = fr || [], ids = [...new Set(rows.map(r => r.a === me ? r.b : r.a))];
+      const profs = new Map();
+      if (ids.length) { const { data } = await c.from('profiles').select('id,username').in('id', ids); for (const p of data || []) profs.set(p.id, p.username); }
+      const acc = rows.filter(r => r.status === 'accepted').map(r => r.a === me ? r.b : r.a), pres = new Map();
+      if (acc.length) { const { data } = await c.from('presence').select('id,room,mode,v,seen').in('id', acc); for (const p of data || []) pres.set(p.id, p); }
+      this.friends = acc.map(id => Object.assign({ id, username: profs.get(id) || '?' }, pres.get(id) || {})).sort((x, y) => this.online(y) - this.online(x) || x.username.localeCompare(y.username));
+      this.incoming = rows.filter(r => r.status === 'pending' && r.b === me).map(r => ({ id: r.a, username: profs.get(r.a) || '?' }));
+      this.outgoing = rows.filter(r => r.status === 'pending' && r.a === me).map(r => ({ id: r.b, username: profs.get(r.b) || '?' }));
+      // room invites from the last 10 minutes
+      const { data: inv } = await c.from('invites').select('id,from_id,room,created_at').eq('to_id', me).gt('created_at', new Date(Date.now() - 600000).toISOString()).order('created_at', { ascending: false }).limit(5);
+      for (const i of inv || []) if (!this._seenInv.has(i.id)) { this._seenInv.add(i.id); if (!(Net.online && Net.code === i.room)) UI.showInvite({ id: i.id, from: profs.get(i.from_id) || 'A friend', room: i.room }); }
+    } catch (e) { console.warn('friends', e); }
+    this._busy = false; UI.refreshSocial();
+  },
+  // tell friends where we are (on room changes, and every 45 s so we count as online)
+  async tick() {
+    if (!this.user) return;
+    const room = Net.online && Net.code && Net.code !== 'SOLO' ? Net.code : null, t = now();
+    if (room !== this._room || t - (this._beat || 0) > 45) {
+      this._room = room; this._beat = t;
+      try { const c = await this.db(); await c.from('presence').upsert({ id: this.user.id, room, mode: room ? modeLabel() : null, v: GAME.version }); } catch (e) { }
+    }
+    if (t - (this._ref || 0) > (UI.open === 'friends' ? 6 : 15) && !document.hidden) { this._ref = t; this.refresh(); }
+  },
+  async addFriend(q) {
+    if (!this.user) throw new Error('Sign in first.');
+    q = String(q || '').trim(); if (!q) return;
+    const c = await this.db(), code = q.toUpperCase().replace(/^TW-?/, '');
+    let target = null;
+    if (/^[0-9A-F]{6}$/.test(code)) { const { data } = await c.from('profiles').select('id,username').eq('friend_code', code).maybeSingle(); target = data; }
+    if (!target && USERNAME_RE.test(q)) { const { data } = await c.from('profiles').select('id,username').ilike('username', q.replace(/[\\%_]/g, m => '\\' + m)).maybeSingle(); target = data; }
+    if (!target) throw new Error('No player with that username or friend code.');
+    if (target.id === this.user.id) throw new Error("That's you!");
+    if (this.friends.some(f => f.id === target.id)) throw new Error(`You and ${target.username} are already friends.`);
+    if (this.incoming.some(f => f.id === target.id)) { await this.accept(target.id); return `You and ${target.username} are now friends.`; }
+    const { error } = await c.from('friends').insert({ a: this.user.id, b: target.id });
+    if (error) throw new Error(/duplicate/i.test(error.message) ? `You already sent ${target.username} a request.` : error.message);
+    this.refresh(); return `Friend request sent to ${target.username}.`;
+  },
+  async accept(id) { const c = await this.db(); await c.from('friends').update({ status: 'accepted' }).eq('a', id).eq('b', this.user.id); this.refresh(); },
+  async remove(id) { const c = await this.db(), me = this.user.id; await c.from('friends').delete().or(`and(a.eq.${me},b.eq.${id}),and(a.eq.${id},b.eq.${me})`); this.refresh(); },
+  async invite(f) {
+    if (!(Net.online && Net.code)) throw new Error('Host or join a room first.');
+    const c = await this.db(); const { error } = await c.from('invites').insert({ to_id: f.id, room: Net.code });
+    if (error) throw new Error(/slow down/i.test(error.message) ? 'Slow down a little.' : error.message);
+  },
+  async dismissInvite(id) { try { const c = await this.db(); await c.from('invites').delete().eq('id', id); } catch (e) { } },
+  join(room) { const was = Game.state === 'playing'; if (was) Game.toLobby(true); UI.closeMenu(); setTimeout(() => Game.joinRoom(room), was ? 600 : 0); },
+};
+
+/* ============================================================================
    12. UI (lobby, HUD, spawn menu, radial, scoreboard, menus, chat, admin,
        gamepad menu navigation, spawn-menu thumbnails)
    ========================================================================== */
@@ -5047,7 +5801,7 @@ const Thumbs = {
 // ---- gamepad navigation inside menus -------------------------------------------
 const Nav = {
   cur: null, rep: 0,
-  root() { const o = UI.open; if (!o || o === 'radial' || o === 'chat') return Game.state === 'lobby' && !o ? $('#lobby') : null; return { spawn: $('#spawnMenu'), pause: $('#pause'), settings: $('#settings'), admin: $('#admin'), saveload: $('#saveload'), help: $('#help'), hostleft: $('#hostLeft') }[o] || null; },
+  root() { const o = UI.open; if (!o || o === 'radial' || o === 'chat') return Game.state === 'lobby' && !o ? $('#lobby') : null; return { spawn: $('#spawnMenu'), pause: $('#pause'), servers: $('#servers'), friends: $('#friendsMenu'), settings: $('#settings'), admin: $('#admin'), saveload: $('#saveload'), help: $('#help'), hostleft: $('#hostLeft') }[o] || null; },
   items(root) { return [...root.querySelectorAll('button,input,select,.item,[data-nav]')].filter(e => e.offsetParent !== null && !e.disabled && e.type !== 'file'); },
   focus(el) { if (this.cur) this.cur.classList.remove('navfocus'); this.cur = el; if (el) { el.classList.add('navfocus'); el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } },
   update(dt) {
@@ -5125,8 +5879,11 @@ const UI = {
     // ---- lobby ----
     const nm = $('#inName'); nm.value = Settings.name || '';
     nm.addEventListener('change', () => { Settings.name = nm.value.trim().slice(0, 18); saveSettings(); });
-    const sw = $('#swatches');
-    for (const c of PLAYER_COLORS) sw.append(h('button', { class: 'swatch' + (c === Settings.color ? ' sel' : ''), style: `background:${c}`, title: c, 'data-c': c, onclick: e => { Settings.color = c; saveSettings(); $$('.swatch').forEach(s => s.classList.toggle('sel', s.dataset.c === c)); this.refreshLobbyAvatar(); } }));
+    this.refreshProfile();
+    $('#btnQuick').onclick = () => Game.quickPlay();
+    if (GAME.discord) { $('#btnBrowse').classList.add('hidden'); $('#chkPublic').parentElement.classList.add('hidden'); }
+    $('#btnBrowse').onclick = () => this.openMenu('servers');
+    $('#btnFriends').onclick = () => this.openMenu('friends');
     $('#btnCreate').onclick = () => Game.createRoom();
     $('#btnSolo').onclick = () => Game.startSolo();
     $('#btnJoin').onclick = () => Game.joinRoom($('#inCode').value);
@@ -5136,6 +5893,17 @@ const UI = {
     $('#btnLobbyHelp').onclick = () => this.openMenu('help');
     $('#btnLobbyAddons').onclick = () => this.openMenu('addons');
     const pub = $('#chkPublic'); pub.checked = Settings.publicRoom !== false; pub.onchange = () => { Settings.publicRoom = pub.checked; saveSettings(); Online.updateRoom(); };
+    // server browser
+    $('#svBack').onclick = () => this.closeMenu();
+    $('#svRefresh').onclick = () => { this.renderRooms(); Audio.play('tick'); };
+    $('#svHost').onclick = () => { this.closeMenu(); Game.createRoom(); };
+    $('#svSearch').addEventListener('input', e => { this.svQuery = e.target.value.trim().toLowerCase(); this.renderRooms(); });
+    const hf = $('#svHideFull'); hf.checked = !!Settings.hideFull; hf.onchange = () => { Settings.hideFull = hf.checked; saveSettings(); this.renderRooms(); };
+    const svJoin = () => { const v = $('#svCode').value; if (!v.trim()) return; this.closeMenu(); Game.joinRoom(v); };
+    $('#svJoin').onclick = svJoin; $('#svCode').addEventListener('keydown', e => { if (e.code === 'Enter') svJoin(); });
+    // "What's new": this build's release notes (stamped by tools/release/release.mjs)
+    const notes = (document.querySelector('meta[name="tw-notes"]') || {}).content || '';
+    $('#newsVer').textContent = 'v' + GAME.version; $('#newsText').textContent = notes || 'Build, weld, drive and blow things up together.';
     Online.onRooms = () => this.renderRooms(); Online.watchRooms(); this.renderRooms();
     const m = location.hash.match(/room=([A-Z0-9]{6})/i);
     if (m) { $('#inCode').value = fmtCode(m[1].toUpperCase()); this.lobbyStatus('Joining from invite link…'); const t0 = now(), go = () => { if (Game.state === 'lobby') Game.joinRoom(m[1]); else if (Game.state === 'loading' && now() - t0 < 30) setTimeout(go, 300); }; setTimeout(go, 300); }
@@ -5155,6 +5923,104 @@ const UI = {
     Input.onLockChange = locked => { if (!locked && Game.state === 'playing' && !this.open && !Editor.active && Input.device === 'kbm' && !Game.lockReleaseOk) this.openMenu('pause'); Game.lockReleaseOk = false; };
     this.buildSlots();
   },
+  // ---- friends & accounts ----------------------------------------------------------------------
+  refreshSocial() {
+    const S = Social, on = S.friends.filter(f => S.online(f)).length, sub = $('#friendsSub');
+    if (sub) sub.textContent = !GAME.supa ? '' : !S.user ? 'Sign in to add friends' : (S.incoming.length ? `${S.incoming.length} request${S.incoming.length === 1 ? '' : 's'} · ` : '') + `${on} online`;
+    const nm = $('#inName'); if (nm) { nm.readOnly = !!S.profile; const hint = $('.lb-hint'); if (hint) hint.textContent = S.profile ? `Signed in · friend code ${S.code()}` : 'Click your name to change it'; }
+    if (this.open === 'friends' && !this._frTyping) this.buildFriends();
+  },
+  buildFriends() {
+    const s = $('#friendsMenu'), S = Social; s.innerHTML = '';
+    s.append(h('h2', { text: 'Friends' }));
+    const msg = h('div', { class: 'fr-msg muted' }), say = (t, bad) => { msg.textContent = t || ''; msg.style.color = bad ? 'var(--bad)' : ''; };
+    const run = async (btn, fn) => { if (btn) btn.disabled = true; try { const r = await fn(); if (typeof r === 'string') say(r); } catch (e) { say(e.message || String(e), true); } if (btn) btn.disabled = false; };
+    const back = h('div', { class: 'btns', style: 'margin-top:14px' }, h('button', { text: 'Back', onclick: () => this.back() }));
+    if (!GAME.supa) { s.append(h('p', { class: 'muted', text: 'Accounts are not available in this copy of the game.' }), back); return; }
+    if (!S.ready) { s.append(h('p', { class: 'muted', text: 'Connecting…' }), back); return; }
+    if (!S.user || !S.profile) {   // sign in / create account / forgot password
+      const tab = this.frTab || 'in', tabs = h('div', { class: 'tabs' });
+      for (const [k, l] of [['in', 'Sign in'], ['up', 'Create account'], ['reset', 'Forgot password']]) tabs.append(h('button', { class: tab === k ? 'act' : '', text: l, onclick: () => { this.frTab = k; this.buildFriends(); } }));
+      s.append(h('p', { class: 'muted', style: 'font-size:13px;line-height:1.5;margin:8px 0 0', text: 'An account gives you a username and a friend code, so friends can see when you\'re online and join your room. Your email is never shown to other players.' }), tabs);
+      const f = h('form', { class: 'fr-form', onsubmit: e => e.preventDefault() });
+      const email = h('input', { type: 'email', placeholder: 'Email', autocomplete: 'email', 'aria-label': 'Email' });
+      const pass = h('input', { type: 'password', placeholder: tab === 'up' ? 'Password (8+ characters)' : 'Password', autocomplete: tab === 'up' ? 'new-password' : 'current-password', 'aria-label': 'Password' });
+      const user = h('input', { type: 'text', placeholder: 'Username (3-16 letters, numbers, _)', maxlength: 16, autocomplete: 'username', 'aria-label': 'Username' });
+      [email, pass, user].forEach(i => { i.onfocus = () => this._frTyping = true; i.onblur = () => this._frTyping = false; i.onkeydown = e => e.stopPropagation(); });
+      if (tab === 'up') f.append(user);
+      f.append(email); if (tab !== 'reset') f.append(pass);
+      const go = h('button', { class: 'primary', type: 'submit', text: tab === 'in' ? 'Sign in' : tab === 'up' ? 'Create account' : 'Send reset link' });
+      go.onclick = () => run(go, async () => {
+        if (tab === 'in') { await S.signIn(email.value, pass.value); return 'Signed in.'; }
+        if (tab === 'up') { const r = await S.signUp(email.value, pass.value, user.value); if (r.confirm) { this.frTab = 'in'; return 'Account created! Check your email for a confirmation link, then sign in.'; } return 'Welcome to Tumblewright!'; }
+        await S.resetPassword(email.value); return 'If that email has an account, a reset link is on its way.';
+      });
+      f.append(go, msg); s.append(f, back);
+      setTimeout(() => (tab === 'up' ? user : email).focus(), 30);
+      return;
+    }
+    // signed in
+    const copy = h('button', { class: 'small', text: 'Copy code', onclick: () => { navigator.clipboard && navigator.clipboard.writeText(S.code()); this.toast('Friend code copied', 'content_copy'); } });
+    s.append(h('div', { class: 'fr-me' }, h('div', { class: 'grow' }, h('b', { text: S.profile.username }), h('div', { class: 'fr-code', text: S.code() })), copy, h('button', { class: 'small danger', text: 'Sign out', onclick: () => run(null, () => S.signOut()) })));
+    const addIn = h('input', { type: 'text', placeholder: 'Username or friend code', 'aria-label': 'Add a friend by username or friend code' });
+    addIn.onfocus = () => this._frTyping = true; addIn.onblur = () => this._frTyping = false;
+    const addB = h('button', { class: 'primary', text: 'Add friend' });
+    const add = () => run(addB, async () => { const r = await S.addFriend(addIn.value); addIn.value = ''; return r; });
+    addB.onclick = add; addIn.onkeydown = e => { e.stopPropagation(); if (e.key === 'Enter') add(); };
+    s.append(h('div', { class: 'fr-add' }, addIn, addB), msg);
+    if (S.incoming.length) {
+      s.append(h('h3', { text: 'Friend requests' }));
+      for (const r of S.incoming) s.append(h('div', { class: 'fr-row' }, h('span', { class: 'nm', text: r.username }), h('span', { class: 'sp' }),
+        h('button', { class: 'small primary', text: 'Accept', onclick: e => run(e.target, () => S.accept(r.id)) }), h('button', { class: 'small', text: 'Decline', onclick: e => run(e.target, () => S.remove(r.id)) })));
+    }
+    s.append(h('h3', { text: `Friends (${S.friends.length})` }));
+    if (!S.friends.length) s.append(h('p', { class: 'muted', style: 'font-size:13px', text: 'No friends yet. Share your friend code, or add someone by their username.' }));
+    for (const f of S.friends) {
+      const on = S.online(f), inRoom = on && f.room, here = Net.online && Net.code === f.room;
+      s.append(h('div', { class: 'fr-row' }, h('i', { class: 'dot' + (on ? ' on' : '') }),
+        h('span', { class: 'nm', text: f.username }),
+        h('span', { class: 'st', text: !on ? 'offline' : here ? 'in your room' : inRoom ? `playing ${f.mode || ''}`.trim() : 'in the menu' }),
+        h('span', { class: 'sp' }),
+        inRoom && !here ? h('button', { class: 'small primary', text: 'Join', onclick: () => S.join(f.room) }) : null,
+        on && Net.online && !here ? h('button', { class: 'small', text: 'Invite', onclick: e => run(e.target, async () => { await S.invite(f); return `Invite sent to ${f.username}.`; }) }) : null,
+        h('button', { class: 'small', text: 'Remove', title: 'Remove friend', onclick: e => { if (confirm(`Remove ${f.username} from your friends?`)) run(e.target, () => S.remove(f.id)); } })));
+    }
+    if (S.outgoing.length) { s.append(h('h3', { text: 'Sent requests' })); for (const r of S.outgoing) s.append(h('div', { class: 'fr-row' }, h('span', { class: 'nm', text: r.username }), h('span', { class: 'st', text: 'pending' }), h('span', { class: 'sp' }), h('button', { class: 'small', text: 'Cancel', onclick: e => run(e.target, () => S.remove(r.id)) }))); }
+    s.append(back);
+  },
+  showInvite(inv) {
+    const b = $('#inviteBox'); b.innerHTML = '';
+    const close = () => { b.classList.add('hidden'); Social.dismissInvite(inv.id); };
+    b.append(h('div', { class: 'grow' }, h('b', { text: `${inv.from} invited you` }), h('small', { text: `Room ${fmtCode(inv.room)}` })),
+      h('button', { class: 'small primary', text: 'Join', onclick: () => { close(); Social.join(inv.room); } }), h('button', { class: 'small', text: 'Later', onclick: close }));
+    b.classList.remove('hidden'); Audio.play('confirm');
+    clearTimeout(this._invT); this._invT = setTimeout(() => b.classList.add('hidden'), 30000);
+  },
+  // ---- progression: level card, daily challenges, colour swatches (some unlock with levels) -----
+  refreshProfile() {
+    const L = Prog.level(), lvl = L.l;
+    $('#lvNum').textContent = lvl; $('#lvTitle').textContent = Prog.title(lvl);
+    $('#xpText').textContent = `${L.into} / ${L.need} XP`; $('#xpFill').style.width = (100 * L.into / L.need) + '%';
+    Prog.rollDaily();
+    const dl = $('#dailyList'); dl.innerHTML = '';
+    for (const c of Prog.d.daily) {
+      const def = DAILY_POOL.find(p => p.id === c.id); if (!def) continue;
+      const v = Math.min(c.n, Prog.d.dp[c.id] || 0), done = !!Prog.d.done[c.id];
+      dl.append(h('div', { class: 'dl' + (done ? ' done' : '') }, h('div', { class: 'dl-t' }, h('span', { text: def.text(c.n) }), h('b', { text: done ? 'Done · +100 XP' : `${v} / ${c.n}` })), h('div', { class: 'dl-b', html: `<i style="width:${100 * v / c.n}%"></i>` })));
+    }
+    const sw = $('#swatches'); sw.innerHTML = '';
+    const pick = c => { Settings.color = c; saveSettings(); $$('.swatch').forEach(s => s.classList.toggle('sel', s.dataset.c === c)); this.refreshLobbyAvatar(); };
+    for (const c of PLAYER_COLORS) sw.append(h('button', { class: 'swatch' + (c === Settings.color ? ' sel' : ''), style: `background:${c}`, title: c, 'data-c': c, onclick: () => pick(c) }));
+    for (const u of UNLOCK_COLORS) {
+      const locked = lvl < u.lvl;
+      sw.append(h('button', { class: 'swatch' + (locked ? ' locked' : '') + (u.c === Settings.color ? ' sel' : ''), style: `background:${u.c}`, title: locked ? `${u.name}: unlocks at level ${u.lvl}` : u.name, 'data-c': u.c, 'data-l': locked ? u.lvl : '', onclick: () => locked ? this.toast(`${u.name} unlocks at level ${u.lvl}`, 'lock') : pick(u.c) }));
+    }
+  },
+  xpPop(n, why) {
+    const f = $('#xpFeed'); if (!f || Game.state !== 'playing') return;
+    const d = h('div', { class: 'xpp', html: `+${Math.round(n)} XP<small>${esc(why || '')}</small>` }); f.append(d); setTimeout(() => d.remove(), 1900);
+    while (f.children.length > 4) f.firstChild.remove();
+  },
   // ---- auto-update status (driven by the loader at the end of the file) ----------------------
   initUpdates() { window.addEventListener('tw-update', () => this.refreshUpdate()); this.refreshUpdate(); },
   updText(U) {
@@ -5163,7 +6029,7 @@ const UI = {
   },
   refreshUpdate() {
     const U = window.TWUpdate || { status: 'off' }, t = this.updText(U);
-    $('#verLabel').textContent = `Tumblewright v${GAME.version}` + (t ? ' · ' + t : '');
+    $('#verLabel').textContent = `v${GAME.version}` + (t ? ' · ' + t : '');
     const bar = $('#updateBar'), ready = U.status === 'ready' && U.ready;
     bar.classList.toggle('hidden', !ready);
     if (ready && bar.dataset.v !== U.ready.version) {
@@ -5183,14 +6049,14 @@ const UI = {
     for (const p of Players.map.values()) Players.updatePlate(p, true);
   },
   // ---- generic menus -----------------------------------------------------------
-  menus: ['spawn', 'pause', 'settings', 'admin', 'saveload', 'help', 'radial', 'hostleft', 'paint', 'cleanup', 'addons', 'inventory', 'owner'],
-  el(name) { return { spawn: '#spawnMenu', pause: '#pause', settings: '#settings', admin: '#admin', saveload: '#saveload', help: '#help', radial: '#radial', hostleft: '#hostLeft', paint: '#paintMenu', cleanup: '#cleanupMenu', addons: '#addonsMenu', inventory: '#inventoryMenu', owner: '#ownerMenu' }[name]; },
+  menus: ['spawn', 'pause', 'settings', 'admin', 'saveload', 'help', 'radial', 'hostleft', 'paint', 'cleanup', 'addons', 'inventory', 'owner', 'servers', 'friends'],
+  el(name) { return { spawn: '#spawnMenu', pause: '#pause', settings: '#settings', admin: '#admin', saveload: '#saveload', help: '#help', radial: '#radial', hostleft: '#hostLeft', paint: '#paintMenu', cleanup: '#cleanupMenu', addons: '#addonsMenu', inventory: '#inventoryMenu', owner: '#ownerMenu', servers: '#servers', friends: '#friendsMenu' }[name]; },
   openMenu(name) {
     if (this.open === 'chat') this.closeChat(false);
     for (const n of this.menus) $(this.el(n)).classList.add('hidden');
     this.open = name;
     if (name !== 'radial') { Game.lockReleaseOk = true; if (document.pointerLockElement) document.exitPointerLock(); Tools.release(); }
-    const b = { owner: () => this.buildOwner(), inventory: () => this.buildInventory(), cleanup: () => this.buildCleanup(), addons: () => this.buildAddons(), spawn: () => this.buildSpawn(), pause: () => this.buildPause(), settings: () => this.buildSettings(), admin: () => this.buildAdmin(), saveload: () => this.buildSaveLoad(), help: () => this.buildHelp(), radial: () => this.buildRadial(), hostleft: () => this.buildHostLeft() }[name];
+    const b = { friends: () => this.buildFriends(), servers: () => { $('#svCode').value = ''; this.renderRooms(); setTimeout(() => $('#svSearch').focus(), 30); }, owner: () => this.buildOwner(), inventory: () => this.buildInventory(), cleanup: () => this.buildCleanup(), addons: () => this.buildAddons(), spawn: () => this.buildSpawn(), pause: () => this.buildPause(), settings: () => this.buildSettings(), admin: () => this.buildAdmin(), saveload: () => this.buildSaveLoad(), help: () => this.buildHelp(), radial: () => this.buildRadial(), hostleft: () => this.buildHostLeft() }[name];
     if (b) b();
     $(this.el(name)).classList.remove('hidden');
     Nav.focus(null);
@@ -5204,22 +6070,44 @@ const UI = {
   },
   back() {
     const o = this.open;
-    if (o === 'settings' || o === 'admin' || o === 'saveload' || o === 'help' || o === 'cleanup' || o === 'addons' || o === 'inventory' || o === 'owner') { if (Game.state === 'playing') this.openMenu('pause'); else this.closeMenu(); }
+    if (o === 'settings' || o === 'admin' || o === 'saveload' || o === 'help' || o === 'cleanup' || o === 'addons' || o === 'inventory' || o === 'owner' || o === 'friends') { if (Game.state === 'playing') this.openMenu('pause'); else this.closeMenu(); }
     else if (o === 'hostleft') return;
     else this.closeMenu();
   },
-  // public rooms (lobby): live list from the presence channel
+  // public rooms: live list from the presence channel, shown in the server browser
+  svQuery: '', svMode: 'All',
   renderRooms() {
-    const el = $('#roomList'); if (!el) return;
-    const rooms = [...Online.rooms.values()].sort((a, b) => (b.n || 0) - (a.n || 0));
-    el.innerHTML = '';
-    el.append(h('div', { class: 'rl-h', html: `<span>PUBLIC ROOMS</span><span>${rooms.length ? rooms.length + ' open' : ''}</span>` }));
-    if (!rooms.length) { el.append(h('div', { class: 'muted', style: 'font-size:12px', text: GAME.supa ? 'No public rooms right now. Create one and your friends will see it here.' : 'Room list unavailable in this copy.' })); return; }
+    const all = [...Online.rooms.values()].sort((a, b) => (b.v === GAME.version) - (a.v === GAME.version) || (b.n || 0) - (a.n || 0));
+    const open = all.filter(r => r.v === GAME.version && (r.n || 0) < (r.max || CFG.maxPlayers)).length;
+    $('#browseSub').textContent = all.length ? `${all.length} room${all.length === 1 ? '' : 's'}` : '';
+    if (GAME.discord) $('#quickSub').textContent = 'Join your voice channel\'s game';
+    else $('#quickSub').textContent = open ? `Join one of ${open} open room${open === 1 ? '' : 's'}` : 'No open rooms: hosts a new one';
+    $('#netDot').classList.toggle('ok', !!Online.live);
+    $('#netDot').lastChild.textContent = !GAME.supa ? 'Room list off' : Online.live ? 'Matchmaking online' : 'Connecting…';
+    $('#svCount').textContent = `${all.length} public room${all.length === 1 ? '' : 's'}`;
+    // mode filter chips from the modes actually being played
+    const modes = ['All', ...new Set(all.map(r => r.mode || 'Sandbox'))];
+    if (!modes.includes(this.svMode)) this.svMode = 'All';
+    const mc = $('#svModes'); mc.innerHTML = '';
+    for (const m of modes) mc.append(h('button', { class: 'sv-chip' + (m === this.svMode ? ' on' : ''), text: m, onclick: () => { this.svMode = m; this.renderRooms(); } }));
+    const q = this.svQuery;
+    const rooms = all.filter(r => (this.svMode === 'All' || (r.mode || 'Sandbox') === this.svMode)
+      && (!Settings.hideFull || (r.n || 0) < (r.max || CFG.maxPlayers))
+      && (!q || [r.host, r.map, r.mode, r.code].some(x => String(x || '').toLowerCase().includes(q))));
+    const el = $('#roomList'); el.innerHTML = '';
+    if (!rooms.length) {
+      el.append(h('div', { class: 'sv-empty', text: !GAME.supa ? 'The room list is unavailable in this copy. Join with a room code instead.' : !Online.live ? 'Connecting to matchmaking…' : all.length ? 'No rooms match your filters.' : 'No public rooms right now. Host one and it shows up here for everyone.' }));
+      return;
+    }
     for (const r of rooms) {
-      const same = r.v === GAME.version, full = (r.n || 0) >= (r.max || 10);
-      el.append(h('div', { class: 'rl' },
-        h('div', { class: 'nm', html: `<b>${esc(r.host)}'s room</b><br><small>${esc(r.map)} · ${esc(r.mode)} · ${r.n}/${r.max}${same ? '' : ' · v' + esc(r.v)}</small>` }),
-        h('button', { class: 'small' + (same && !full ? ' primary' : ''), text: full ? 'Full' : same ? 'Join' : 'Update', disabled: full, title: same ? '' : 'Different game version: joining will update you first if you can', onclick: () => Game.joinRoom(r.code) })));
+      const same = r.v === GAME.version, full = (r.n || 0) >= (r.max || CFG.maxPlayers), go = () => { if (full) return; this.closeMenu(); Game.joinRoom(r.code); };
+      el.append(h('div', { class: 'sv-row sv-r', onclick: go },
+        h('div', { class: 'nm', html: `<b>${esc(r.host)}'s room</b><small>${fmtCode(r.code)}</small>` }),
+        h('span', { text: r.map || '—' }),
+        h('span', { class: 'sv-mode' + (/nextbot/i.test(r.mode || '') ? ' nb' : ''), text: r.mode || 'Sandbox' }),
+        h('span', { class: 'num', text: `${r.n || 0} / ${r.max || CFG.maxPlayers}` }),
+        h('span', { class: 'num' + (same ? '' : ' old'), text: 'v' + (r.v || '?') }),
+        h('button', { class: same && !full ? 'primary' : '', text: full ? 'Full' : same ? 'Join' : 'Update', disabled: full, title: same ? '' : 'Different game version: joining updates you first if it can', onclick: e => { e.stopPropagation(); go(); } })));
     }
   },
   // cleanup: props grouped by who spawned them
@@ -5465,18 +6353,56 @@ const UI = {
   },
   showDeath() { $('#deathScreen').classList.remove('hidden'); },
   hideDeath() { $('#deathScreen').classList.add('hidden'); },
-  damageFlash() { const hud = $('#hud'); hud.style.boxShadow = 'inset 0 0 140px rgba(255,30,30,.55)'; clearTimeout(this._df); this._df = setTimeout(() => hud.style.boxShadow = '', 180); if (!this._hurtT || now() - this._hurtT > 0.45) { this._hurtT = now(); Audio.play('pain_m', 0.55); Audio.play('punch', 0.35); } },
+  // red arc pointing toward where a hit came from (f = source position from the host), plus the screen-edge flash
+  damageFlash(f) {
+    const me = Players.local, dd = $('#dmgDir');
+    if (f && me && dd) {
+      const ang = Math.atan2(-(f[0] - me.pos.x), -(f[2] - me.pos.z)) - me.yaw;
+      dd.style.transform = `translate(-50%,-50%) rotate(${-ang}rad)`; dd.classList.remove('on'); void dd.offsetWidth; dd.classList.add('on');
+    }
+    this._damageFlash();
+  },
+  _damageFlash() { const hud = $('#hud'); hud.style.boxShadow = 'inset 0 0 140px rgba(255,30,30,.55)'; clearTimeout(this._df); this._df = setTimeout(() => hud.style.boxShadow = '', 180); if (!this._hurtT || now() - this._hurtT > 0.45) { this._hurtT = now(); Audio.play('pain_m', 0.55); Audio.play('punch', 0.35); } },
   hitmarker() { Audio.play('hitmark'); const hm = $('#hitmarker'); hm.style.opacity = 1; clearTimeout(this._hm); this._hm = setTimeout(() => hm.style.opacity = 0, 140); },
   killfeed(m) {
     const v = Players.map.get(m.v), a = m.a ? Players.map.get(m.a) : null;
     const nm = p => `<span style="color:${esc(p ? p.color : '#fff')}">${esc(p ? p.name : '?')}</span>`;
-    const d = h('div', { class: 'panel', html: a && a !== v ? `${nm(a)} ${ic('skull', '☠')} <span class="muted">${esc(m.w)}</span> ${nm(v)}` : `${ic('skull', '☠')} ${nm(v)} <span class="muted">died</span>` });
+    const d = h('div', { class: 'panel', html: a && a !== v ? `${nm(a)} <span class="kf-w">${esc(m.w || '')}</span> ${nm(v)}` : `${nm(v)} <span class="kf-w">${ic('skull', '☠')}</span> <span class="muted">died</span>` });
     $('#killfeed').prepend(d); setTimeout(() => d.remove(), 6000);
   },
   update(dt) {
     const me = Players.local;
-    if (me) { $('#hpText').textContent = Math.round(me.hp); $('#hpFill').style.width = me.hp + '%'; $('#hpFill').style.background = me.hp > 50 ? 'linear-gradient(90deg,#4ade80,#a3e635)' : me.hp > 25 ? '#fbbf24' : '#ef4444'; }
+    if (me) {   // segmented health bar: 10 cells, colour by how hurt you are
+      const hp = Math.max(0, Math.round(me.hp)), lv = hp > 50 ? 'ok' : hp > 25 ? 'mid' : 'low', n = Math.ceil(hp / 10), key = hp + lv;
+      if (this._hpKey !== key) {
+        this._hpKey = key; $('#hpText').textContent = hp; $('#hpBox').dataset.lv = lv;
+        const sg = $('#hpSegs'); if (sg.children.length !== 10) { sg.innerHTML = ''; for (let i = 0; i < 10; i++) sg.append(h('i')); }
+        [...sg.children].forEach((c, i) => c.classList.toggle('on', i < n));
+      }
+    }
     $('#hpBox').style.display = Rules.combat ? '' : 'none';
+    const pt = $('#protTag'), prot = !!(me && Rules.combat && !me.dead && Players.isProt(me)); if (pt._on !== prot) { pt._on = prot; pt.classList.toggle('hidden', !prot); }
+    // Zombie Survival banner: big number = seconds to the next wave, or zombies left
+    const zh = $('#zsHud'), zs = Rules.mode === 'zombies' && Rules.zs, ph = Rules.mode === 'prophunt' && Rules.ph;
+    zh.classList.toggle('hidden', !zs && !ph);
+    // Prop Hunt banner: your team, the clock, what's happening; hunters see black while props hide
+    if (ph) {
+      const team = me && me.team, fmt = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+      const big = ph.phase === 'end' ? (ph.win === 'hunter' ? 'HUNTERS WIN' : 'PROPS WIN') : ph.phase === 'wait' ? '—' : fmt(ph.t);
+      const right = ph.phase === 'wait' ? 'Waiting for a second player' : ph.phase === 'hide' ? (team === 'prop' ? 'Hide! Press E on an object to become it' : 'Props are hiding') : ph.phase === 'hunt' ? `${ph.left} prop${ph.left === 1 ? '' : 's'} left` : `Round ${ph.round} over`;
+      const label = team === 'hunter' ? 'Hunter' : 'Prop', key = 'ph' + big + right + label;
+      if (zh._k !== key) { zh._k = key; $('#zsL').textContent = `Prop hunt · ${label}`; $('#zsBig').textContent = big; $('#zsR').textContent = right; zh.classList.toggle('over', ph.phase === 'end'); zh.classList.toggle('team-prop', team === 'prop'); zh.classList.toggle('team-hunter', team === 'hunter'); }
+    } else if (zs) $('#zsL').textContent = 'Zombie survival';
+    $('#hud').classList.toggle('ph-prop', !!(ph && me && me.team === 'prop' && ph.phase !== 'wait'));   // props don't use weapons
+    $('#phBlind').classList.toggle('hidden', !(ph && ph.phase === 'hide' && me && me.team === 'hunter'));
+    if (zs) {
+      const big = zs.phase === 'wave' ? `${zs.left}` : zs.phase === 'over' ? 'GAME OVER' : `0:${String(zs.t).padStart(2, '0')}`;
+      const right = zs.phase === 'wave' ? `Wave ${zs.wave} · zombies left` : zs.phase === 'over' ? `Survived ${Math.max(0, zs.wave - 1)} waves` : zs.wave ? `Wave ${zs.wave + 1} incoming · build!` : 'First wave incoming · build!';
+      const key = big + right; if (zh._k !== key) { zh._k = key; $('#zsBig').textContent = big; $('#zsR').textContent = right; zh.classList.toggle('over', zs.phase === 'over'); }
+      const ds = $('#deathScreen'), dt2 = zs.phase === 'wave' ? 'You\'re down. Back when the wave is cleared.' : 'You died';
+      if (me && me.dead && ds.textContent !== dt2) ds.textContent = dt2;
+    }
+    if (Game.state === 'playing' && Prog.d) Prog.tick(dt);
     // nextbot gamemode: how long you've survived since your last death, and your best
     const bh = $('#botHud'), nb = Rules.mode === 'nextbot' && me;
     bh.classList.toggle('hidden', !nb);
@@ -5783,6 +6709,15 @@ const UI = {
     if (Owner.key) {
       const st = Net.isHost ? 'You are the host, so you already have every setting.' : !Net.online ? 'Unlocked. Join or host a room: the host will verify you automatically.' : Owner.ok ? 'Verified by this room\'s host. Host settings are in the pause menu.' : 'Unlocked. Waiting for the host to verify you…';
       s.append(h('p', { text: st }));
+      // owner aimbot (Game.ownerAimbot); saved per device like the other settings
+      const row = (label, ctl) => h('div', { class: 'setrow' }, h('span', { html: label }), ctl);
+      const sel = (key, opts, num) => { const el = h('select', { onchange: () => { Settings[key] = num ? +el.value : el.value; saveSettings(); } }); opts.forEach(([v, l]) => el.append(h('option', { value: v, text: l, selected: Settings[key] === v }))); return el; };
+      s.append(h('h3', { text: 'Aimbot', style: 'margin:14px 0 6px' }),
+        row('Aimbot', sel('aimbot', [[0, 'Off'], [1, 'While aiming or shooting'], [2, 'Always on']], true)),
+        row('Target', sel('aimbotBone', [['head', 'Head'], ['body', 'Body']])),
+        row('Field of view', sel('aimbotFov', [[10, '10°'], [25, '25°'], [45, '45°'], [90, '90°'], [180, '180°']], true)),
+        row('Smoothing', sel('aimbotSmooth', [[0, 'Instant'], [1, 'Fast'], [2, 'Medium'], [3, 'Smooth']], true)),
+        h('p', { class: 'muted', style: 'font-size:13px', text: 'Locks onto NPCs, and players when combat is on. Only works on your device while owner access is unlocked.' }));
       s.append(h('div', { class: 'btns' },
         !Owner.ok && Net.online && !Net.isHost ? h('button', { text: 'Ask the host again', onclick: () => { Owner.okHost = null; Owner.hello(); } }) : null,
         h('button', { class: 'danger', text: 'Forget on this device', onclick: () => Owner.forget() }),
@@ -5804,27 +6739,46 @@ const UI = {
       h('div', { class: 'btns' }, h('button', { text: 'Back', onclick: () => this.back() }), btn));
     setTimeout(() => inp.focus(), 50);
   },
+  // pause: menu down the left, players + invite on the right
   buildPause() {
     const p = $('#pause'); p.innerHTML = '';
-    p.append(h('h2', { text: 'Paused' }));
-    if (Net.online) p.append(h('div', { class: 'psub' }, h('span', { text: 'Room' }), h('b', { text: fmtCode(Net.code) }), h('span', { text: `${Players.map.size} player${Players.map.size === 1 ? '' : 's'}` })));
-    else p.append(h('div', { class: 'psub', text: 'Offline' }));
-    const list = h('div', { class: 'mlist' }), item = (label, fn, cls) => list.append(h('button', { class: 'mitem' + (cls ? ' ' + cls : ''), text: label, onclick: fn }));
-    item('Resume', () => this.closeMenu());
-    item('Spawn menu', () => this.openMenu('spawn'));
-    item('Inventory / hotbar', () => this.openMenu('inventory'));
-    if (Net.online) item('Copy invite link', () => this.copyInvite());
-    if (Net.online) item('Copy network report', () => this.copyReport());
+    const left = h('div', { class: 'ps-left panel' }), right = h('div', { class: 'ps-right' });
+    left.append(h('h2', { text: 'Paused' }));
+    if (Net.online) left.append(h('div', { class: 'psub' }, h('span', { text: 'Room' }), h('b', { text: fmtCode(Net.code) }), h('span', { text: `${Players.map.size} player${Players.map.size === 1 ? '' : 's'}` })));
+    else left.append(h('div', { class: 'psub', text: 'Solo sandbox' }));
+    const list = h('div', { class: 'mlist' }), item = (label, fn, cls, key) => list.append(h('button', { class: 'mitem' + (cls ? ' ' + cls : ''), onclick: fn, html: esc(label) + (key ? `<kbd>${esc(key)}</kbd>` : '') }));
+    item('Resume', () => this.closeMenu(), '', 'Esc');
+    item('Spawn menu', () => this.openMenu('spawn'), '', keyLabel(Settings.binds.spawnMenu));
+    item('Inventory / hotbar', () => this.openMenu('inventory'), '', keyLabel(Settings.binds.inventory));
+    item('Friends', () => this.openMenu('friends'));
     item('Save / load', () => this.openMenu('saveload'));
     item('Clean up props', () => this.openMenu('cleanup'));
-    item('Community addons', () => this.openMenu('addons'));
+    item('Workshop', () => this.openMenu('addons'));
     if (Net.isHost) item('Host settings', () => this.openMenu('admin'));
     else if (Owner.ok) item('Host settings (owner)', () => this.openMenu('admin'));
     item('Settings', () => this.openMenu('settings'));
-    item('Controls', () => this.openMenu('help'));
+    item('Controls', () => this.openMenu('help'), '', keyLabel(Settings.binds.help));
     item(Owner.key ? 'Owner access ✓' : 'Owner access', () => this.openMenu('owner'));
-    item(Net.online ? 'Leave room' : 'Quit to menu', () => Game.toLobby(), 'danger');
-    p.append(list);
+    left.append(list, h('div', { class: 'ps-leave' }, h('button', { class: 'mitem danger', text: Net.online ? 'Leave room' : 'Quit to menu', onclick: () => Game.toLobby() })));
+    // players
+    const th = THEMES[Rules.env], card = h('div', { class: 'ps-card panel' });
+    card.append(h('div', { class: 'ps-card-h' }, h('h3', { text: 'Players' }), h('span', { text: [th && th.label, Rules.mode !== 'sandbox' ? modeLabel() : Rules.combat ? 'Combat on' : 'Sandbox'].filter(Boolean).join(' · ') })));
+    for (const pl of [...Players.map.values()].sort((a, b) => (b.kills || 0) - (a.kills || 0) || a.joinOrder - b.joinOrder)) {
+      const ping = pl.isLocal && Net.isHost ? 0 : Math.round(pl.ping || 0);
+      card.append(h('div', { class: 'ps-pl' + (pl.isLocal ? ' me' : '') },
+        h('i', { style: `background:${pl.color}` }),
+        h('span', { class: 'lv', text: pl.isLocal ? Prog.level().l : (pl.lvl || 1) }),
+        h('span', { class: 'nm', text: pl.name }),
+        Net.online && Net.hostId === pl.id ? h('span', { class: 'badge ps-host', text: 'HOST' }) : null,
+        h('span', { class: 'k', text: Rules.combat || Rules.mode !== 'sandbox' ? `${pl.kills || 0} kills · ${pl.deaths || 0} deaths` : '' }),
+        Net.online ? h('span', { class: 'png ' + (ping < 80 ? 'ok' : ping < 150 ? 'mid' : 'bad'), text: ping + ' ms' }) : null));
+    }
+    right.append(card);
+    if (Net.online) right.append(h('div', { class: 'ps-card panel ps-inv' },
+      h('div', { class: 'grow' }, h('b', { text: 'Invite friends' }), h('span', { text: 'Anyone with the link joins this room' })),
+      h('button', { class: 'primary', text: 'Copy invite link', onclick: () => this.copyInvite() })));
+    if (Net.online) right.append(h('button', { class: 'ps-report', text: 'Copy network report', onclick: () => this.copyReport() }));
+    p.append(left, right);
   },
   // player preview in the lobby (renders the avatar model in the chosen color)
   refreshLobbyAvatar() {
@@ -5833,7 +6787,8 @@ const UI = {
     if (gun && Models.has('wp_physgun')) { gun.traverse(o => { if (o.isMesh) o.visible = false; }); const W = WEAPON_MODEL.physgun, wm = Models.instance('wp_physgun', W.t, W.c), hand = wm.getObjectByName('wp_physgun_hand'); if (hand) hand.visible = false; wm.position.set(0, 0.03, -0.12); gun.add(wm); }
     Models.plain(g);
     const url = Thumbs.snap(g, new V3(0.5, 0.18, -1), 150, 0.95);
-    if (url) $('#lobbyAvatar').innerHTML = `<img src="${url}" alt="Your character">`;
+    if (url) { this._avTry = 0; $("#lobbyAvatar").innerHTML = `<img src="${url}" alt="Your character">`; }
+    else if ((this._avTry = (this._avTry || 0) + 1) < 30) setTimeout(() => this.refreshLobbyAvatar(), 1000);   // the renderer can still be warming up at startup
   },
   buildSettings() {
     const s = $('#settings'); s.innerHTML = '';
@@ -5892,6 +6847,7 @@ const UI = {
       s.append(row('Field of view', ...range('fov', 60, 110, 1, v => v + '°', () => R.setFov(Settings.fov))));
       s.append(row('Mouse sensitivity', ...range('sens', 0.1, 3, 0.05, v => v.toFixed(2))));
       s.append(row('Invert look Y', check('invertY')));
+      s.append(row('Ask before closing the tab during a game', check('confirmClose')));
       s.append(row('Show control hints', check('showHints', () => { this.hintKey = ''; })));
       s.append(row('Spawn with hologram preview', check('spawnPreview')));
       s.append(row('Damage numbers', check('dmgNums')));
@@ -5946,7 +6902,7 @@ const UI = {
     for (const k in THEMES) th.append(h('option', { value: k, text: THEMES[k].label, selected: (Rules.env || 'plains') === k }));
     s.append(row('Map', th));
     const gm = h('select', { onchange: () => Admin.req('mode', { v: gm.value }) });
-    for (const [k, l] of [['sandbox', 'Sandbox'], ['nextbot', 'Nextbot chase']]) gm.append(h('option', { value: k, text: l, selected: (Rules.mode || 'sandbox') === k }));
+    for (const [k, l] of [['sandbox', 'Sandbox'], ['nextbot', 'Nextbot chase'], ['zombies', 'Zombie survival'], ['prophunt', 'Prop hunt']]) gm.append(h('option', { value: k, text: l, selected: (Rules.mode || 'sandbox') === k }));
     s.append(row('Gamemode', gm));
     if (Rules.mode === 'nextbot') { const bc = h('input', { type: 'range', min: 1, max: 8, value: Rules.bots || 3, onchange: () => Admin.req('bots', { v: +bc.value }) }); s.append(row(`Nextbots <span class="muted">(${Rules.bots || 3})</span>`, bc)); }
     s.append(row('Dismemberment (NPC limbs can come off)', h('input', { type: 'checkbox', checked: Rules.dismember !== false, onchange: e => Admin.req('dismember', { v: e.target.checked }) })));
@@ -7699,7 +8655,7 @@ const Game = {
   async boot() {
     const lt = $('#loadingText');
     try {
-      UI.init(); Input.init($('#c'));
+      Prog.load(); UI.init(); Input.init($('#c')); Social.init();
       lt.textContent = 'Starting renderer…'; R.init();
       lt.textContent = 'Loading physics engine…'; await Phys.init();
       Players.init(); World.initStatic(); Tools.init(); Editor.init(); FX.init(); Gore.init();
@@ -7721,6 +8677,9 @@ const Game = {
       UI.initUpdates();
       this.state = 'lobby'; UI.onTierChanged(R.tier);
       Owner.restore();
+      if (GAME.discord) DiscordAct.start();   // launched from a voice channel: go straight into its room
+      // crouch (Ctrl) + forward (W) is also the browser's close-tab shortcut: ask first while a game is running
+      addEventListener('beforeunload', e => { if (this.state === 'playing' && Settings.confirmClose !== false && !GAME.discord) { e.preventDefault(); e.returnValue = ''; } });
       addEventListener('pointerdown', () => Audio.ensure(), true); addEventListener('keydown', () => Audio.ensure(), true);
       this.lastRaf = performance.now(); this.startWatchdog();
       $('#c').addEventListener('click', () => { if (this.state === 'playing' && !UI.open && !Editor.active) this.lock(); });
@@ -7746,18 +8705,24 @@ const Game = {
   },
   // ---- room flow ---------------------------------------------------------------------
   profileName() { let n = ($('#inName').value || Settings.name || '').trim().slice(0, 18); if (!n) n = 'Player' + ((Math.random() * 900 + 100) | 0); Settings.name = n; $('#inName').value = n; saveSettings(); return n; },
-  resetForPlay() { World.clear(); for (const id of [...Players.map.keys()]) Players.remove(id); Editor.undo = []; Editor.redo = []; Object.assign(Rules, { combat: false, editPerm: 'all', propLimit: CFG.propLimit, allowNoclip: true, aimAssist: true, dismember: true, env: 'plains', envGone: [], mode: 'sandbox', bots: 3 }); $('#chatLog').innerHTML = ''; Auth.nades = []; Auth.corpses = []; },
-  async createRoom() {
+  resetForPlay() { ZS.st = null; Rules.zs = null; PH.st = null; Rules.ph = null; World.clear(); for (const id of [...Players.map.keys()]) Players.remove(id); Editor.undo = []; Editor.redo = []; Object.assign(Rules, { combat: false, editPerm: 'all', propLimit: CFG.propLimit, allowNoclip: true, aimAssist: true, dismember: true, env: 'plains', envGone: [], mode: 'sandbox', bots: 3 }); $('#chatLog').innerHTML = ''; Auth.nades = []; Auth.corpses = []; },
+  async createRoom(code0) {
     const name = this.profileName(); UI.lobbyStatus('Creating room…');
-    const code = randCode();
+    const code = code0 || randCode();
     try { this.resetForPlay(); await Net.start(code, true); }
     catch (e) { UI.lobbyStatus('Could not reach the network (' + e.message + '). You can still Play Solo.', true); this.startAttract(); return; }
-    Players.add({ id: Net.me, name, color: Settings.color, tier: R.tier, idx: 0, joinOrder: 0, isLocal: true });
+    Players.add({ id: Net.me, name, color: Settings.color, tier: R.tier, idx: 0, joinOrder: 0, isLocal: true, lvl: Prog.level().l });
     this.loadPending();
     try { history.replaceState(null, '', '#room=' + code); } catch (e) { }
     this.enterPlay(Auth.pickSpawn());
     UI.chat({ sys: 1, text: `Room ${fmtCode(code)} created. Share the code or invite link (Esc → Copy invite link).` });
     Net.sendPlayers();
+  },
+  // main menu "Play": join the busiest public room on our version that has space, else host a new one
+  quickPlay() {
+    if (GAME.discord) return DiscordAct.start();
+    const r = [...Online.rooms.values()].filter(r => r.v === GAME.version && (r.n || 0) < (r.max || CFG.maxPlayers)).sort((a, b) => (b.n || 0) - (a.n || 0))[0];
+    if (r) this.joinRoom(r.code); else { UI.lobbyStatus('No open public rooms right now, hosting one…'); this.createRoom(); }
   },
   async joinRoom(raw, retry) {
     const txt = String(raw || ''), link = txt.match(/room=([A-Z0-9]{6})/i);                 // a pasted invite link works too
@@ -7788,7 +8753,7 @@ const Game = {
   startSolo() {
     const name = this.profileName();
     this.resetForPlay(); Net.startOffline();
-    Players.add({ id: 'local', name, color: Settings.color, tier: R.tier, idx: 0, joinOrder: 0, isLocal: true });
+    Players.add({ id: 'local', name, color: Settings.color, tier: R.tier, idx: 0, joinOrder: 0, isLocal: true, lvl: Prog.level().l });
     this.loadPending();
     this.enterPlay(Auth.pickSpawn());
     UI.chat({ sys: 1, text: 'Offline. Create a room from the main menu to play with others.' });
@@ -7805,6 +8770,7 @@ const Game = {
     this.lock();
   },
   toLobby(silent) {
+    UI.refreshProfile();
     DmgNum.clear(); Bots.clear(); Auth.bots = [];
     if (Editor.active) Editor.toggle(false);
     if (Net.online && !silent) this.autosave();
@@ -7873,7 +8839,7 @@ const Game = {
     const h = Tools.cast(40); const o = new V3(), d = new V3(); Tools.aim(o, d);
     const pt = h ? h.point.clone().addScaledVector(h.normal, 0.05) : o.addScaledVector(d, 6);
     if (pt.distanceTo(me.pos) > 40) pt.copy(me.pos).add(new V3(-Math.sin(me.yaw) * 4, 0.5, -Math.cos(me.yaw) * 4));
-    Net.toHost({ t: 'spawn', item: key, p: a3(pt), yaw: me.yaw });
+    Net.toHost({ t: 'spawn', item: key, p: a3(pt), yaw: me.yaw }); Prog.bump('spawns');
     if (ITEM_INDEX[key] && ['props', 'furniture', 'fun'].includes(ITEM_INDEX[key].cat)) store.set('recent', [key, ...store.get('recent', []).filter(k => k !== key)].slice(0, 6));
     Audio.play('place');
   },
@@ -7908,7 +8874,7 @@ const Game = {
     if (Input.hit('reload')) { P.yaw += Math.PI / 4; Audio.play('tick'); }
     if (Input.hit('alt')) { this.cancelPlace(); Audio.play('switch'); return; }
     if (Input.hit('fire') && P.ok) {
-      Net.toHost({ t: 'spawn', item: P.key, p: a3(pt), yaw: me.yaw + P.yaw });
+      Net.toHost({ t: 'spawn', item: P.key, p: a3(pt), yaw: me.yaw + P.yaw }); Prog.bump('spawns');
       if (ITEM_INDEX[P.key] && ITEM_INDEX[P.key].cat !== 'map') store.set('recent', [P.key, ...store.get('recent', []).filter(k => k !== P.key)].slice(0, 6));
       Audio.play('place');
       // stays selected (GoreBox style): keep clicking to place more, alt-fire puts it away
@@ -7971,6 +8937,7 @@ const Game = {
         me.yaw += ey * k; me.pitch += ep * k * 0.85;
       }
       this._wasZoomed = this.zoomed;
+      this.ownerAimbot(me, dt);
       if (me.seat) {   // chase camera settles behind the vehicle when you stop looking around
         if (Math.abs(Input.dx) + Math.abs(Input.dy) > 0 || Math.hypot(Input.axes[2], Input.axes[3]) > 0.15) this.lookT = now();
         const ve = this.seatVeh();
@@ -7987,6 +8954,7 @@ const Game = {
     // movement
     const mv = Input.move(); mi.mx = mv.x; mi.my = mv.y;
     mi.jump = Input.down('jump'); mi.sprint = Input.down('sprint');
+    if (Rules.mode === 'prophunt' && Rules.ph && Rules.ph.phase === 'hide' && me.team === 'hunter') { mi.mx = mi.my = 0; mi.jump = mi.sprint = false; }   // hunters wait, blind
     mi.up = (Input.down('jump') ? 1 : 0) - (Input.down('crouch') ? 1 : 0);
     me.crouch = !me.noclip && !me.seat && Input.down('crouch');
     if (Editor.active) { this.cancelPlace(); Editor.update(dt); }
@@ -8012,7 +8980,8 @@ const Game = {
       if (!this.aimSeat) this.nearbySeat(me);   // standing next to a vehicle counts too
     }
     if (me.seat && Input.hit('reload')) Net.toHost({ t: 'flip' });
-    if (Input.hit('use') && !Editor.active) {
+    if (Input.hit('use') && !Editor.active && Rules.mode === 'prophunt' && me.team === 'prop' && !me.dead && this.aimEnt && this.aimDist < 9) Net.toHost({ t: 'disg', e: this.aimEnt.id });   // become this object
+    else if (Input.hit('use') && !Editor.active) {
       if (me.seat) Net.toHost({ t: 'use' });
       else if (this.aimSeat) Net.toHost({ t: 'use', e: this.aimSeat });
       else if (this.aimUse && this.aimUse.d.door) Net.toHost({ t: 'door', e: this.aimUse.id });
@@ -8084,6 +9053,42 @@ const Game = {
       if (!ok) return null;
     }
     best.s = bestS; return best;
+  },
+  // ---- owner aimbot --------------------------------------------------------------------------
+  // Only for owners (the owner code unlocked on this device). Turns the view onto the target closest to the crosshair
+  // inside Settings.aimbotFov: live NPCs, and other players when combat is on, with line of sight. Head or body.
+  ownerAimbot(me, dt) {
+    const W = W_BY_ID[Tools.weapon], mode = Settings.aimbot | 0;
+    if (!Owner.key || !mode || !W || !(W.range || W.proj) || me.seat || me.dead || Editor.active || UI.open) return;
+    if (mode === 1 && !Input.down('fire') && !Input.down('alt')) return;
+    const eye = R.camera.position, cp = Math.cos(me.pitch), fwd = new V3(-Math.sin(me.yaw) * cp, Math.sin(me.pitch), -Math.cos(me.yaw) * cp);
+    const maxD = Math.min(W.range || 300, 400), minCos = Math.cos(clamp(Settings.aimbotFov || 25, 2, 180) * Math.PI / 360), head = Settings.aimbotBone !== 'body';
+    const cands = [];
+    const consider = (pt, kind, id) => {
+      const dx = pt.x - eye.x, dy = pt.y - eye.y, dz = pt.z - eye.z, d = Math.hypot(dx, dy, dz);
+      if (d < 0.5 || d > maxD) return;
+      const cos = (dx * fwd.x + dy * fwd.y + dz * fwd.z) / d; if (cos < minCos) return;
+      cands.push({ pt: new V3(pt.x, pt.y, pt.z), d, kind, id, cos });
+    };
+    for (const g of World.groups.values()) {
+      if (g.t !== 'npc' || !g.alive) continue;
+      const e = (head && World.ents.get(g.parts[2])) || World.ents.get(g.parts[1]); if (e && e.mesh) consider(e.mesh.position, 'g', g.id);
+    }
+    if (Rules.combat) for (const p of Players.map.values()) if (!p.isLocal && !p.dead) consider({ x: p.renderPos.x, y: p.renderPos.y + (head ? 1.62 : 1.25) - (p.crouch ? 0.3 : 0), z: p.renderPos.z }, 'p', p.id);
+    cands.sort((a, b) => b.cos - a.cos);
+    let best = null;
+    for (const c of cands.slice(0, 6)) {   // nearest to the crosshair that we can actually see
+      const h = Phys.cast(eye, new V3().subVectors(c.pt, eye).normalize(), c.d + 0.5, me.body);
+      if (h && h.dist < c.d - 0.3 && !(c.kind === 'p' ? h.id === 'p:' + c.id : (typeof h.id === 'number' && World.ents.has(h.id) && World.ents.get(h.id).d.g === c.id))) continue;
+      best = c; break;
+    }
+    if (!best) return;
+    const dx = best.pt.x - eye.x, dy = best.pt.y - eye.y, dz = best.pt.z - eye.z;
+    let ey = Math.atan2(-dx, -dz) - me.yaw; while (ey > Math.PI) ey -= Math.PI * 2; while (ey < -Math.PI) ey += Math.PI * 2;
+    const ep = Math.atan2(dy, Math.hypot(dx, dz)) - me.pitch;
+    const sm = [0, 25, 12, 6][Settings.aimbotSmooth | 0], k = sm ? 1 - Math.exp(-sm * dt) : 1;   // instant / fast / medium / smooth
+    me.yaw += ey * k; me.pitch = clamp(me.pitch + ep * k, -1.55, 1.55);
+    R.camera.rotation.set(me.pitch, me.yaw, 0, 'YXZ'); R.camera.updateMatrixWorld();   // so a shot fired this frame goes where we now look
   },
   // ---- fixed 60 Hz step ----------------------------------------------------------------------
   fixedStep(dt) {
@@ -8177,6 +9182,13 @@ const Game = {
         if (h) cam.position.copy(target).addScaledVector(back, Math.max(0.6, h.dist - 0.3));
       }
       cam.lookAt(target);
+    } else if (me.disg && !me.dead && Rules.mode === 'prophunt') {   // disguised: look at yourself from behind
+      const target = _v1.copy(me.renderPos); target.y += Math.max(1.0, me.disg.s[1] + 0.5);
+      cam.position.copy(target).addScaledVector(dir, -4.5);
+      const back = _v4.subVectors(cam.position, target), bl = back.length(); back.divideScalar(bl || 1);
+      const h = Phys.cast(target, back, bl, me.body, c => { const id = Phys.colMap.get(c.handle); return id === 0 || (typeof id === 'number' && World.ents.has(id) && World.ents.get(id).d.k === 'map'); });
+      if (h) cam.position.copy(target).addScaledVector(back, Math.max(0.6, h.dist - 0.3));
+      cam.lookAt(target);
     } else {
       const eh = me.crouch ? CFG.eye - 0.5 : CFG.eye;
       this.eyeH = lerp(this.eyeH || eh, eh, 1 - Math.exp(-14 * dt));
@@ -8195,7 +9207,7 @@ const Game = {
     const scoped = this.fovCur < Settings.fov * 0.55; $('#scope').classList.toggle('on', scoped);
     const vm = this.viewmodel;
     if (vm) {
-      vm.visible = !me.seat && !me.dead && !Editor.active && !scoped;
+      vm.visible = !me.seat && !me.dead && !Editor.active && !scoped && !(me.disg && Rules.mode === 'prophunt');
       const spd = Math.hypot(me.vel.x, me.vel.z); this.bob += dt * spd * (me.grounded ? 1.6 : 0.3);
       const k = Tools.kick;
       const VB = Models.has('wp_' + Tools.weapon) && WEAPON_MODEL[Tools.weapon] ? WEAPON_MODEL[Tools.weapon].vm : [0.26, -0.25, -0.48];
@@ -8278,7 +9290,7 @@ const Game = {
 };
 
 // debug handle for testing from the console
-window.TW = { Owner, Hotbar, Audio, Models, Game, Net, World, Players, R, Auth, Tools, Editor, UI, Rules, Settings, Phys, Input, Admin, Save, FX, Mats, Vehicles, VEH, Gore, Env };
+window.TW = { Social, PH, ZS, Prog, DiscordAct, Online, Owner, Hotbar, Audio, Models, Game, Net, World, Players, R, Auth, Tools, Editor, UI, Rules, Settings, Phys, Input, Admin, Save, FX, Mats, Vehicles, VEH, Gore, Env };
 Game.boot();
 </script>
 
@@ -8299,7 +9311,13 @@ Game.boot();
   var PENDING = 'tw-update-pending';
   // shared across a document.open() swap (same Window), fresh after a reload
   var U = window.TWUpdate = window.TWUpdate || {};
-  U.version = VERSION; U.url = URL_; U.status = URL_ && KEY ? 'idle' : 'off';
+  // inside a Discord Activity the page can only reach the network through Discord's proxy: the site itself serves the
+  // CDN libraries under /npm/ (a Vercel rewrite), and the page is always the deployed latest, so no self-update
+  var DISCORD = /\.discordsays\.com$/.test(location.hostname);
+  // Discord's page security only runs inline scripts carrying its nonce: it stamps one on this script, and the two
+  // scripts boot() creates must carry the same one (read now: currentScript is gone once boot runs asynchronously)
+  var NONCE = (document.currentScript && document.currentScript.nonce) || '';
+  U.version = VERSION; U.url = URL_; U.status = URL_ && KEY && !DISCORD ? 'idle' : 'off';
 
   function cmp(a, b) {   // semver-ish compare: 1.10.0 > 1.9.3
     a = String(a).split('.').map(Number); b = String(b).split('.').map(Number);
@@ -8327,8 +9345,8 @@ Game.boot();
   // ---- start the game contained in THIS document ------------------------------------------
   function boot() {
     var im = document.getElementById('tw-importmap'), main = document.getElementById('tw-main');
-    var s = document.createElement('script'); s.type = 'importmap'; s.textContent = im.textContent; document.head.appendChild(s);
-    var m = document.createElement('script'); m.type = 'module'; m.textContent = main.textContent; document.body.appendChild(m);
+    var s = document.createElement('script'); s.type = 'importmap'; s.textContent = DISCORD ? im.textContent.split('https://cdn.jsdelivr.net/').join('/') : im.textContent; if (NONCE) s.nonce = NONCE; document.head.appendChild(s);
+    var m = document.createElement('script'); m.type = 'module'; m.textContent = main.textContent; if (NONCE) m.nonce = NONCE; document.body.appendChild(m);
   }
   // ---- replace this document with a downloaded newer version --------------------------------
   function swap(rec) {

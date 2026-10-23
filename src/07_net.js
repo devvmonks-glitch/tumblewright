@@ -67,7 +67,7 @@ const Net = {
     this._iceP = (async () => {
       try {
         const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 4000);
-        const r = await fetch(GAME.site + 'api/turn', { signal: ctl.signal, cache: 'no-store' }); clearTimeout(to);
+        const r = await fetch(GAME.discord ? '/api/turn' : GAME.site + 'api/turn', { signal: ctl.signal, cache: 'no-store' }); clearTimeout(to);
         const j = r.ok ? await r.json() : null, list = j && Array.isArray(j.iceServers) ? j.iceServers.filter(s => s && s.urls) : [];
         if (list.length) { this._ice = list; this._iceT = now(); }
         return list;
@@ -79,8 +79,9 @@ const Net = {
   // realtime channel (GAME.supa). Some networks block Nostr; whichever service connects two players first wins.
   async libs() {
     if (this._libs) return this._libs;
+    await DiscordAct.boot();
     const tryImport = (spec, ms) => Promise.race([import(spec), new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
-    const [nostr, supa] = await Promise.allSettled([tryImport('trystero', 15000), GAME.supa ? tryImport('trystero/supabase', 15000) : Promise.reject(new Error('off'))]);
+    const [nostr, supa] = await Promise.allSettled([GAME.discord ? Promise.reject(new Error('Nostr relays are unreachable from Discord')) : tryImport('trystero', 15000), GAME.supa ? tryImport('trystero/supabase', 15000) : Promise.reject(new Error('off'))]);
     const out = [];
     if (nostr.status === 'fulfilled') out.push({ kind: 'nostr', T: nostr.value });
     if (supa.status === 'fulfilled' && (!out.length || supa.value.selfId === out[0].T.selfId)) out.push({ kind: 'supabase', T: supa.value });
@@ -153,7 +154,7 @@ const Net = {
     for (const r of this.rooms || []) { try { r.leave(); } catch (e) { } }
     this.rooms = []; if (this.via) this.via.clear(); this.online = false; this.isHost = true; this.hostId = this.me = 'local'; this.peers.clear(); this.ready = false;
   },
-  hello() { return { name: Settings.name, color: Settings.color, tier: R.tier, host: this.isHost, v: GAME.version }; },
+  hello() { return { name: Settings.name, color: Settings.color, tier: R.tier, host: this.isHost, v: GAME.version, lvl: Prog.level().l }; },
   // ---- sending --------------------------------------------------------------------
   countIn(d) { this.stats.inB += typeof d === 'string' ? d.length : (d && d.byteLength) || 64; },
   send(action, data, target) {
@@ -176,7 +177,7 @@ const Net = {
   notify(pid, text) { this.sendTo(pid, { t: 'note', text }); },
   sysChat(text, cls) { this.bcastAll({ t: 'chat', sys: 1, cls: cls || 'sys', text }); },
   playerList() {
-    return [...Players.map.values()].map(p => ({ id: p.id, name: p.name, color: p.color, tier: p.tier, idx: p.idx, joinOrder: p.joinOrder, kills: p.kills, deaths: p.deaths, canEdit: p.canEdit, muted: p.muted }));
+    return [...Players.map.values()].map(p => ({ id: p.id, name: p.name, color: p.color, tier: p.tier, idx: p.idx, joinOrder: p.joinOrder, kills: p.kills, deaths: p.deaths, canEdit: p.canEdit, muted: p.muted, lvl: p.lvl || 1, team: p.team || null, disg: p.disg || null }));
   },
   sendPlayers() { this.bcastAll({ t: 'pl', list: this.playerList(), host: this.me }); if (this.isHost) Online.updateRoom(); },
   sendRules() { this.bcastAll({ t: 'rules', rules: Rules }); if (this.isHost) Online.updateRoom(); },
@@ -195,7 +196,7 @@ const Net = {
       if (Players.map.size >= CFG.maxPlayers) { this.send('ev', { t: 'full' }, pid); return; }
       const used = new Set([...Players.map.values()].map(p => p.idx)); let idx = 1; while (used.has(idx)) idx++;
       const name = String(d.name || 'Player').replace(/[<>]/g, '').slice(0, 18) || 'Player';
-      const p = Players.add({ id: pid, name, color: /^#[0-9a-f]{6}$/i.test(d.color) ? d.color : '#ff9f43', tier: TIERS[d.tier] ? d.tier : 'medium', idx, joinOrder: ++this.joinCounter });
+      const p = Players.add({ id: pid, name, color: /^#[0-9a-f]{6}$/i.test(d.color) ? d.color : '#ff9f43', tier: TIERS[d.tier] ? d.tier : 'medium', idx, joinOrder: ++this.joinCounter, lvl: clamp(d.lvl | 0, 1, 999) });
       const sp = Auth.pickSpawn(); p.pos.copy(sp); p.tpGrace = now() + 1.5;
       this.send('ws', { hostId: this.me, rules: Rules, players: this.playerList(), world: World.serialize(), you: { spawn: a3(sp) }, code: this.code }, pid);
       this.sendPlayers();
@@ -278,8 +279,9 @@ const Net = {
       case 'fx': FX.remote(m); break;
       case 'vs': Vehicles.recv(m); break;
       case 'tp': Game.teleport(new V3().fromArray(m.p), m.respawn); break;
+      case 'xp': Prog.onXp(m); break;
       case 'kb': if (me && !me.noclip) { me.kb = new V3().fromArray(m.v); me.grounded = false; } break;
-      case 'hurt': if (me) { me.hp = m.hp; UI.damageFlash(); } break;
+      case 'hurt': if (me) { me.hp = m.hp; UI.damageFlash(m.f); } break;
       case 'hm': UI.hitmarker(); break;
       case 'dn': DmgNum.add(m); Audio.play('hitmark', 0.8); break;
       case 'bots': Bots.recv(m.b); break;
@@ -339,7 +341,7 @@ const Net = {
       let y = p.yaw % (Math.PI * 2); if (y > Math.PI) y -= Math.PI * 2; if (y < -Math.PI) y += Math.PI * 2;
       dv.setInt16(o, Math.round(y * 10000)); dv.setInt16(o + 2, Math.round(clamp(p.pitch, -1.6, 1.6) * 10000)); o += 4;
       dv.setUint8(o, clamp(Math.round(p.hp), 0, 255)); o++;
-      dv.setUint8(o, (p.dead ? 1 : 0) | (p.seat ? 2 : 0) | (p.crouch ? 4 : 0) | (p.noclip ? 8 : 0) | (p.beamEnd && p.grab ? 16 : 0) | (p.firing ? 32 : 0)); o++;
+      dv.setUint8(o, (p.dead ? 1 : 0) | (p.seat ? 2 : 0) | (p.crouch ? 4 : 0) | (p.noclip ? 8 : 0) | (p.beamEnd && p.grab ? 16 : 0) | (p.firing ? 32 : 0) | (p.protUntil && now() < p.protUntil ? 64 : 0)); o++;
       dv.setUint8(o, W_BY_ID[p.weapon] ? W_BY_ID[p.weapon].idx : 0); o++;
       dv.setUint16(o, clamp(Math.round(p.ping || 0), 0, 65535)); o += 2;
       const b = p.beamEnd || p.pos; dv.setInt16(o, i16(b.x)); dv.setInt16(o + 2, i16(b.y)); dv.setInt16(o + 4, i16(b.z)); o += 6;
@@ -373,7 +375,7 @@ const Net = {
       const be = new V3(dv.getInt16(o) / 100, dv.getInt16(o + 2) / 100, dv.getInt16(o + 4) / 100); o += 6;
       const p = Players.byIdx(idx); if (!p) continue;
       p.hp = hp; p.ping = ping;
-      const wasDead = p.dead; p.dead = !!(fl & 1);
+      const wasDead = p.dead; p.dead = !!(fl & 1); p.prot = !!(fl & 64);
       if (p.isLocal) { if (wasDead && !p.dead) UI.hideDeath(); if (!wasDead && p.dead) UI.showDeath(); continue; }
       p.crouch = !!(fl & 4); p.noclip = !!(fl & 8); p.firing = !!(fl & 32); p.weapon = (WEAPONS[w] || WEAPONS[0]).id;
       p.beamEnd = (fl & 16) ? be : null;
@@ -423,11 +425,71 @@ function cleanText(t) {
   const s = String(t || '').toLowerCase().replace(/[013457@$!|]/g, c => ({ 0: 'o', 1: 'i', 3: 'e', 4: 'a', 5: 's', 7: 't', '@': 'a', '$': 's', '!': 'i', '|': 'i' }[c]));
   return !BAD_LONG.test(s.replace(/[^a-z]/g, '')) && !BAD_SHORT.test(s);
 }
+/* ============================================================================
+   Discord Activity: everyone who launches the game in the same voice channel lands in the same room.
+   The room code comes from Discord's instance id; a presence channel on Supabase picks who hosts
+   (whoever arrived first) and tells late arrivals there is a host to join.
+   Developer Portal URL mappings needed: "/" -> the site, "/supabase" -> the Supabase project host.
+   ========================================================================== */
+const modeLabel = (m = Rules.mode) => ({ nextbot: 'Nextbot chase', zombies: 'Zombie survival', prophunt: 'Prop hunt' })[m] || 'Sandbox';
+const DiscordAct = {
+  sdk: null, _p: null, ch: null, busy: false,
+  boot() {
+    if (!GAME.discord) return Promise.resolve(null);
+    return this._p || (this._p = (async () => {
+      const { DiscordSDK, patchUrlMappings } = await import('@discord/embedded-app-sdk');
+      patchUrlMappings([{ prefix: '/supabase', target: new URL(GAME.supa.url).host }]);   // fetch + WebSocket go through Discord's proxy
+      this.sdk = new DiscordSDK(GAME.discord.clientId);
+      await this.sdk.ready();
+      return this.sdk;
+    })().catch(e => { console.warn('Discord SDK', e); return null; }));
+  },
+  code() {   // the same 6-character room code for everyone in this Activity instance
+    const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let h = 2166136261, s = '';
+    for (const c of GAME.discord.instance) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); }
+    for (let i = 0; i < 6; i++) { h = Math.imul(h ^ (h >>> 15), 2246822507) ^ i; s += A[(h >>> 0) % A.length]; }
+    return s;
+  },
+  async start() {
+    if (this.busy || Game.state !== 'lobby') return; this.busy = true;
+    const code = this.code(), since = this._since || (this._since = Date.now()), k = Online.key;
+    UI.lobbyStatus('Joining the game in your voice channel…');
+    try {
+      const c = await Online.client();
+      if (!this.ch) {
+        const ch = this.ch = c.channel('tw-di-' + code, { config: { presence: { key: k } } });
+        await new Promise((res, rej) => {
+          const t = setTimeout(() => rej(new Error('matchmaking did not answer')), 12000);
+          ch.subscribe(st => { if (st === 'SUBSCRIBED') { clearTimeout(t); res(); } });
+        });
+        setInterval(() => this.track(code), 4000);   // keep "who hosts" current, also after a host migration
+      }
+      await this.ch.track({ k, since, hosting: false });
+      const members = () => Object.values(this.ch.presenceState()).flat().filter(m => m && m.k);
+      const t0 = now();
+      await new Promise(r => setTimeout(r, 1500));   // let presence sync
+      for (;;) {
+        const ms = members();
+        if (ms.some(m => m.hosting && m.k !== k)) { this.busy = false; return Game.joinRoom(code); }
+        const first = ms.sort((a, b) => a.since - b.since || (a.k < b.k ? -1 : 1))[0];
+        if (!first || first.k === k || now() - t0 > 12) break;   // we arrived first (or nobody stepped up): host it
+        await new Promise(r => setTimeout(r, 500));
+      }
+      await Game.createRoom(code);
+      this.track(code);
+    } catch (e) {
+      UI.lobbyStatus('Could not set up the voice channel game (' + (e.message || e) + '). Press Play to try again.', true);
+    }
+    this.busy = false;
+  },
+  track(code) { if (this.ch) this.ch.track({ k: Online.key, since: this._since || (this._since = Date.now()), hosting: Net.online && Net.isHost && Net.code === code }).catch(() => { }); },
+};
 const Online = {
   sb: null, lobby: null, rooms: new Map(), key: Math.random().toString(36).slice(2, 10), listed: null, onRooms: null, trackT: null,
   async client() {
     if (!GAME.supa) throw new Error('Online features are off in this copy');
-    if (!this.sb) { const { createClient } = await import('@supabase/supabase-js'); this.sb = createClient(GAME.supa.url, GAME.supa.key, { auth: { persistSession: false } }); }
+    await DiscordAct.boot();
+    if (!this.sb) { const { createClient } = await import('@supabase/supabase-js'); this.sb = createClient(GAME.supa.url, GAME.supa.key, { auth: { persistSession: true, storageKey: 'tw-auth', autoRefreshToken: true, detectSessionInUrl: true } }); }
     return this.sb;
   },
   async watchRooms() {
@@ -439,7 +501,7 @@ const Online = {
         for (const k in st) for (const m of st[k]) if (m && /^[A-Z0-9]{6}$/.test(m.code || '')) this.rooms.set(m.code, m);
         if (this.onRooms) this.onRooms();
       });
-      ch.subscribe(st => { if (st === 'SUBSCRIBED' && this.listed) ch.track(this.listed).catch(() => { }); });
+      ch.subscribe(st => { this.live = st === 'SUBSCRIBED'; if (this.onRooms) this.onRooms(); if (st === 'SUBSCRIBED' && this.listed) ch.track(this.listed).catch(() => { }); });
     } catch (e) { this.lobby = null; }
   },
   // host: put the room in the list (or take it out with null); rapid changes are batched
@@ -448,8 +510,8 @@ const Online = {
     this.trackT = setTimeout(async () => { await this.watchRooms(); const ch = this.lobby; if (!ch) return; try { if (this.listed) await ch.track(this.listed); else await ch.untrack(); } catch (e) { } }, info ? 400 : 0);
   },
   roomInfo() {
-    if (!Net.online || !Net.isHost || !Settings.publicRoom) return null;
-    return { code: Net.code, host: String(Settings.name || 'Player').slice(0, 18), n: Players.map.size, max: CFG.maxPlayers, map: (THEMES[Rules.env] || {}).label || '', mode: Rules.mode === 'nextbot' ? 'Nextbot chase' : 'Sandbox', v: GAME.version };
+    if (!Net.online || !Net.isHost || !Settings.publicRoom || GAME.discord) return null;   // Activity rooms stay private to the voice channel
+    return { code: Net.code, host: String(Settings.name || 'Player').slice(0, 18), n: Players.map.size, max: CFG.maxPlayers, map: (THEMES[Rules.env] || {}).label || '', mode: modeLabel(), v: GAME.version };
   },
   updateRoom() { this.listRoom(this.roomInfo()); },
   async addons(q, sort) {
