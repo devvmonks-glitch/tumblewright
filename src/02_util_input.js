@@ -22,7 +22,7 @@ const GAME = { name: 'Tumblewright', version: (document.querySelector('meta[name
 // the public site: invite links point here (a copy opened from disk has no shareable address) and it serves relay credentials
 GAME.site = ((document.querySelector('meta[name="tw-update-url"]') || {}).content || 'https://tumblewright.vercel.app/').replace(/\/?$/, '/');
 // matchmaking on Supabase Realtime (public project URL + publishable key; null = public Nostr relays only)
-GAME.supa = { url: 'https://imonuvmxzxdtglxyvdmj.supabase.co', key: 'sb_publishable_LpsLJ5i8_X43A8SjcVhgkw_3gZXVEob' };   // Supabase project 'tumblewright'
+GAME.supa = { url: 'https://bblyrpmuvkqngrjvqian.supabase.co', key: 'sb_publishable_115sboDtRpYXdDl7_bGTRA_NO-EphQB' };   // Supabase project on devvmonks-glitch's org (schema: supabase/schema.sql)
 // running as a Discord Activity: Discord loads the site at https://<client id>.discordsays.com/?instance_id=…&frame_id=…
 GAME.discord = (() => {
   const q = new URLSearchParams(location.search);

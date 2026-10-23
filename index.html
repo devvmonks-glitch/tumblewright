@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <!-- auto-update config: stamped by tools/release/release.mjs (version, update server, public signing key) -->
-<meta name="tw-version" content="1.9.0">
+<meta name="tw-version" content="1.9.1">
 <meta name="tw-update-url" content="https://tumblewright.vercel.app/">
 <meta name="tw-update-key" content="MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEY+Cnn8Lm7Qg8qyzAHUGYObpBjSgdckeo7PetlABb0TomToEhaMbLW/zaRHOAbvsMn1TRCb4I/cPFv1ghZ6CgWw==">
-<meta name="tw-notes" content="Accounts and friends (usernames, friend codes, invites). New owner code.">
+<meta name="tw-notes" content="Moved to a new Supabase project: matchmaking, workshop and accounts. Sign-ups now work instantly.">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Tumblewright — Multiplayer Physics Sandbox</title>
 <meta name="description" content="Tumblewright: a multiplayer 3D physics sandbox. Build, weld, drive and blow things up together in your browser.">
@@ -903,7 +903,7 @@ const GAME = { name: 'Tumblewright', version: (document.querySelector('meta[name
 // the public site: invite links point here (a copy opened from disk has no shareable address) and it serves relay credentials
 GAME.site = ((document.querySelector('meta[name="tw-update-url"]') || {}).content || 'https://tumblewright.vercel.app/').replace(/\/?$/, '/');
 // matchmaking on Supabase Realtime (public project URL + publishable key; null = public Nostr relays only)
-GAME.supa = { url: 'https://imonuvmxzxdtglxyvdmj.supabase.co', key: 'sb_publishable_LpsLJ5i8_X43A8SjcVhgkw_3gZXVEob' };   // Supabase project 'tumblewright'
+GAME.supa = { url: 'https://bblyrpmuvkqngrjvqian.supabase.co', key: 'sb_publishable_115sboDtRpYXdDl7_bGTRA_NO-EphQB' };   // Supabase project on devvmonks-glitch's org (schema: supabase/schema.sql)
 // running as a Discord Activity: Discord loads the site at https://<client id>.discordsays.com/?instance_id=…&frame_id=…
 GAME.discord = (() => {
   const q = new URLSearchParams(location.search);
