@@ -316,7 +316,7 @@ button.primary .ms{color:#1a1206}
 #crosshair,#crosshair.dot{width:30px;height:30px}
 #crosshair:before,#crosshair.dot:before{left:13px;top:13px;width:4px;height:4px;border-radius:50%;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.6)}
 #crosshair:after,#crosshair.dot:after{display:block;left:4px;top:4px;width:22px;height:22px;border-radius:50%;background:transparent;border:2px solid rgba(255,255,255,.55);box-sizing:border-box;box-shadow:0 0 2px rgba(0,0,0,.7);transition:transform .12s,border-color .12s}
-#crosshair.gun:after{border-style:dashed;transform:scale(.8)}
+#crosshair.gun:after{border-style:dashed;transform:scale(calc(.8 * var(--bloom,1)))}
 #crosshair.aim:after{border-color:var(--acc2);transform:scale(1.25)}
 #crosshair.use:after{border-color:var(--acc);transform:scale(1.25)}
 #crosshair.hot:after{border-color:var(--bad);transform:scale(1.1)}
@@ -672,6 +672,9 @@ body.pixel #lobby .logo h1{font-size:clamp(28px,3.6vw,48px);white-space:nowrap}
 .lb-lvt{display:flex;justify-content:space-between;align-items:baseline}
 #lvTitle{font:700 18px var(--title);text-transform:uppercase;letter-spacing:.04em}
 #xpText{font:600 12px var(--title);letter-spacing:.08em;color:var(--muted)}
+#lvNext{display:block;margin-top:6px;font:600 11px var(--title);letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+#lvNum.t2,.nameplate .lv.t2,.ps-pl .lv.t2{background:#9b7bff}#lvNum.t3,.nameplate .lv.t3,.ps-pl .lv.t3{background:#ff5a4d;color:#fff}#lvNum.t4,.nameplate .lv.t4,.ps-pl .lv.t4{background:#6cd8ef}
+#lvNum.t5,.nameplate .lv.t5,.ps-pl .lv.t5{background:linear-gradient(135deg,#f2c230,#ff5a9c 55%,#6cd8ef);color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.5)}
 .lb-xp{height:6px;background:#30353b;margin-top:6px}.lb-xp i{display:block;height:100%;background:var(--acc);width:0}
 #dailyReset{font:600 12px var(--title);letter-spacing:.08em;color:var(--muted);text-transform:uppercase}
 .dl{margin-top:10px}
@@ -769,7 +772,7 @@ input[type=email]:focus,input[type=password]:focus{border-color:var(--acc)}
         </div>
       </div>
       <div class="lb-card lb-prog">
-        <div class="lb-lv"><b id="lvNum">1</b><div class="grow"><div class="lb-lvt"><span id="lvTitle">Rookie</span><span id="xpText"></span></div><div class="lb-xp"><i id="xpFill"></i></div></div></div>
+        <div class="lb-lv"><b id="lvNum">1</b><div class="grow"><div class="lb-lvt"><span id="lvTitle">Rookie</span><span id="xpText"></span></div><div class="lb-xp"><i id="xpFill"></i></div><small id="lvNext"></small></div></div>
         <div class="lb-news-h" style="margin-top:16px"><h3>Daily challenges</h3><span id="dailyReset">New ones every day</span></div>
         <div id="dailyList"></div>
       </div>

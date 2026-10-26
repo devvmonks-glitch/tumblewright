@@ -473,6 +473,26 @@ function ptsMat(o) {
   };
   return m;
 }
+// crowbar swing, seconds since the click -> [rx, ry, rz, px, py, pz] added to the resting pose:
+// a quick wind-up, a fast diagonal chop (the hit lands at SWING_HIT), a follow-through and an easy recovery
+const SWING_KEYS = [
+  [0, [0, 0, 0, 0, 0, 0], 'out'],
+  [0.07, [0.4, -0.25, -0.2, 0.035, 0.05, 0.05], 'in'],
+  [0.15, [-0.95, 0.75, 0.3, -0.1, -0.03, -0.04], 'out'],
+  [0.23, [-1.1, 0.85, 0.38, -0.12, -0.06, -0.02], 'inout'],
+  [0.46, [0, 0, 0, 0, 0, 0], ''],
+];
+const SWING_HIT = 0.12, SWING_REST = [0, 0, 0, 0, 0, 0];
+const _swOut = [0, 0, 0, 0, 0, 0];
+function swingPose(t) {
+  if (t >= SWING_KEYS[SWING_KEYS.length - 1][0]) return SWING_REST;
+  let i = 0; while (t > SWING_KEYS[i + 1][0]) i++;
+  const [t0, a, ease] = SWING_KEYS[i], [t1, b] = SWING_KEYS[i + 1];
+  let u = clamp((t - t0) / (t1 - t0), 0, 1);
+  u = ease === 'in' ? u * u : ease === 'out' ? 1 - (1 - u) * (1 - u) : u * u * (3 - 2 * u);
+  for (let j = 0; j < 6; j++) _swOut[j] = a[j] + (b[j] - a[j]) * u;
+  return _swOut;
+}
 const FX = {
   list: [], beams: [], light: null, smokeTex: null,
   init() {
@@ -1624,7 +1644,7 @@ const HOLO = {
 const AIM_ASSIST = [0, 0.55, 1, 1.45];   // Settings.aimAssist: off / low / standard / strong
 const Game = {
   state: 'loading', viewmodel: null, detected: null, pendingWorld: null, aimSeat: 0, lockReleaseOk: false,
-  acc: 0, last: 0, orbit: 0, shake: 0, punch: [0, 0], sway: [0, 0], drawT: 1, sprintK: 0, moveInp: { mx: 0, my: 0, jump: false, sprint: false, up: 0 }, autoT: 20, hiddenTicker: null, bob: 0, fellT: 0,
+  acc: 0, last: 0, orbit: 0, shake: 0, punch: [0, 0], sway: [0, 0], drawT: 1, sprintK: 0, swingT: 9, moveInp: { mx: 0, my: 0, jump: false, sprint: false, up: 0 }, autoT: 20, hiddenTicker: null, bob: 0, fellT: 0,
   async boot() {
     const lt = $('#loadingText');
     try {
@@ -2134,7 +2154,7 @@ const Game = {
   updateCamera(dt) {
     const cam = R.camera, me = Players.local;
     if (this.state !== 'playing' || !me) {
-      this.firstPerson = false; this.orbit += dt * 0.06;
+      this.orbit += dt * 0.06;
       cam.position.set(Math.sin(this.orbit) * 16, 5.5 + Math.sin(this.orbit * 0.7) * 1.2, Math.cos(this.orbit) * 16);
       cam.lookAt(0, 1.2, 0); R.focus.set(0, 0, 0);
       if (this.viewmodel) this.viewmodel.visible = false;
@@ -2142,7 +2162,6 @@ const Game = {
       return;
     }
     const cp = Math.cos(me.pitch), dir = _v2.set(-Math.sin(me.yaw) * cp, Math.sin(me.pitch), -Math.cos(me.yaw) * cp);
-    this.firstPerson = false;
     if (me.seat) {
       const se = World.ents.get(me.seat), ve = this.seatVeh(), V = ve && VEH[ve.d.veh], base = ve && ve.mesh ? ve.mesh : se && se.mesh;
       const target = base ? _v1.copy(base.position).add(_v3.set(0, V ? V.cam[1] : 1.3, 0)) : _v1.copy(me.renderPos);
@@ -2164,7 +2183,7 @@ const Game = {
       if (h) cam.position.copy(target).addScaledVector(back, Math.max(0.6, h.dist - 0.3));
       cam.lookAt(target);
     } else {
-      const eh = me.crouch ? CFG.eye - 0.5 : CFG.eye; this.firstPerson = true;
+      const eh = me.crouch ? CFG.eye - 0.5 : CFG.eye;
       this.eyeH = lerp(this.eyeH || eh, eh, 1 - Math.exp(-14 * dt));
       cam.position.set(me.renderPos.x, me.renderPos.y + this.eyeH, me.renderPos.z);
       // landing: remember the fastest fall, dip the view when we touch down
@@ -2173,7 +2192,7 @@ const Game = {
       this.land = Math.max(0, (this.land || 0) - dt * 3.2);
       cam.position.y -= Math.sin(Math.min(1, this.land) * Math.PI) * 0.09 * this.land;
       // view punch from recoil: kicks the camera (not the aim) and springs back
-      const pk = 1 - Math.exp(-11 * dt); this.punch[0] -= this.punch[0] * pk; this.punch[1] -= this.punch[1] * pk;
+      const pk = 1 - Math.exp(-(Tools.cool > 0 ? 6 : 9) * dt); this.punch[0] -= this.punch[0] * pk; this.punch[1] -= this.punch[1] * pk;   // recovers slower while you keep firing
       cam.rotation.set(me.pitch + this.punch[0], me.yaw + this.punch[1], 0, 'YXZ');
       if (me.dead) { cam.position.y = me.renderPos.y + 0.4; cam.rotation.z = 0.4; }
     }
@@ -2202,18 +2221,20 @@ const Game = {
       this.sprintK += ((sprint ? 1 : 0) - this.sprintK) * (1 - Math.exp(-8 * dt));
       this.drawT = Math.min(1, this.drawT + dt / 0.28); const dr = Math.pow(1 - this.drawT, 2);
       const ld = Math.sin(Math.min(1, this.land || 0) * Math.PI) * (this.land || 0), br = Math.sin(t * 1.7) * 0.0025 * (1 - mv);
+      this.swingT += dt; const sw = melee ? swingPose(this.swingT) : SWING_REST;
       const WM = Models.has('wp_' + Tools.weapon) && WEAPON_MODEL[Tools.weapon], VB = WM ? WM.vm : [0.26, -0.25, -0.48], VR = (WM && WM.vr) || [0, 0, 0], spr = melee ? 0.4 : 1;
       vm.position.set(
-        VB[0] + Math.sin(this.bob) * 0.012 * mv + this.sway[0] - this.sprintK * 0.03 * spr,
-        VB[1] + Math.abs(Math.cos(this.bob)) * 0.012 * mv - this.sway[1] + br - ld * 0.04 - this.sprintK * 0.035 - dr * 0.22,
-        VB[2] + k * 0.07);
+        VB[0] + Math.sin(this.bob) * 0.012 * mv + this.sway[0] - this.sprintK * 0.03 * spr + sw[3],
+        VB[1] + Math.abs(Math.cos(this.bob)) * 0.012 * mv - this.sway[1] + br - ld * 0.04 - this.sprintK * 0.035 - dr * 0.22 + sw[4],
+        VB[2] + (melee ? 0 : k * 0.07) + sw[5]);
       vm.rotation.set(
-        VR[0] + k * (melee ? -1.2 : 0.18) - this.sway[1] * 1.6 - this.sprintK * 0.22 * spr - dr * 0.7 - ld * 0.06,
-        VR[1] + (melee ? k * 0.8 : 0) - this.sway[0] * 1.8 + this.sprintK * 0.55 * spr,
-        VR[2] + this.sway[0] * -2.2 + (melee ? 0 : (this.kickRoll || 0) * k));
+        VR[0] + (melee ? 0 : k * 0.18) - this.sway[1] * 1.6 - this.sprintK * 0.22 * spr - dr * 0.7 - ld * 0.06 + sw[0],
+        VR[1] - this.sway[0] * 1.8 + this.sprintK * 0.55 * spr + sw[1],
+        VR[2] + this.sway[0] * -2.2 + (melee ? 0 : (this.kickRoll || 0) * k) + sw[2]);
     }
   },
   buildViewmodel() {
+    this.swingT = 9;
     if (!this.viewmodel) { this.viewmodel = new THREE.Group(); R.camera.add(this.viewmodel); }
     const vm = this.viewmodel; while (vm.children.length) vm.remove(vm.children[0]);
     const add = (geo, t, c, p, r) => { const m = matMesh(geo, t, c); m.castShadow = m.receiveShadow = false; if (p) m.position.set(...p); if (r) m.rotation.set(...r); vm.add(m); return m; };

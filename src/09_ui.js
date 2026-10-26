@@ -275,7 +275,8 @@ const UI = {
   // ---- progression: level card, daily challenges, colour swatches (some unlock with levels) -----
   refreshProfile() {
     const L = Prog.level(), lvl = L.l;
-    $('#lvNum').textContent = lvl; $('#lvTitle').textContent = Prog.title(lvl);
+    $('#lvNum').textContent = lvl; $('#lvNum').className = lvTier(lvl).trim(); $('#lvTitle').textContent = Prog.title(lvl);
+    const nx = Prog.nextTitle(lvl); $('#lvNext').textContent = nx ? `Next rank: ${nx[1]} at level ${nx[0]}` : 'Top rank reached';
     $('#xpText').textContent = `${L.into} / ${L.need} XP`; $('#xpFill').style.width = (100 * L.into / L.need) + '%';
     Prog.rollDaily();
     const dl = $('#dailyList'); dl.innerHTML = '';
@@ -287,8 +288,9 @@ const UI = {
     const sw = $('#swatches'); sw.innerHTML = '';
     const pick = c => { Settings.color = c; saveSettings(); $$('.swatch').forEach(s => s.classList.toggle('sel', s.dataset.c === c)); this.refreshLobbyAvatar(); };
     for (const c of PLAYER_COLORS) sw.append(h('button', { class: 'swatch' + (c === Settings.color ? ' sel' : ''), style: `background:${c}`, title: c, 'data-c': c, onclick: () => pick(c) }));
+    let ahead = 0;
     for (const u of UNLOCK_COLORS) {
-      const locked = lvl < u.lvl;
+      const locked = lvl < u.lvl; if (locked && ++ahead > 2) break;   // unlocked colours plus the next two to aim for
       sw.append(h('button', { class: 'swatch' + (locked ? ' locked' : '') + (u.c === Settings.color ? ' sel' : ''), style: `background:${u.c}`, title: locked ? `${u.name}: unlocks at level ${u.lvl}` : u.name, 'data-c': u.c, 'data-l': locked ? u.lvl : '', onclick: () => locked ? this.toast(`${u.name} unlocks at level ${u.lvl}`, 'lock') : pick(u.c) }));
     }
   },
@@ -707,6 +709,7 @@ const UI = {
       else if (ae && Game.aimDist < 14) { const g = ae.d.g && World.groups.get(ae.d.g); if (g && g.t === 'npc') label = g.n + (g.alive ? (g.bl > 0.5 ? ' · bleeding' : '') : ' (down)'); else if (ae.d.n) label = ae.d.n; }
     }
     const ch = $('#crosshair'); if (ch.className !== cls) ch.className = cls;
+    const bl = (1 + Tools.bloom * 0.6).toFixed(2); if (ch._bl !== bl) { ch._bl = bl; ch.style.setProperty('--bloom', bl); }
     ch.style.display = (Editor.active && Input.device === 'kbm') || Game.zoomed ? 'none' : '';
     const al = $('#aimLabel'); if (al.textContent !== label) al.textContent = label;
     this.refreshHints();
@@ -1049,7 +1052,7 @@ const UI = {
       const ping = pl.isLocal && Net.isHost ? 0 : Math.round(pl.ping || 0);
       card.append(h('div', { class: 'ps-pl' + (pl.isLocal ? ' me' : '') },
         h('i', { style: `background:${pl.color}` }),
-        h('span', { class: 'lv', text: pl.isLocal ? Prog.level().l : (pl.lvl || 1) }),
+        h('span', { class: 'lv' + lvTier(pl.isLocal ? Prog.level().l : (pl.lvl || 1)), text: pl.isLocal ? Prog.level().l : (pl.lvl || 1) }),
         h('span', { class: 'nm', text: pl.name }),
         Net.online && Net.hostId === pl.id ? h('span', { class: 'badge ps-host', text: 'HOST' }) : null,
         h('span', { class: 'k', text: Rules.combat || Rules.mode !== 'sandbox' ? `${pl.kills || 0} kills · ${pl.deaths || 0} deaths` : '' }),

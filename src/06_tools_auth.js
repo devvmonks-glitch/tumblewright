@@ -5,9 +5,9 @@
 const WEAPONS = [
   { id: 'physgun', name: 'Physics Gun', icon: '🧲', desc: 'Grab, move, rotate and freeze objects.' },
   { id: 'toolgun', name: 'Tool Gun', icon: '🔧', desc: '' },
-  { id: 'pistol', name: 'Pistol', icon: '🔫', desc: 'Semi-automatic. Knocks props around.', rate: 0.22, dmg: 22, imp: 1.2, dv: 8, spread: 0.004, range: 300, vp: 0.022 },
+  { id: 'pistol', name: 'Pistol', icon: '🔫', desc: 'Semi-automatic. Knocks props around.', rate: 0.22, dmg: 22, imp: 1.2, dv: 8, spread: 0.004, range: 300, vp: 0.03, bloom: 0.6 },
   { id: 'shotgun', name: 'Shotgun', icon: '💥', desc: 'Pump action, 8 pellets. Devastating up close.', rate: 0.85, dmg: 11, imp: 0.9, dv: 2, spread: 0.055, pellets: 8, range: 120, push: 2, vp: 0.06 },
-  { id: 'rifle', name: 'Rifle', icon: '🎯', desc: 'Automatic rifle.', rate: 0.09, dmg: 13, imp: 0.7, dv: 5, spread: 0.011, auto: true, range: 300, vp: 0.011 },
+  { id: 'rifle', name: 'Rifle', icon: '🎯', desc: 'Automatic rifle.', rate: 0.09, dmg: 13, imp: 0.7, dv: 5, spread: 0.011, auto: true, range: 300, vp: 0.017, bloom: 0.3 },
   { id: 'sniper', name: 'Sniper Rifle', icon: '🔭', desc: 'Hold alt-fire to scope in. Inaccurate from the hip.', rate: 1.2, dmg: 95, imp: 4, dv: 16, spread: 0, hipSpread: 0.03, zoom: 1, range: 800, push: 3, vp: 0.07 },
   { id: 'rocket', name: 'Rocket Launcher', icon: '🚀', desc: 'Rockets explode on impact. Rocket-jump if you dare.', rate: 1.0, proj: 'rocket', vp: 0.045 },
   { id: 'grenade', name: 'Grenade', icon: '💣', desc: 'Throw it. It explodes after 2.5 s. One every 2.5 s.', rate: 2.5 },
@@ -35,7 +35,7 @@ const TOOL_MODES = [
   { id: 'dynamite', name: 'Dynamite', icon: '🧨', desc: 'Plant a charge on a surface. Press its key to set it off (or shoot it).' },
 ];
 const Tools = {
-  weapon: 'physgun', mode: 'weld', grab: null, first: null, cool: 0, rot: [0, 0], rotating: false, clipboard: null, marker: null, beam: null, kick: 0,
+  weapon: 'physgun', mode: 'weld', grab: null, first: null, cool: 0, rot: [0, 0], rotating: false, clipboard: null, marker: null, beam: null, kick: 0, bloom: 0, swingAt: 0,
   opt: Object.assign({ ropeLen: 1.0, ropeRigid: 1.0, thrForce: 12, thrKey: 'KeyF', thrPad: 'Pad7', wheelR: 0.4, paintMat: 'metal', paintCol: '#ff5a5f', motSpd: 4, motKey: 'KeyM', motTog: false,
     blLift: 10, blLen: 2, hovSpd: 3, hovAir: 0.3, hovUp: 'KeyU', hovDn: 'KeyJ', dynPow: 1, dynKey: 'KeyX' }, store.get('toolopt', {})),
   saveOpt() { store.set('toolopt', this.opt); },
@@ -51,7 +51,7 @@ const Tools = {
   cycleMode(dir) { const i = TOOL_MODES.findIndex(m => m.id === this.mode); this.setMode(TOOL_MODES[(i + dir + TOOL_MODES.length) % TOOL_MODES.length].id); Audio.play('switch'); },
   release() { if (this.grab) { Net.toHost({ t: 'drop' }); this.grab = null; } this.rotating = false; },
   onEntRemoved(id) { if (this.grab && this.grab.e === id) this.grab = null; if (this.first && this.first.e === id) this.first = null; },
-  aim(o, d) { R.camera.getWorldPosition(o); R.camera.getWorldDirection(d); if (Game.firstPerson && Players.local) Players.aimDir(Players.local, d); return { o, d }; },   // first person: view punch is cosmetic, shots go where you look
+  aim(o, d) { R.camera.getWorldPosition(o); R.camera.getWorldDirection(d); return { o, d }; },   // follows the camera, recoil included: spraying climbs and you pull it back down
   cast(max) { const o = new V3(), d = new V3(); this.aim(o, d); const p = Players.local; return Phys.cast(o, d, max, p ? p.body : null); },
   localPoint(e, wp) { return wp.clone().sub(e.mesh.position).applyQuaternion(_q1.copy(e.mesh.quaternion).invert()); },
   hitInfo(hit) {
@@ -62,7 +62,9 @@ const Tools = {
   update(dt) {
     const p = Players.local;
     this.cool -= dt; this.kick = Math.max(0, this.kick - dt * 6);
-    if (!p || p.dead || p.seat) { this.release(); return; }
+    if (this.cool < -0.06) this.bloom = Math.max(0, this.bloom - dt * 3);   // settles shortly after you stop firing
+    if (!p || p.dead || p.seat) { this.release(); this.swingAt = 0; return; }
+    if (this.swingAt > 0 && (this.swingAt -= dt) <= 0) { this.swingAt = 0; if (this.weapon === 'crowbar') this.fireGun(W_BY_ID.crowbar, true); }   // the crowbar lands mid-swing
     const W = W_BY_ID[this.weapon];
     if (this.weapon === 'physgun') this.updPhysgun(dt);
     else if (this.weapon === 'toolgun') this.updToolgun(dt);
@@ -175,16 +177,19 @@ const Tools = {
     else if (h.id === 0 && Env.colItem && Env.colItem.has(h.handle)) Net.toHost({ t: 'del', env: Env.colItem.get(h.handle) });
   },
   muzzle() { const vm = Game.viewmodel; const m = vm && vm.getObjectByName('muzzle'); return m ? m.getWorldPosition(new V3()) : R.camera.position.clone(); },
-  fireGun(W) {
-    this.cool = W.rate; this.kick = W.pellets || W.proj || W.zoom ? 1.5 : 1;
+  fireGun(W, landed) {
+    if (W.id === 'crowbar' && !landed) { this.cool = W.rate; this.swingAt = SWING_HIT; Game.swingT = 0; Audio.play('swing'); return; }   // wind up first, hit when the bar arrives
+    if (W.id !== 'crowbar') { this.cool = W.rate; this.kick = W.pellets || W.proj || W.zoom ? 1.5 : 1; }
     if (W.vp) { const z = W.zoom && Game.zoomed ? 0.5 : 1; Game.punch[0] += W.vp * z * (0.85 + Math.random() * 0.3); Game.punch[1] += (Math.random() - 0.5) * W.vp * 0.5 * z; }
     Game.kickRoll = (Math.random() - 0.5) * 0.12;
     const o = new V3(), d = new V3(); this.aim(o, d);
     const mzo = Game.viewmodel && Game.viewmodel.getObjectByName('muzzle');
     if (W.id !== 'crowbar') FX.muzzle(mzo && Game.viewmodel.visible ? mzo : this.muzzle(), W.proj ? 'puff' : W.pellets || W.zoom ? 'big' : 'small');
-    const spread = W.zoom && !Game.zoomed ? W.hipSpread : W.spread;
+    // bloom: the first shot is on target, keep firing and the spread opens up (shown by the crosshair)
+    const spread = (W.zoom && !Game.zoomed ? W.hipSpread : W.spread) * (1 + this.bloom);
+    if (W.bloom) this.bloom = Math.min(1.8, this.bloom + W.bloom);
     if (spread && !W.pellets) jitter(d, spread);
-    if (W.proj === 'rocket') Audio.play('rocket_fire'); else if (W.proj) Audio.play('propcannon'); else if (W.id === 'crowbar') Audio.play('swing'); else Audio.gun(W.id, R.camera.position, true);
+    if (W.proj === 'rocket') Audio.play('rocket_fire'); else if (W.proj) Audio.play('propcannon'); else if (W.id !== 'crowbar') Audio.gun(W.id, R.camera.position, true);
     if (W.zoom) Game.shake = Math.max(Game.shake, 0.12);
     if (!W.proj) {   // hitscan: predicted tracers + sparks (the host does the real hits)
       const p = Players.local, n = W.pellets || 1;

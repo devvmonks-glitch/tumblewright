@@ -172,8 +172,13 @@ const PH = {
 const UNLOCK_COLORS = [
   { lvl: 3, c: '#c0c6cc', name: 'Steel' }, { lvl: 5, c: '#e8b923', name: 'Gold' }, { lvl: 8, c: '#7fffd4', name: 'Aqua' },
   { lvl: 12, c: '#ff4fa3', name: 'Neon pink' }, { lvl: 16, c: '#1a1a1a', name: 'Midnight' }, { lvl: 20, c: '#fffaf0', name: 'Pearl' },
+  { lvl: 25, c: '#b3122e', name: 'Crimson' }, { lvl: 30, c: '#6a3fd6', name: 'Royal' }, { lvl: 40, c: '#9dff00', name: 'Toxic' },
+  { lvl: 50, c: '#ff6b35', name: 'Sunset' }, { lvl: 75, c: '#a8e6ff', name: 'Glacier' }, { lvl: 100, c: '#2a1f3d', name: 'Obsidian' },
 ];
-const TITLES = [[1, 'Rookie'], [5, 'Builder'], [10, 'Survivor'], [15, 'Veteran'], [20, 'Elite'], [30, 'Legend']];
+const TITLES = [[1, 'Rookie'], [5, 'Builder'], [10, 'Survivor'], [15, 'Veteran'], [20, 'Elite'], [25, 'Ace'], [30, 'Legend'], [40, 'Champion'],
+  [50, 'Master'], [60, 'Grandmaster'], [75, 'Mythic'], [90, 'Immortal'], [100, 'Tumblewright']];
+// badge colour for high levels (nameplates, player list, main menu)
+const lvTier = l => l >= 100 ? ' t5' : l >= 75 ? ' t4' : l >= 50 ? ' t3' : l >= 30 ? ' t2' : '';
 const XP_FOR = { zkill: 10, pkill: 25, npc: 5 };
 const DAILY_POOL = [
   { id: 'zkills', text: n => `Kill ${n} zombies`, n: [15, 25, 40] },
@@ -200,8 +205,10 @@ const Prog = {
     while (out.length < 3 && pool.length) { h = (Math.imul(h, 1103515245) + 12345) >>> 0; const c = pool.splice(h % pool.length, 1)[0]; out.push({ id: c.id, n: c.n[(h >>> 8) % c.n.length] }); }
     Object.assign(this.d, { day, daily: out, dp: {}, done: {} }); this.save();
   },
-  level(xp = this.d ? this.d.xp : 0) { let l = 1, need = 100; while (xp >= need) { xp -= need; l++; need = 100 + (l - 1) * 50; } return { l, into: xp, need }; },
+  // each level needs 50 XP more than the last, up to level 30; after that every level costs the same, so the top ranks stay reachable
+  level(xp = this.d ? this.d.xp : 0) { let l = 1, need = 100; while (xp >= need) { xp -= need; l++; need = 100 + (Math.min(l, 30) - 1) * 50; } return { l, into: xp, need }; },
   title(l = this.level().l) { let t = TITLES[0][1]; for (const [n, s] of TITLES) if (l >= n) t = s; return t; },
+  nextTitle(l = this.level().l) { return TITLES.find(([n]) => n > l) || null; },
   gain(n, why) {
     if (!(n > 0)) return;
     const before = this.level().l; this.d.xp += Math.round(n); this.save();
@@ -209,7 +216,8 @@ const Prog = {
     const after = this.level().l;
     if (after > before) {
       const un = UNLOCK_COLORS.filter(u => u.lvl > before && u.lvl <= after).map(u => u.name + ' colour');
-      UI.toast(`Level ${after}! ${this.title(after)}` + (un.length ? ` · Unlocked: ${un.join(', ')}` : ''), 'military_tech'); Audio.play('confirm');
+      const ranked = TITLES.some(([n]) => n > before && n <= after);
+      UI.toast(`Level ${after}!` + (ranked ? ` New rank: ${this.title(after)}` : ` ${this.title(after)}`) + (un.length ? ` · Unlocked: ${un.join(', ')}` : ''), 'military_tech'); Audio.play('confirm');
       if (Net.online && !Net.isHost) Net.toHost({ t: 'lvl', v: after });
       else { const me = Players.local; if (me) { me.lvl = after; Net.sendPlayers(); } }
       UI.refreshProfile();
