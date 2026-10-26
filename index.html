@@ -3,16 +3,16 @@
 <head>
 <meta charset="utf-8">
 <!-- auto-update config: stamped by tools/release/release.mjs (version, update server, public signing key) -->
-<meta name="tw-version" content="1.9.1">
+<meta name="tw-version" content="1.9.2">
 <meta name="tw-update-url" content="https://tumblewright.vercel.app/">
 <meta name="tw-update-key" content="MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEY+Cnn8Lm7Qg8qyzAHUGYObpBjSgdckeo7PetlABb0TomToEhaMbLW/zaRHOAbvsMn1TRCb4I/cPFv1ghZ6CgWw==">
-<meta name="tw-notes" content="Moved to a new Supabase project: matchmaking, workshop and accounts. Sign-ups now work instantly.">
+<meta name="tw-notes" content="Pixel font for the whole interface (turn it off in Settings > Graphics).">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Tumblewright — Multiplayer Physics Sandbox</title>
 <meta name="description" content="Tumblewright: a multiplayer 3D physics sandbox. Build, weld, drive and blow things up together in your browser.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Barlow:wght@400;500;600;700&family=Pixelify+Sans:wght@400..700&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,400..600,0..1,0&display=block" rel="stylesheet">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='12' y='12' width='40' height='40' rx='8' transform='rotate(18 32 32)' fill='%23ffb13b'/%3E%3Crect x='24' y='24' width='16' height='16' rx='3' transform='rotate(18 32 32)' fill='%2316181f'/%3E%3C/svg%3E">
 <!--
@@ -641,6 +641,10 @@ kbd,.glyph{border-radius:2px;background:#2b2f35;border-color:#454b53}
 .ps-report{align-self:flex-start;background:none;border:0;padding:0;color:var(--muted);font:600 13px var(--title);letter-spacing:.1em;text-transform:uppercase}
 .ps-report:hover{background:none;color:var(--text)}
 @media (max-width:900px){#pause .ps-right{display:none}#pause .ps-left{margin:0;width:100%}}
+/* pixel font (Settings > Graphics > Pixel font) */
+body.pixel{--font:'Pixelify Sans','Barlow','Segoe UI',system-ui,sans-serif;--title:'Pixelify Sans','Barlow Condensed','Barlow',sans-serif;-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale}
+body.pixel h1,body.pixel h2,body.pixel .lb-item,body.pixel .mitem{letter-spacing:.02em}
+body.pixel #lobby .logo h1{font-size:clamp(28px,3.6vw,48px);white-space:nowrap}
 /* spawn protection */
 #protTag{position:absolute;left:24px;bottom:96px;padding:6px 12px;background:rgba(21,23,26,.9);border:1px solid var(--acc2);color:var(--acc2);font:700 13px var(--title);letter-spacing:.14em;text-transform:uppercase;animation:protPulse 1s ease-in-out infinite}
 @keyframes protPulse{50%{opacity:.55}}
@@ -982,7 +986,7 @@ const Settings = Object.assign({
   targetFps: isChromebook ? 30 : 60, fov: 80, sens: 1.0, invertY: false, deadzone: 0.15, padSens: 1.0, aimAssist: 2, flySpeed: 1, volume: 0.6, gore: 'full', bloodColor: 'red', spawnPreview: true, dmgNums: true, publicRoom: true,
   showNet: false, showFps: false, showHints: true, name: '', color: PLAYER_COLORS[(Math.random() * PLAYER_COLORS.length) | 0],
   turnUrl: '', turnUser: '', turnPass: '', binds: {},
-  confirmClose: true, aimbot: 0, aimbotFov: 25, aimbotBone: 'head', aimbotSmooth: 0,   // owner-only (Game.ownerAimbot): 0 off / 1 while aiming or shooting / 2 always
+  confirmClose: true, pixelFont: true, aimbot: 0, aimbotFov: 25, aimbotBone: 'head', aimbotSmooth: 0,   // owner-only (Game.ownerAimbot): 0 off / 1 while aiming or shooting / 2 always
 }, AUDIO_DEFAULTS, store.get('settings', {}));
 Settings.binds = Object.assign({}, DEFAULT_BINDS, Settings.binds || {});
 const saveSettings = () => store.set('settings', Settings);
@@ -5877,6 +5881,7 @@ const UI = {
   open: null, smTab: 'props', smQuery: '', setTab: 'graphics', slTab: 'worlds', rad: { page: 0, sel: -1, vx: 0, vy: 0 }, hintKey: '', fpsAcc: 0, fpsN: 0, fpsT: 0,
   init() {
     // ---- lobby ----
+    document.body.classList.toggle('pixel', Settings.pixelFont !== false);
     const nm = $('#inName'); nm.value = Settings.name || '';
     nm.addEventListener('change', () => { Settings.name = nm.value.trim().slice(0, 18); saveSettings(); });
     this.refreshProfile();
@@ -6808,6 +6813,7 @@ const UI = {
       s.append(row('Shadows' + (pbr ? '' : ' <span class="muted">(n/a on Low)</span>'), check('shadows', () => R.applyTier(R.tier, false))));
       s.append(row('Ambient occlusion (GTAO)', check('ao', () => R.setupComposer())));
       s.append(row('Bloom', check('bloom', () => R.setupComposer())));
+      s.append(row('Pixel font', check('pixelFont', () => { document.body.classList.toggle('pixel', !!Settings.pixelFont); for (const p of Players.map.values()) Players.updatePlate(p, true); })));
       s.append(row('Reflection probes <span class="muted">(Ultra)</span>', check('reflections')));
       s.append(row('Dynamic resolution', check('drs')));
       const tf = h('select', { onchange: () => { Settings.targetFps = +tf.value; saveSettings(); } });

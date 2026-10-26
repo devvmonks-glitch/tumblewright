@@ -12,7 +12,7 @@
 <meta name="description" content="Tumblewright: a multiplayer 3D physics sandbox. Build, weld, drive and blow things up together in your browser.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Barlow:wght@400;500;600;700&family=Pixelify+Sans:wght@400..700&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,400..600,0..1,0&display=block" rel="stylesheet">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='12' y='12' width='40' height='40' rx='8' transform='rotate(18 32 32)' fill='%23ffb13b'/%3E%3Crect x='24' y='24' width='16' height='16' rx='3' transform='rotate(18 32 32)' fill='%2316181f'/%3E%3C/svg%3E">
 <!--
@@ -641,6 +641,10 @@ kbd,.glyph{border-radius:2px;background:#2b2f35;border-color:#454b53}
 .ps-report{align-self:flex-start;background:none;border:0;padding:0;color:var(--muted);font:600 13px var(--title);letter-spacing:.1em;text-transform:uppercase}
 .ps-report:hover{background:none;color:var(--text)}
 @media (max-width:900px){#pause .ps-right{display:none}#pause .ps-left{margin:0;width:100%}}
+/* pixel font (Settings > Graphics > Pixel font) */
+body.pixel{--font:'Pixelify Sans','Barlow','Segoe UI',system-ui,sans-serif;--title:'Pixelify Sans','Barlow Condensed','Barlow',sans-serif;-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale}
+body.pixel h1,body.pixel h2,body.pixel .lb-item,body.pixel .mitem{letter-spacing:.02em}
+body.pixel #lobby .logo h1{font-size:clamp(28px,3.6vw,48px);white-space:nowrap}
 /* spawn protection */
 #protTag{position:absolute;left:24px;bottom:96px;padding:6px 12px;background:rgba(21,23,26,.9);border:1px solid var(--acc2);color:var(--acc2);font:700 13px var(--title);letter-spacing:.14em;text-transform:uppercase;animation:protPulse 1s ease-in-out infinite}
 @keyframes protPulse{50%{opacity:.55}}

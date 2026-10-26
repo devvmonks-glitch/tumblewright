@@ -139,6 +139,7 @@ const UI = {
   open: null, smTab: 'props', smQuery: '', setTab: 'graphics', slTab: 'worlds', rad: { page: 0, sel: -1, vx: 0, vy: 0 }, hintKey: '', fpsAcc: 0, fpsN: 0, fpsT: 0,
   init() {
     // ---- lobby ----
+    document.body.classList.toggle('pixel', Settings.pixelFont !== false);
     const nm = $('#inName'); nm.value = Settings.name || '';
     nm.addEventListener('change', () => { Settings.name = nm.value.trim().slice(0, 18); saveSettings(); });
     this.refreshProfile();
@@ -1070,6 +1071,7 @@ const UI = {
       s.append(row('Shadows' + (pbr ? '' : ' <span class="muted">(n/a on Low)</span>'), check('shadows', () => R.applyTier(R.tier, false))));
       s.append(row('Ambient occlusion (GTAO)', check('ao', () => R.setupComposer())));
       s.append(row('Bloom', check('bloom', () => R.setupComposer())));
+      s.append(row('Pixel font', check('pixelFont', () => { document.body.classList.toggle('pixel', !!Settings.pixelFont); for (const p of Players.map.values()) Players.updatePlate(p, true); })));
       s.append(row('Reflection probes <span class="muted">(Ultra)</span>', check('reflections')));
       s.append(row('Dynamic resolution', check('drs')));
       const tf = h('select', { onchange: () => { Settings.targetFps = +tf.value; saveSettings(); } });
