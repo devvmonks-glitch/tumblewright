@@ -487,6 +487,23 @@ const FX = {
     this.list.push({ t: 0, life, upd: (k) => { bm.mesh.material.opacity = 1 - k; }, end: () => { bm.mesh.visible = false; } });
   },
   tracer(a, b) { this.beam(a, b, 0xffd27a, 0.07, 0.018); },
+  // muzzle flash: a hot core and an orange bloom for a couple of frames, a flicker of light, and smoke for big guns.
+  // `at` is the viewmodel's muzzle (the flash rides along with the gun) or a world position (other players).
+  muzzle(at, kind) {
+    const big = kind === 'big', puff = kind === 'puff', obj = at.isObject3D ? at : null, wp = obj ? obj.getWorldPosition(new V3()) : at;
+    if (!puff) for (const [col, sz, op] of [[0xfff2c8, big ? 0.2 : 0.13, 1], [0xff9a3c, big ? 0.55 : 0.34, 0.8]]) {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.smokeTex, color: col, transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false, rotation: Math.random() * Math.PI }));
+      sp.material.userData.outlineParameters = { visible: false }; sp.renderOrder = 10;
+      const s0 = sz * (0.8 + Math.random() * 0.4); sp.scale.setScalar(s0);
+      if (obj) obj.add(sp); else { sp.position.copy(wp); R.scene.add(sp); }
+      this.list.push({ t: 0, life: 0.06, upd: k => { sp.material.opacity = op * (1 - k); sp.scale.setScalar(s0 * (1 + k * 0.6)); }, end: () => { sp.removeFromParent(); sp.material.dispose(); } });
+    }
+    if (this.light.intensity < 2 && !puff) {   // shares the explosion light: only when no explosion is lighting things up
+      this.light.position.copy(wp); this.light.intensity = big ? 9 : 6;
+      this.list.push({ t: 0, life: 0.05, upd: k => { if (this.light.intensity <= 9) this.light.intensity = (big ? 9 : 6) * (1 - k); }, end: () => { if (this.light.intensity <= 9) this.light.intensity = 0; } });
+    }
+    if (big || puff) this.smoke(wp, puff ? 2 : 1, puff ? 0.35 : 0.18, 0.6, 0xcfcfcf);
+  },
   zap(a, b) { this.beam(a, b, 0x9ff3ff, 0.12, 0.03); this.spark(b, null, 0x9ff3ff, 6); },
   spark(p, n, color, count) {
     count = count || 10;
@@ -540,6 +557,7 @@ const FX = {
   remote(m) {
     if (m.k === 'shot') {
       const o = new V3().fromArray(m.o), ends = Array.isArray(m.e[0]) ? m.e : [m.e];
+      if (o.distanceTo(R.camera.position) > 1.5 && m.w !== 'crowbar') this.muzzle(_v1.fromArray(ends[0]).sub(o).normalize().multiplyScalar(0.7).add(o).clone(), ends.length > 1 || m.w === 'sniper' ? 'big' : 'small');
       ends.forEach((a, i) => { const e = new V3().fromArray(a); this.tracer(o, e); if (m.n) this.spark(e, new V3().fromArray(m.n)); else if (ends.length > 1) this.spark(e, null, null, 4); if (i < 3) Audio.bulletHit(o, e, m.n || ends.length > 1 ? UP : null); Audio.flyby(o, e); });
       Audio.gun(m.w, o);
     }
@@ -1606,7 +1624,7 @@ const HOLO = {
 const AIM_ASSIST = [0, 0.55, 1, 1.45];   // Settings.aimAssist: off / low / standard / strong
 const Game = {
   state: 'loading', viewmodel: null, detected: null, pendingWorld: null, aimSeat: 0, lockReleaseOk: false,
-  acc: 0, last: 0, orbit: 0, shake: 0, moveInp: { mx: 0, my: 0, jump: false, sprint: false, up: 0 }, autoT: 20, hiddenTicker: null, bob: 0, fellT: 0,
+  acc: 0, last: 0, orbit: 0, shake: 0, punch: [0, 0], sway: [0, 0], drawT: 1, sprintK: 0, moveInp: { mx: 0, my: 0, jump: false, sprint: false, up: 0 }, autoT: 20, hiddenTicker: null, bob: 0, fellT: 0,
   async boot() {
     const lt = $('#loadingText');
     try {
@@ -2116,7 +2134,7 @@ const Game = {
   updateCamera(dt) {
     const cam = R.camera, me = Players.local;
     if (this.state !== 'playing' || !me) {
-      this.orbit += dt * 0.06;
+      this.firstPerson = false; this.orbit += dt * 0.06;
       cam.position.set(Math.sin(this.orbit) * 16, 5.5 + Math.sin(this.orbit * 0.7) * 1.2, Math.cos(this.orbit) * 16);
       cam.lookAt(0, 1.2, 0); R.focus.set(0, 0, 0);
       if (this.viewmodel) this.viewmodel.visible = false;
@@ -2124,6 +2142,7 @@ const Game = {
       return;
     }
     const cp = Math.cos(me.pitch), dir = _v2.set(-Math.sin(me.yaw) * cp, Math.sin(me.pitch), -Math.cos(me.yaw) * cp);
+    this.firstPerson = false;
     if (me.seat) {
       const se = World.ents.get(me.seat), ve = this.seatVeh(), V = ve && VEH[ve.d.veh], base = ve && ve.mesh ? ve.mesh : se && se.mesh;
       const target = base ? _v1.copy(base.position).add(_v3.set(0, V ? V.cam[1] : 1.3, 0)) : _v1.copy(me.renderPos);
@@ -2145,10 +2164,17 @@ const Game = {
       if (h) cam.position.copy(target).addScaledVector(back, Math.max(0.6, h.dist - 0.3));
       cam.lookAt(target);
     } else {
-      const eh = me.crouch ? CFG.eye - 0.5 : CFG.eye;
+      const eh = me.crouch ? CFG.eye - 0.5 : CFG.eye; this.firstPerson = true;
       this.eyeH = lerp(this.eyeH || eh, eh, 1 - Math.exp(-14 * dt));
       cam.position.set(me.renderPos.x, me.renderPos.y + this.eyeH, me.renderPos.z);
-      cam.rotation.set(me.pitch, me.yaw, 0, 'YXZ');
+      // landing: remember the fastest fall, dip the view when we touch down
+      if (!me.grounded) this.airVy = Math.min(this.airVy || 0, me.vel.y);
+      else { if (this.airVy < -4) this.land = Math.max(this.land || 0, clamp(-this.airVy / 14, 0.25, 1)); this.airVy = 0; }
+      this.land = Math.max(0, (this.land || 0) - dt * 3.2);
+      cam.position.y -= Math.sin(Math.min(1, this.land) * Math.PI) * 0.09 * this.land;
+      // view punch from recoil: kicks the camera (not the aim) and springs back
+      const pk = 1 - Math.exp(-11 * dt); this.punch[0] -= this.punch[0] * pk; this.punch[1] -= this.punch[1] * pk;
+      cam.rotation.set(me.pitch + this.punch[0], me.yaw + this.punch[1], 0, 'YXZ');
       if (me.dead) { cam.position.y = me.renderPos.y + 0.4; cam.rotation.z = 0.4; }
     }
     if (this.shake > 0) { this.shake = Math.max(0, this.shake - dt); cam.position.x += (Math.random() - 0.5) * this.shake * 0.4; cam.position.y += (Math.random() - 0.5) * this.shake * 0.4; }
@@ -2163,11 +2189,28 @@ const Game = {
     const vm = this.viewmodel;
     if (vm) {
       vm.visible = !me.seat && !me.dead && !Editor.active && !scoped && !(me.disg && Rules.mode === 'prophunt');
-      const spd = Math.hypot(me.vel.x, me.vel.z); this.bob += dt * spd * (me.grounded ? 1.6 : 0.3);
-      const k = Tools.kick;
+      const spd = Math.hypot(me.vel.x, me.vel.z), mv = Math.min(1, spd / 5); this.bob += dt * spd * (me.grounded ? 1.6 : 0.3);
+      const k = Tools.kick, melee = Tools.weapon === 'crowbar', t = now();
+      // sway: the gun lags behind where you look
+      let dyaw = me.yaw - (this.lastYaw ?? me.yaw); while (dyaw > Math.PI) dyaw -= Math.PI * 2; while (dyaw < -Math.PI) dyaw += Math.PI * 2;
+      const dpitch = me.pitch - (this.lastPitch ?? me.pitch); this.lastYaw = me.yaw; this.lastPitch = me.pitch;
+      const sk = 1 - Math.exp(-9 * dt), sdt = Math.max(dt, 1 / 240);
+      this.sway[0] += (clamp(dyaw / sdt * 0.006, -0.035, 0.035) - this.sway[0]) * sk;
+      this.sway[1] += (clamp(dpitch / sdt * 0.006, -0.03, 0.03) - this.sway[1]) * sk;
+      // sprinting lowers and turns the gun in; drawing raises it from below
+      const sprint = this.moveInp.sprint && me.grounded && spd > 4 && !Tools.grab && Tools.cool <= 0;
+      this.sprintK += ((sprint ? 1 : 0) - this.sprintK) * (1 - Math.exp(-8 * dt));
+      this.drawT = Math.min(1, this.drawT + dt / 0.28); const dr = Math.pow(1 - this.drawT, 2);
+      const ld = Math.sin(Math.min(1, this.land || 0) * Math.PI) * (this.land || 0), br = Math.sin(t * 1.7) * 0.0025 * (1 - mv);
       const VB = Models.has('wp_' + Tools.weapon) && WEAPON_MODEL[Tools.weapon] ? WEAPON_MODEL[Tools.weapon].vm : [0.26, -0.25, -0.48];
-      vm.position.set(VB[0] + Math.sin(this.bob) * 0.012 * Math.min(1, spd / 5), VB[1] + Math.abs(Math.cos(this.bob)) * 0.012 * Math.min(1, spd / 5), VB[2] + k * 0.07);
-      vm.rotation.set(k * (Tools.weapon === 'crowbar' ? -1.2 : 0.18), Tools.weapon === 'crowbar' ? k * 0.8 : 0, 0);
+      vm.position.set(
+        VB[0] + Math.sin(this.bob) * 0.012 * mv + this.sway[0] - this.sprintK * 0.03,
+        VB[1] + Math.abs(Math.cos(this.bob)) * 0.012 * mv - this.sway[1] + br - ld * 0.04 - this.sprintK * 0.035 - dr * 0.22,
+        VB[2] + k * 0.07);
+      vm.rotation.set(
+        k * (melee ? -1.2 : 0.18) - this.sway[1] * 1.6 - this.sprintK * 0.22 - dr * 0.7 - ld * 0.06,
+        (melee ? k * 0.8 : 0) - this.sway[0] * 1.8 + this.sprintK * 0.55,
+        this.sway[0] * -2.2 + (melee ? 0 : (this.kickRoll || 0) * k));
     }
   },
   buildViewmodel() {
@@ -2245,7 +2288,7 @@ const Game = {
 };
 
 // debug handle for testing from the console
-window.TW = { Social, PH, ZS, Prog, DiscordAct, Online, Owner, Hotbar, Audio, Models, Game, Net, World, Players, R, Auth, Tools, Editor, UI, Rules, Settings, Phys, Input, Admin, Save, FX, Mats, Vehicles, VEH, Gore, Env };
+window.TW = { Thumbs, Social, PH, ZS, Prog, DiscordAct, Online, Owner, Hotbar, Audio, Models, Game, Net, World, Players, R, Auth, Tools, Editor, UI, Rules, Settings, Phys, Input, Admin, Save, FX, Mats, Vehicles, VEH, Gore, Env };
 Game.boot();
 </script>
 

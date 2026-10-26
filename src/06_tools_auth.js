@@ -5,14 +5,14 @@
 const WEAPONS = [
   { id: 'physgun', name: 'Physics Gun', icon: '🧲', desc: 'Grab, move, rotate and freeze objects.' },
   { id: 'toolgun', name: 'Tool Gun', icon: '🔧', desc: '' },
-  { id: 'pistol', name: 'Pistol', icon: '🔫', desc: 'Semi-automatic. Knocks props around.', rate: 0.22, dmg: 22, imp: 1.2, dv: 8, spread: 0.004, range: 300 },
-  { id: 'shotgun', name: 'Shotgun', icon: '💥', desc: 'Pump action, 8 pellets. Devastating up close.', rate: 0.85, dmg: 11, imp: 0.9, dv: 2, spread: 0.055, pellets: 8, range: 120, push: 2 },
-  { id: 'rifle', name: 'Rifle', icon: '🎯', desc: 'Automatic rifle.', rate: 0.09, dmg: 13, imp: 0.7, dv: 5, spread: 0.011, auto: true, range: 300 },
-  { id: 'sniper', name: 'Sniper Rifle', icon: '🔭', desc: 'Hold alt-fire to scope in. Inaccurate from the hip.', rate: 1.2, dmg: 95, imp: 4, dv: 16, spread: 0, hipSpread: 0.03, zoom: 1, range: 800, push: 3 },
-  { id: 'rocket', name: 'Rocket Launcher', icon: '🚀', desc: 'Rockets explode on impact. Rocket-jump if you dare.', rate: 1.0, proj: 'rocket' },
+  { id: 'pistol', name: 'Pistol', icon: '🔫', desc: 'Semi-automatic. Knocks props around.', rate: 0.22, dmg: 22, imp: 1.2, dv: 8, spread: 0.004, range: 300, vp: 0.022 },
+  { id: 'shotgun', name: 'Shotgun', icon: '💥', desc: 'Pump action, 8 pellets. Devastating up close.', rate: 0.85, dmg: 11, imp: 0.9, dv: 2, spread: 0.055, pellets: 8, range: 120, push: 2, vp: 0.06 },
+  { id: 'rifle', name: 'Rifle', icon: '🎯', desc: 'Automatic rifle.', rate: 0.09, dmg: 13, imp: 0.7, dv: 5, spread: 0.011, auto: true, range: 300, vp: 0.011 },
+  { id: 'sniper', name: 'Sniper Rifle', icon: '🔭', desc: 'Hold alt-fire to scope in. Inaccurate from the hip.', rate: 1.2, dmg: 95, imp: 4, dv: 16, spread: 0, hipSpread: 0.03, zoom: 1, range: 800, push: 3, vp: 0.07 },
+  { id: 'rocket', name: 'Rocket Launcher', icon: '🚀', desc: 'Rockets explode on impact. Rocket-jump if you dare.', rate: 1.0, proj: 'rocket', vp: 0.045 },
   { id: 'grenade', name: 'Grenade', icon: '💣', desc: 'Throw it. It explodes after 2.5 s. One every 2.5 s.', rate: 2.5 },
-  { id: 'crowbar', name: 'Crowbar', icon: '🪓', desc: 'Melee. Great for smashing ragdolls.', rate: 0.42, dmg: 34, imp: 3, dv: 10, range: 2.4, push: 4 },
-  { id: 'propcannon', name: 'Prop Cannon', icon: '📦', desc: 'Fires random props. They vanish after 30 s.', rate: 0.35, proj: 'prop' },
+  { id: 'crowbar', name: 'Crowbar', icon: '🪓', desc: 'Melee. Great for smashing ragdolls.', rate: 0.42, dmg: 34, imp: 3, dv: 10, range: 2.4, push: 4, vp: 0.012 },
+  { id: 'propcannon', name: 'Prop Cannon', icon: '📦', desc: 'Fires random props. They vanish after 30 s.', rate: 0.35, proj: 'prop', vp: 0.03 },
   { id: 'deleter', name: 'Delete Gun', icon: '🗑️', desc: 'Deletes whatever you shoot: props, NPCs, map pieces, trees, rocks and containers. Map and world objects need edit permission.', rate: 0.2 },
 ];
 // random cone spread around a direction
@@ -45,13 +45,13 @@ const Tools = {
     R.scene.add(this.marker);
     this.beam = new Beam(0x6fe3ff, 0.05);
   },
-  setWeapon(id) { if (!W_BY_ID[id] || this.weapon === id) return; this.release(); this.weapon = id; this.first = null; Game.buildViewmodel(); UI.refreshTool(); Audio.play('draw'); },
+  setWeapon(id) { if (!W_BY_ID[id] || this.weapon === id) return; this.release(); this.weapon = id; this.first = null; Game.drawT = 0; Game.buildViewmodel(); UI.refreshTool(); Audio.play('draw'); },
   cycleWeapon(dir) { const i = W_BY_ID[this.weapon].idx; this.setWeapon(WEAPONS[(i + dir + WEAPONS.length) % WEAPONS.length].id); },
   setMode(id) { this.mode = id; this.first = null; UI.refreshTool(); },
   cycleMode(dir) { const i = TOOL_MODES.findIndex(m => m.id === this.mode); this.setMode(TOOL_MODES[(i + dir + TOOL_MODES.length) % TOOL_MODES.length].id); Audio.play('switch'); },
   release() { if (this.grab) { Net.toHost({ t: 'drop' }); this.grab = null; } this.rotating = false; },
   onEntRemoved(id) { if (this.grab && this.grab.e === id) this.grab = null; if (this.first && this.first.e === id) this.first = null; },
-  aim(o, d) { R.camera.getWorldPosition(o); R.camera.getWorldDirection(d); return { o, d }; },
+  aim(o, d) { R.camera.getWorldPosition(o); R.camera.getWorldDirection(d); if (Game.firstPerson && Players.local) Players.aimDir(Players.local, d); return { o, d }; },   // first person: view punch is cosmetic, shots go where you look
   cast(max) { const o = new V3(), d = new V3(); this.aim(o, d); const p = Players.local; return Phys.cast(o, d, max, p ? p.body : null); },
   localPoint(e, wp) { return wp.clone().sub(e.mesh.position).applyQuaternion(_q1.copy(e.mesh.quaternion).invert()); },
   hitInfo(hit) {
@@ -77,12 +77,12 @@ const Tools = {
     if (!this.grab) {
       if (Input.hit('fire')) {
         const h = this.cast(90), hi = h && this.hitInfo(h);
-        if (hi && hi.ent && hi.ent.d.k !== 'map') { this.grab = { e: hi.e, lp: hi.lp, dist: h.dist }; Net.toHost({ t: 'grab', e: hi.e, lp: hi.lp, dist: h.dist }); Audio.play('pg_grab'); }
+        if (hi && hi.ent && hi.ent.d.k !== 'map') { this.grab = { e: hi.e, lp: hi.lp, dist: h.dist }; Net.toHost({ t: 'grab', e: hi.e, lp: hi.lp, dist: h.dist }); Audio.play('pg_grab'); FX.spark(h.point, h.normal, 0x6fe3ff, 8); this.kick = 0.45; }
         else if (hi && hi.ent && hi.ent.d.k === 'map') UI.toast('Map pieces are moved in Edit mode');
       }
       if (Input.hit('reload')) {
         const h = this.cast(90), hi = h && this.hitInfo(h);
-        if (hi && hi.ent && hi.ent.d.fz) { Net.toHost({ t: 'unfreeze', e: hi.e }); UI.toast('Unfrozen'); Audio.play('unfreeze'); }
+        if (hi && hi.ent && hi.ent.d.fz) { Net.toHost({ t: 'unfreeze', e: hi.e }); FX.spark(h.point, h.normal, 0x6fe3ff, 10); this.kick = 0.4; UI.toast('Unfrozen'); Audio.play('unfreeze'); }
       }
       return;
     }
@@ -96,7 +96,7 @@ const Tools = {
       this.rot[0] += Input.dx * 0.006 + Input.axes[2] * 3.2 * dt;
       this.rot[1] += Input.dy * 0.006 + Input.axes[3] * 3.2 * dt;
     }
-    if (Input.hit('alt')) { Net.toHost({ t: 'freeze' }); this.grab = null; Audio.play('freeze'); UI.toast('Frozen'); return; }
+    if (Input.hit('alt')) { const fe = World.ents.get(g.e); if (fe && fe.mesh) { FX.spark(fe.mesh.position, null, 0xbfefff, 18); FX.smoke(fe.mesh.position, 2, 0.5, 0.4, 0xd8f4ff); } Net.toHost({ t: 'freeze' }); this.grab = null; this.kick = 0.7; Audio.play('freeze'); UI.toast('Frozen'); return; }
     if (!Input.down('fire')) { Net.toHost({ t: 'drop' }); this.grab = null; Audio.play('pg_drop'); }
   },
   updToolgun() {
@@ -177,7 +177,11 @@ const Tools = {
   muzzle() { const vm = Game.viewmodel; const m = vm && vm.getObjectByName('muzzle'); return m ? m.getWorldPosition(new V3()) : R.camera.position.clone(); },
   fireGun(W) {
     this.cool = W.rate; this.kick = W.pellets || W.proj || W.zoom ? 1.5 : 1;
+    if (W.vp) { const z = W.zoom && Game.zoomed ? 0.5 : 1; Game.punch[0] += W.vp * z * (0.85 + Math.random() * 0.3); Game.punch[1] += (Math.random() - 0.5) * W.vp * 0.5 * z; }
+    Game.kickRoll = (Math.random() - 0.5) * 0.12;
     const o = new V3(), d = new V3(); this.aim(o, d);
+    const mzo = Game.viewmodel && Game.viewmodel.getObjectByName('muzzle');
+    if (W.id !== 'crowbar') FX.muzzle(mzo && Game.viewmodel.visible ? mzo : this.muzzle(), W.proj ? 'puff' : W.pellets || W.zoom ? 'big' : 'small');
     const spread = W.zoom && !Game.zoomed ? W.hipSpread : W.spread;
     if (spread && !W.pellets) jitter(d, spread);
     if (W.proj === 'rocket') Audio.play('rocket_fire'); else if (W.proj) Audio.play('propcannon'); else if (W.id === 'crowbar') Audio.play('swing'); else Audio.gun(W.id, R.camera.position, true);
@@ -186,7 +190,7 @@ const Tools = {
       const p = Players.local, n = W.pellets || 1;
       for (let i = 0; i < n; i++) {
         const dd = n > 1 ? jitter(d.clone(), W.spread) : d, h = Phys.cast(o, dd, W.range, p.body);
-        if (W.id === 'crowbar') { if (h) { FX.spark(h.point, h.normal); const s = Audio.surfaceAt(h), b = HIT_OF[s] || 'hit_metal'; Audio.at(s === 'body' ? 'punch' : SND[b + '_h'] ? b + '_h' : b, h.point); } }
+        if (W.id === 'crowbar') { if (h) { Game.punch[0] += 0.02; Game.punch[1] += (Math.random() - 0.5) * 0.03; FX.spark(h.point, h.normal); const s = Audio.surfaceAt(h), b = HIT_OF[s] || 'hit_metal'; Audio.at(s === 'body' ? 'punch' : SND[b + '_h'] ? b + '_h' : b, h.point); } }
         else { const end = h ? h.point : o.clone().addScaledVector(dd, W.range); FX.tracer(this.muzzle(), end); if (h) { FX.spark(h.point, h.normal, null, n > 1 ? 4 : 10); if (i < 3) Audio.bulletHit(o, h.point, h.normal); } }
         if (h && typeof h.id === 'string' && Rules.combat) UI.hitmarker();
       }

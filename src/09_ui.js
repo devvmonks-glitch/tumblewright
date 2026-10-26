@@ -24,7 +24,7 @@ const Thumbs = {
   },
   generate() {
     const r = R.renderer, size = 112, pr = r.getPixelRatio(), H = r.domElement.height;
-    if (H < size * pr || r.domElement.width < size * pr) return;
+    if (H < size * pr || r.domElement.width < size * pr) { this.retryOnResize(); return; }
     const sc = new THREE.Scene(); sc.environment = R.envTex;
     const cam = new THREE.PerspectiveCamera(30, 1, 0.05, 200);
     const l = new THREE.DirectionalLight(0xffffff, 2.6); l.position.set(3, 6, 4); sc.add(l, new THREE.HemisphereLight(0xffffff, 0x888888, 0.9));
@@ -44,6 +44,7 @@ const Thumbs = {
       this.urls[it.key] = cv.toDataURL('image/png');
       sc.remove(g);
     }
+    const fill = new THREE.DirectionalLight(0xffffff, 1.8); sc.add(fill);   // weapons are mostly dark metal: light them from the camera too
     for (const w of WEAPONS) {   // weapon thumbnails (without the first-person hand)
       const mk = 'wp_' + w.id, W = WEAPON_MODEL[w.id]; if (!Models.has(mk)) continue;
       const g = Models.instance(mk, W.t, W.c), hand = g.getObjectByName(mk + '_hand'); if (hand) hand.visible = false;
@@ -51,12 +52,24 @@ const Thumbs = {
       box.makeEmpty(); g.traverseVisible(o => { if (o.isMesh) box.expandByObject(o); }); box.getCenter(ctr); box.getSize(sz);
       const rad = Math.max(sz.length() * 0.5, 0.05), dist = rad / Math.sin(THREE.MathUtils.degToRad(15)) * 1.05;
       cam.position.copy(ctr).add(new V3(1.2, 0.45, -0.35).normalize().multiplyScalar(dist)); cam.lookAt(ctr); cam.near = dist / 50; cam.far = dist * 4; cam.updateProjectionMatrix();
+      fill.position.copy(cam.position).add(new V3(0, dist * 0.5, 0)); fill.target.position.copy(ctr); fill.target.updateMatrixWorld();
       r.clear(); r.render(sc, cam);
       ctx.clearRect(0, 0, size, size); ctx.drawImage(r.domElement, 0, H - size * pr, size * pr, size * pr, 0, 0, size, size);
       this.urls[mk] = cv.toDataURL('image/png');
       sc.remove(g);
     }
     r.setScissorTest(false); r.setClearColor(0x000000, 1); R.resize();
+    this.done = true;
+  },
+  // the canvas was too small to render into (window minimised or tiny while loading): try again once it grows
+  retryOnResize() {
+    if (this.waiting) return; this.waiting = true;
+    const go = () => {
+      this.generate(); if (!this.done) return;
+      removeEventListener('resize', go); this.waiting = false;
+      UI.buildSlots(); UI.refreshTool(); if (UI.open === 'spawn') UI.buildSpawn();
+    };
+    addEventListener('resize', go);
   },
 };
 
@@ -626,7 +639,13 @@ const UI = {
     this._damageFlash();
   },
   _damageFlash() { const hud = $('#hud'); hud.style.boxShadow = 'inset 0 0 140px rgba(255,30,30,.55)'; clearTimeout(this._df); this._df = setTimeout(() => hud.style.boxShadow = '', 180); if (!this._hurtT || now() - this._hurtT > 0.45) { this._hurtT = now(); Audio.play('pain_m', 0.55); Audio.play('punch', 0.35); } },
-  hitmarker() { Audio.play('hitmark'); const hm = $('#hitmarker'); hm.style.opacity = 1; clearTimeout(this._hm); this._hm = setTimeout(() => hm.style.opacity = 0, 140); },
+  // kind: '' (hit), 'head' or 'kill'. The host can report one hit twice (damage number + player hit), so the tick is debounced
+  hitmarker(kind = '') {
+    const t = now(), hm = $('#hitmarker'), fresh = t - (this._hmT || 0) > 0.05; this._hmT = t;
+    if (fresh) Audio.play('hitmark'); if (kind === 'kill' && hm.className !== 'kill') Audio.play('kill');
+    if (fresh || kind) { hm.className = kind + ' pop'; void hm.offsetWidth; hm.classList.remove('pop'); }
+    hm.style.opacity = 1; clearTimeout(this._hm); this._hm = setTimeout(() => { hm.style.opacity = 0; this._hm = setTimeout(() => hm.className = '', 160); }, kind === 'kill' ? 420 : 160);
+  },
   killfeed(m) {
     const v = Players.map.get(m.v), a = m.a ? Players.map.get(m.a) : null;
     const nm = p => `<span style="color:${esc(p ? p.color : '#fff')}">${esc(p ? p.name : '?')}</span>`;
@@ -742,7 +761,7 @@ const UI = {
       key: it.key, name: it.name, icon: it.icon, desc: it.desc, cat,
       sub: cat === 'vehicles' ? 'Sit to drive' : it.desc ? it.desc : (() => { const d = it.pf().ents[0]; return (MATDEFS[d.m] ? MATDEFS[d.m].name : ''); })(),
       tag: it.key === 'zombie' ? 'HOSTILE' : ['xbarrel', 'propane'].includes(it.key) ? 'EXPLOSIVE' : null, tagCls: 'hostile', onclick: () => { Game.spawnItem(it.key); close(); } }));
-    if (cat === 'weapons') return WEAPONS.map((w, i) => ({ key: 'wp_' + w.id, name: w.name, icon: w.icon, sub: w.desc, tag: 'SLOT ' + ((i + 1) % 10), cat, onclick: () => { Tools.setWeapon(w.id); this.closeMenu(); } }));
+    if (cat === 'weapons') return WEAPONS.map((w, i) => ({ key: 'wp_' + w.id, name: w.name, icon: w.icon, sub: w.desc, tag: (j => j >= 0 ? 'SLOT ' + HOTBAR_LABEL[j] : null)(Hotbar.get().findIndex(e => e && e.w === w.id && !e.m)), cat, onclick: () => { Tools.setWeapon(w.id); this.closeMenu(); } }));
     if (cat === 'tools') return TOOL_MODES.map(m => ({ name: m.name, icon: m.icon, sub: m.desc, cat, onclick: () => { Tools.setWeapon('toolgun'); Tools.setMode(m.id); this.buildSpawn(); } }));
     if (cat === 'map') return CATALOG.map.map(it => ({ key: it.key, name: it.name, icon: it.icon, sub: 'Edit mode', cat, onclick: () => { if (!Editor.active) Editor.toggle(true); if (Editor.active) { Editor.arm(it.key); this.closeMenu(); this.toast('Click to place ' + it.name + (Input.device === 'pad' ? ' (RT)' : ''), 'architecture'); } } }));
     return [];

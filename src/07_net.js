@@ -283,7 +283,7 @@ const Net = {
       case 'kb': if (me && !me.noclip) { me.kb = new V3().fromArray(m.v); me.grounded = false; } break;
       case 'hurt': if (me) { me.hp = m.hp; UI.damageFlash(m.f); } break;
       case 'hm': UI.hitmarker(); break;
-      case 'dn': DmgNum.add(m); Audio.play('hitmark', 0.8); break;
+      case 'dn': DmgNum.add(m); UI.hitmarker(m.k ? 'kill' : m.h ? 'head' : ''); break;
       case 'bots': Bots.recv(m.b); break;
       case 'seat': { const p = Players.map.get(m.pid); if (p) { p.seat = m.e; if (p.isLocal) Game.onSeat(m.e); } break; }
       case 'kill': UI.killfeed(m); if (m.v === this.me && me) { me.dead = true; me.hp = 0; Audio.play('death_m', 0.8); } break;
