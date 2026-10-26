@@ -554,7 +554,7 @@ const WEAPON_MODEL = {
   pistol: { t: 'metal', c: '#2a2c31', muzzle: [0, 0.018, -0.155], vm: [0.19, -0.17, -0.5] },
   rifle: { t: 'plastic', c: '#3d4a32', muzzle: [0, 0, -0.65], vm: [0.17, -0.17, -0.74] },
   grenade: { t: 'plastic', c: '#4b5b3a', muzzle: [0, 0, -0.06], vm: [0.2, -0.16, -0.5] },
-  crowbar: { t: 'metal', c: '#c0392b', muzzle: [0, 0.24, -0.47], vm: [0.22, -0.2, -0.52] },
+  crowbar: { t: 'metal', c: '#c0392b', muzzle: [0, 0.24, -0.47], vm: [0.23, -0.27, -0.4], vr: [0.9, 0.3, 0.85] },   // vr: resting tilt (held up across the body, twisted so the hook shows side-on)
   shotgun: { t: 'metal', c: '#2e3238', muzzle: [0, 0.022, -0.66], vm: [0.18, -0.17, -0.62] },
   sniper: { t: 'plastic', c: '#6b6247', muzzle: [0, 0.008, -0.88], vm: [0.17, -0.16, -0.72] },
   rocket: { t: 'plastic', c: '#55653f', muzzle: [0, 0.06, -0.64], vm: [0.2, -0.2, -0.46] },
