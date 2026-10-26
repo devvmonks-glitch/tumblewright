@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <!-- auto-update config: stamped by tools/release/release.mjs (version, update server, public signing key) -->
-<meta name="tw-version" content="1.9.4">
+<meta name="tw-version" content="1.9.5">
 <meta name="tw-update-url" content="https://tumblewright.vercel.app/">
 <meta name="tw-update-key" content="MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEY+Cnn8Lm7Qg8qyzAHUGYObpBjSgdckeo7PetlABb0TomToEhaMbLW/zaRHOAbvsMn1TRCb4I/cPFv1ghZ6CgWw==">
-<meta name="tw-notes" content="The crowbar is now held upright with its hook showing, and chops diagonally when you swing.">
+<meta name="tw-notes" content="The crowbar has a proper swing. Guns kick and bloom, so spraying takes control. Levels now go to 100 with new ranks, colours and badges.">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Tumblewright — Multiplayer Physics Sandbox</title>
 <meta name="description" content="Tumblewright: a multiplayer 3D physics sandbox. Build, weld, drive and blow things up together in your browser.">
@@ -316,7 +316,7 @@ button.primary .ms{color:#1a1206}
 #crosshair,#crosshair.dot{width:30px;height:30px}
 #crosshair:before,#crosshair.dot:before{left:13px;top:13px;width:4px;height:4px;border-radius:50%;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.6)}
 #crosshair:after,#crosshair.dot:after{display:block;left:4px;top:4px;width:22px;height:22px;border-radius:50%;background:transparent;border:2px solid rgba(255,255,255,.55);box-sizing:border-box;box-shadow:0 0 2px rgba(0,0,0,.7);transition:transform .12s,border-color .12s}
-#crosshair.gun:after{border-style:dashed;transform:scale(.8)}
+#crosshair.gun:after{border-style:dashed;transform:scale(calc(.8 * var(--bloom,1)))}
 #crosshair.aim:after{border-color:var(--acc2);transform:scale(1.25)}
 #crosshair.use:after{border-color:var(--acc);transform:scale(1.25)}
 #crosshair.hot:after{border-color:var(--bad);transform:scale(1.1)}
@@ -672,6 +672,9 @@ body.pixel #lobby .logo h1{font-size:clamp(28px,3.6vw,48px);white-space:nowrap}
 .lb-lvt{display:flex;justify-content:space-between;align-items:baseline}
 #lvTitle{font:700 18px var(--title);text-transform:uppercase;letter-spacing:.04em}
 #xpText{font:600 12px var(--title);letter-spacing:.08em;color:var(--muted)}
+#lvNext{display:block;margin-top:6px;font:600 11px var(--title);letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+#lvNum.t2,.nameplate .lv.t2,.ps-pl .lv.t2{background:#9b7bff}#lvNum.t3,.nameplate .lv.t3,.ps-pl .lv.t3{background:#ff5a4d;color:#fff}#lvNum.t4,.nameplate .lv.t4,.ps-pl .lv.t4{background:#6cd8ef}
+#lvNum.t5,.nameplate .lv.t5,.ps-pl .lv.t5{background:linear-gradient(135deg,#f2c230,#ff5a9c 55%,#6cd8ef);color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.5)}
 .lb-xp{height:6px;background:#30353b;margin-top:6px}.lb-xp i{display:block;height:100%;background:var(--acc);width:0}
 #dailyReset{font:600 12px var(--title);letter-spacing:.08em;color:var(--muted);text-transform:uppercase}
 .dl{margin-top:10px}
@@ -769,7 +772,7 @@ input[type=email]:focus,input[type=password]:focus{border-color:var(--acc)}
         </div>
       </div>
       <div class="lb-card lb-prog">
-        <div class="lb-lv"><b id="lvNum">1</b><div class="grow"><div class="lb-lvt"><span id="lvTitle">Rookie</span><span id="xpText"></span></div><div class="lb-xp"><i id="xpFill"></i></div></div></div>
+        <div class="lb-lv"><b id="lvNum">1</b><div class="grow"><div class="lb-lvt"><span id="lvTitle">Rookie</span><span id="xpText"></span></div><div class="lb-xp"><i id="xpFill"></i></div><small id="lvNext"></small></div></div>
         <div class="lb-news-h" style="margin-top:16px"><h3>Daily challenges</h3><span id="dailyReset">New ones every day</span></div>
         <div id="dailyList"></div>
       </div>
@@ -2276,7 +2279,7 @@ const Players = {
     if (!p.plate) return;
     if (full || p._plateKey !== p.name + p.tier + p.color + (Net.hostId === p.id) + p.muted + p.lvl) {
       p._plateKey = p.name + p.tier + p.color + (Net.hostId === p.id) + p.muted + p.lvl;
-      p.plate.querySelector('.nm').innerHTML = `<span class="lv">${p.lvl || 1}</span>${Net.hostId === p.id ? '👑' : ''}<span style="color:${esc(p.color)}">${esc(p.name)}</span>${tierBadge(p.tier)}${p.muted ? '🔇' : ''}`;
+      p.plate.querySelector('.nm').innerHTML = `<span class="lv${lvTier(p.lvl || 1)}">${p.lvl || 1}</span>${Net.hostId === p.id ? '👑' : ''}<span style="color:${esc(p.color)}">${esc(p.name)}</span>${tierBadge(p.tier)}${p.muted ? '🔇' : ''}`;
     }
     const hb = p.plate.querySelector('.hb i'); hb.style.width = p.hp + '%'; hb.style.background = p.hp > 50 ? '#4ade80' : p.hp > 25 ? '#fbbf24' : '#ef4444';
   },
@@ -2729,9 +2732,9 @@ function prefabBottom(pf) {
 const WEAPONS = [
   { id: 'physgun', name: 'Physics Gun', icon: '🧲', desc: 'Grab, move, rotate and freeze objects.' },
   { id: 'toolgun', name: 'Tool Gun', icon: '🔧', desc: '' },
-  { id: 'pistol', name: 'Pistol', icon: '🔫', desc: 'Semi-automatic. Knocks props around.', rate: 0.22, dmg: 22, imp: 1.2, dv: 8, spread: 0.004, range: 300, vp: 0.022 },
+  { id: 'pistol', name: 'Pistol', icon: '🔫', desc: 'Semi-automatic. Knocks props around.', rate: 0.22, dmg: 22, imp: 1.2, dv: 8, spread: 0.004, range: 300, vp: 0.03, bloom: 0.6 },
   { id: 'shotgun', name: 'Shotgun', icon: '💥', desc: 'Pump action, 8 pellets. Devastating up close.', rate: 0.85, dmg: 11, imp: 0.9, dv: 2, spread: 0.055, pellets: 8, range: 120, push: 2, vp: 0.06 },
-  { id: 'rifle', name: 'Rifle', icon: '🎯', desc: 'Automatic rifle.', rate: 0.09, dmg: 13, imp: 0.7, dv: 5, spread: 0.011, auto: true, range: 300, vp: 0.011 },
+  { id: 'rifle', name: 'Rifle', icon: '🎯', desc: 'Automatic rifle.', rate: 0.09, dmg: 13, imp: 0.7, dv: 5, spread: 0.011, auto: true, range: 300, vp: 0.017, bloom: 0.3 },
   { id: 'sniper', name: 'Sniper Rifle', icon: '🔭', desc: 'Hold alt-fire to scope in. Inaccurate from the hip.', rate: 1.2, dmg: 95, imp: 4, dv: 16, spread: 0, hipSpread: 0.03, zoom: 1, range: 800, push: 3, vp: 0.07 },
   { id: 'rocket', name: 'Rocket Launcher', icon: '🚀', desc: 'Rockets explode on impact. Rocket-jump if you dare.', rate: 1.0, proj: 'rocket', vp: 0.045 },
   { id: 'grenade', name: 'Grenade', icon: '💣', desc: 'Throw it. It explodes after 2.5 s. One every 2.5 s.', rate: 2.5 },
@@ -2759,7 +2762,7 @@ const TOOL_MODES = [
   { id: 'dynamite', name: 'Dynamite', icon: '🧨', desc: 'Plant a charge on a surface. Press its key to set it off (or shoot it).' },
 ];
 const Tools = {
-  weapon: 'physgun', mode: 'weld', grab: null, first: null, cool: 0, rot: [0, 0], rotating: false, clipboard: null, marker: null, beam: null, kick: 0,
+  weapon: 'physgun', mode: 'weld', grab: null, first: null, cool: 0, rot: [0, 0], rotating: false, clipboard: null, marker: null, beam: null, kick: 0, bloom: 0, swingAt: 0,
   opt: Object.assign({ ropeLen: 1.0, ropeRigid: 1.0, thrForce: 12, thrKey: 'KeyF', thrPad: 'Pad7', wheelR: 0.4, paintMat: 'metal', paintCol: '#ff5a5f', motSpd: 4, motKey: 'KeyM', motTog: false,
     blLift: 10, blLen: 2, hovSpd: 3, hovAir: 0.3, hovUp: 'KeyU', hovDn: 'KeyJ', dynPow: 1, dynKey: 'KeyX' }, store.get('toolopt', {})),
   saveOpt() { store.set('toolopt', this.opt); },
@@ -2775,7 +2778,7 @@ const Tools = {
   cycleMode(dir) { const i = TOOL_MODES.findIndex(m => m.id === this.mode); this.setMode(TOOL_MODES[(i + dir + TOOL_MODES.length) % TOOL_MODES.length].id); Audio.play('switch'); },
   release() { if (this.grab) { Net.toHost({ t: 'drop' }); this.grab = null; } this.rotating = false; },
   onEntRemoved(id) { if (this.grab && this.grab.e === id) this.grab = null; if (this.first && this.first.e === id) this.first = null; },
-  aim(o, d) { R.camera.getWorldPosition(o); R.camera.getWorldDirection(d); if (Game.firstPerson && Players.local) Players.aimDir(Players.local, d); return { o, d }; },   // first person: view punch is cosmetic, shots go where you look
+  aim(o, d) { R.camera.getWorldPosition(o); R.camera.getWorldDirection(d); return { o, d }; },   // follows the camera, recoil included: spraying climbs and you pull it back down
   cast(max) { const o = new V3(), d = new V3(); this.aim(o, d); const p = Players.local; return Phys.cast(o, d, max, p ? p.body : null); },
   localPoint(e, wp) { return wp.clone().sub(e.mesh.position).applyQuaternion(_q1.copy(e.mesh.quaternion).invert()); },
   hitInfo(hit) {
@@ -2786,7 +2789,9 @@ const Tools = {
   update(dt) {
     const p = Players.local;
     this.cool -= dt; this.kick = Math.max(0, this.kick - dt * 6);
-    if (!p || p.dead || p.seat) { this.release(); return; }
+    if (this.cool < -0.06) this.bloom = Math.max(0, this.bloom - dt * 3);   // settles shortly after you stop firing
+    if (!p || p.dead || p.seat) { this.release(); this.swingAt = 0; return; }
+    if (this.swingAt > 0 && (this.swingAt -= dt) <= 0) { this.swingAt = 0; if (this.weapon === 'crowbar') this.fireGun(W_BY_ID.crowbar, true); }   // the crowbar lands mid-swing
     const W = W_BY_ID[this.weapon];
     if (this.weapon === 'physgun') this.updPhysgun(dt);
     else if (this.weapon === 'toolgun') this.updToolgun(dt);
@@ -2899,16 +2904,19 @@ const Tools = {
     else if (h.id === 0 && Env.colItem && Env.colItem.has(h.handle)) Net.toHost({ t: 'del', env: Env.colItem.get(h.handle) });
   },
   muzzle() { const vm = Game.viewmodel; const m = vm && vm.getObjectByName('muzzle'); return m ? m.getWorldPosition(new V3()) : R.camera.position.clone(); },
-  fireGun(W) {
-    this.cool = W.rate; this.kick = W.pellets || W.proj || W.zoom ? 1.5 : 1;
+  fireGun(W, landed) {
+    if (W.id === 'crowbar' && !landed) { this.cool = W.rate; this.swingAt = SWING_HIT; Game.swingT = 0; Audio.play('swing'); return; }   // wind up first, hit when the bar arrives
+    if (W.id !== 'crowbar') { this.cool = W.rate; this.kick = W.pellets || W.proj || W.zoom ? 1.5 : 1; }
     if (W.vp) { const z = W.zoom && Game.zoomed ? 0.5 : 1; Game.punch[0] += W.vp * z * (0.85 + Math.random() * 0.3); Game.punch[1] += (Math.random() - 0.5) * W.vp * 0.5 * z; }
     Game.kickRoll = (Math.random() - 0.5) * 0.12;
     const o = new V3(), d = new V3(); this.aim(o, d);
     const mzo = Game.viewmodel && Game.viewmodel.getObjectByName('muzzle');
     if (W.id !== 'crowbar') FX.muzzle(mzo && Game.viewmodel.visible ? mzo : this.muzzle(), W.proj ? 'puff' : W.pellets || W.zoom ? 'big' : 'small');
-    const spread = W.zoom && !Game.zoomed ? W.hipSpread : W.spread;
+    // bloom: the first shot is on target, keep firing and the spread opens up (shown by the crosshair)
+    const spread = (W.zoom && !Game.zoomed ? W.hipSpread : W.spread) * (1 + this.bloom);
+    if (W.bloom) this.bloom = Math.min(1.8, this.bloom + W.bloom);
     if (spread && !W.pellets) jitter(d, spread);
-    if (W.proj === 'rocket') Audio.play('rocket_fire'); else if (W.proj) Audio.play('propcannon'); else if (W.id === 'crowbar') Audio.play('swing'); else Audio.gun(W.id, R.camera.position, true);
+    if (W.proj === 'rocket') Audio.play('rocket_fire'); else if (W.proj) Audio.play('propcannon'); else if (W.id !== 'crowbar') Audio.gun(W.id, R.camera.position, true);
     if (W.zoom) Game.shake = Math.max(Game.shake, 0.12);
     if (!W.proj) {   // hitscan: predicted tracers + sparks (the host does the real hits)
       const p = Players.local, n = W.pellets || 1;
@@ -5553,8 +5561,13 @@ const PH = {
 const UNLOCK_COLORS = [
   { lvl: 3, c: '#c0c6cc', name: 'Steel' }, { lvl: 5, c: '#e8b923', name: 'Gold' }, { lvl: 8, c: '#7fffd4', name: 'Aqua' },
   { lvl: 12, c: '#ff4fa3', name: 'Neon pink' }, { lvl: 16, c: '#1a1a1a', name: 'Midnight' }, { lvl: 20, c: '#fffaf0', name: 'Pearl' },
+  { lvl: 25, c: '#b3122e', name: 'Crimson' }, { lvl: 30, c: '#6a3fd6', name: 'Royal' }, { lvl: 40, c: '#9dff00', name: 'Toxic' },
+  { lvl: 50, c: '#ff6b35', name: 'Sunset' }, { lvl: 75, c: '#a8e6ff', name: 'Glacier' }, { lvl: 100, c: '#2a1f3d', name: 'Obsidian' },
 ];
-const TITLES = [[1, 'Rookie'], [5, 'Builder'], [10, 'Survivor'], [15, 'Veteran'], [20, 'Elite'], [30, 'Legend']];
+const TITLES = [[1, 'Rookie'], [5, 'Builder'], [10, 'Survivor'], [15, 'Veteran'], [20, 'Elite'], [25, 'Ace'], [30, 'Legend'], [40, 'Champion'],
+  [50, 'Master'], [60, 'Grandmaster'], [75, 'Mythic'], [90, 'Immortal'], [100, 'Tumblewright']];
+// badge colour for high levels (nameplates, player list, main menu)
+const lvTier = l => l >= 100 ? ' t5' : l >= 75 ? ' t4' : l >= 50 ? ' t3' : l >= 30 ? ' t2' : '';
 const XP_FOR = { zkill: 10, pkill: 25, npc: 5 };
 const DAILY_POOL = [
   { id: 'zkills', text: n => `Kill ${n} zombies`, n: [15, 25, 40] },
@@ -5581,8 +5594,10 @@ const Prog = {
     while (out.length < 3 && pool.length) { h = (Math.imul(h, 1103515245) + 12345) >>> 0; const c = pool.splice(h % pool.length, 1)[0]; out.push({ id: c.id, n: c.n[(h >>> 8) % c.n.length] }); }
     Object.assign(this.d, { day, daily: out, dp: {}, done: {} }); this.save();
   },
-  level(xp = this.d ? this.d.xp : 0) { let l = 1, need = 100; while (xp >= need) { xp -= need; l++; need = 100 + (l - 1) * 50; } return { l, into: xp, need }; },
+  // each level needs 50 XP more than the last, up to level 30; after that every level costs the same, so the top ranks stay reachable
+  level(xp = this.d ? this.d.xp : 0) { let l = 1, need = 100; while (xp >= need) { xp -= need; l++; need = 100 + (Math.min(l, 30) - 1) * 50; } return { l, into: xp, need }; },
   title(l = this.level().l) { let t = TITLES[0][1]; for (const [n, s] of TITLES) if (l >= n) t = s; return t; },
+  nextTitle(l = this.level().l) { return TITLES.find(([n]) => n > l) || null; },
   gain(n, why) {
     if (!(n > 0)) return;
     const before = this.level().l; this.d.xp += Math.round(n); this.save();
@@ -5590,7 +5605,8 @@ const Prog = {
     const after = this.level().l;
     if (after > before) {
       const un = UNLOCK_COLORS.filter(u => u.lvl > before && u.lvl <= after).map(u => u.name + ' colour');
-      UI.toast(`Level ${after}! ${this.title(after)}` + (un.length ? ` · Unlocked: ${un.join(', ')}` : ''), 'military_tech'); Audio.play('confirm');
+      const ranked = TITLES.some(([n]) => n > before && n <= after);
+      UI.toast(`Level ${after}!` + (ranked ? ` New rank: ${this.title(after)}` : ` ${this.title(after)}`) + (un.length ? ` · Unlocked: ${un.join(', ')}` : ''), 'military_tech'); Audio.play('confirm');
       if (Net.online && !Net.isHost) Net.toHost({ t: 'lvl', v: after });
       else { const me = Players.local; if (me) { me.lvl = after; Net.sendPlayers(); } }
       UI.refreshProfile();
@@ -6026,7 +6042,8 @@ const UI = {
   // ---- progression: level card, daily challenges, colour swatches (some unlock with levels) -----
   refreshProfile() {
     const L = Prog.level(), lvl = L.l;
-    $('#lvNum').textContent = lvl; $('#lvTitle').textContent = Prog.title(lvl);
+    $('#lvNum').textContent = lvl; $('#lvNum').className = lvTier(lvl).trim(); $('#lvTitle').textContent = Prog.title(lvl);
+    const nx = Prog.nextTitle(lvl); $('#lvNext').textContent = nx ? `Next rank: ${nx[1]} at level ${nx[0]}` : 'Top rank reached';
     $('#xpText').textContent = `${L.into} / ${L.need} XP`; $('#xpFill').style.width = (100 * L.into / L.need) + '%';
     Prog.rollDaily();
     const dl = $('#dailyList'); dl.innerHTML = '';
@@ -6038,8 +6055,9 @@ const UI = {
     const sw = $('#swatches'); sw.innerHTML = '';
     const pick = c => { Settings.color = c; saveSettings(); $$('.swatch').forEach(s => s.classList.toggle('sel', s.dataset.c === c)); this.refreshLobbyAvatar(); };
     for (const c of PLAYER_COLORS) sw.append(h('button', { class: 'swatch' + (c === Settings.color ? ' sel' : ''), style: `background:${c}`, title: c, 'data-c': c, onclick: () => pick(c) }));
+    let ahead = 0;
     for (const u of UNLOCK_COLORS) {
-      const locked = lvl < u.lvl;
+      const locked = lvl < u.lvl; if (locked && ++ahead > 2) break;   // unlocked colours plus the next two to aim for
       sw.append(h('button', { class: 'swatch' + (locked ? ' locked' : '') + (u.c === Settings.color ? ' sel' : ''), style: `background:${u.c}`, title: locked ? `${u.name}: unlocks at level ${u.lvl}` : u.name, 'data-c': u.c, 'data-l': locked ? u.lvl : '', onclick: () => locked ? this.toast(`${u.name} unlocks at level ${u.lvl}`, 'lock') : pick(u.c) }));
     }
   },
@@ -6458,6 +6476,7 @@ const UI = {
       else if (ae && Game.aimDist < 14) { const g = ae.d.g && World.groups.get(ae.d.g); if (g && g.t === 'npc') label = g.n + (g.alive ? (g.bl > 0.5 ? ' · bleeding' : '') : ' (down)'); else if (ae.d.n) label = ae.d.n; }
     }
     const ch = $('#crosshair'); if (ch.className !== cls) ch.className = cls;
+    const bl = (1 + Tools.bloom * 0.6).toFixed(2); if (ch._bl !== bl) { ch._bl = bl; ch.style.setProperty('--bloom', bl); }
     ch.style.display = (Editor.active && Input.device === 'kbm') || Game.zoomed ? 'none' : '';
     const al = $('#aimLabel'); if (al.textContent !== label) al.textContent = label;
     this.refreshHints();
@@ -6800,7 +6819,7 @@ const UI = {
       const ping = pl.isLocal && Net.isHost ? 0 : Math.round(pl.ping || 0);
       card.append(h('div', { class: 'ps-pl' + (pl.isLocal ? ' me' : '') },
         h('i', { style: `background:${pl.color}` }),
-        h('span', { class: 'lv', text: pl.isLocal ? Prog.level().l : (pl.lvl || 1) }),
+        h('span', { class: 'lv' + lvTier(pl.isLocal ? Prog.level().l : (pl.lvl || 1)), text: pl.isLocal ? Prog.level().l : (pl.lvl || 1) }),
         h('span', { class: 'nm', text: pl.name }),
         Net.online && Net.hostId === pl.id ? h('span', { class: 'badge ps-host', text: 'HOST' }) : null,
         h('span', { class: 'k', text: Rules.combat || Rules.mode !== 'sandbox' ? `${pl.kills || 0} kills · ${pl.deaths || 0} deaths` : '' }),
@@ -7551,6 +7570,26 @@ function ptsMat(o) {
     sh.fragmentShader = sh.fragmentShader.replace('#include <clipping_planes_fragment>', 'if (length(gl_PointCoord - 0.5) > 0.5) discard;\n#include <clipping_planes_fragment>');
   };
   return m;
+}
+// crowbar swing, seconds since the click -> [rx, ry, rz, px, py, pz] added to the resting pose:
+// a quick wind-up, a fast diagonal chop (the hit lands at SWING_HIT), a follow-through and an easy recovery
+const SWING_KEYS = [
+  [0, [0, 0, 0, 0, 0, 0], 'out'],
+  [0.07, [0.4, -0.25, -0.2, 0.035, 0.05, 0.05], 'in'],
+  [0.15, [-0.95, 0.75, 0.3, -0.1, -0.03, -0.04], 'out'],
+  [0.23, [-1.1, 0.85, 0.38, -0.12, -0.06, -0.02], 'inout'],
+  [0.46, [0, 0, 0, 0, 0, 0], ''],
+];
+const SWING_HIT = 0.12, SWING_REST = [0, 0, 0, 0, 0, 0];
+const _swOut = [0, 0, 0, 0, 0, 0];
+function swingPose(t) {
+  if (t >= SWING_KEYS[SWING_KEYS.length - 1][0]) return SWING_REST;
+  let i = 0; while (t > SWING_KEYS[i + 1][0]) i++;
+  const [t0, a, ease] = SWING_KEYS[i], [t1, b] = SWING_KEYS[i + 1];
+  let u = clamp((t - t0) / (t1 - t0), 0, 1);
+  u = ease === 'in' ? u * u : ease === 'out' ? 1 - (1 - u) * (1 - u) : u * u * (3 - 2 * u);
+  for (let j = 0; j < 6; j++) _swOut[j] = a[j] + (b[j] - a[j]) * u;
+  return _swOut;
 }
 const FX = {
   list: [], beams: [], light: null, smokeTex: null,
@@ -8703,7 +8742,7 @@ const HOLO = {
 const AIM_ASSIST = [0, 0.55, 1, 1.45];   // Settings.aimAssist: off / low / standard / strong
 const Game = {
   state: 'loading', viewmodel: null, detected: null, pendingWorld: null, aimSeat: 0, lockReleaseOk: false,
-  acc: 0, last: 0, orbit: 0, shake: 0, punch: [0, 0], sway: [0, 0], drawT: 1, sprintK: 0, moveInp: { mx: 0, my: 0, jump: false, sprint: false, up: 0 }, autoT: 20, hiddenTicker: null, bob: 0, fellT: 0,
+  acc: 0, last: 0, orbit: 0, shake: 0, punch: [0, 0], sway: [0, 0], drawT: 1, sprintK: 0, swingT: 9, moveInp: { mx: 0, my: 0, jump: false, sprint: false, up: 0 }, autoT: 20, hiddenTicker: null, bob: 0, fellT: 0,
   async boot() {
     const lt = $('#loadingText');
     try {
@@ -9213,7 +9252,7 @@ const Game = {
   updateCamera(dt) {
     const cam = R.camera, me = Players.local;
     if (this.state !== 'playing' || !me) {
-      this.firstPerson = false; this.orbit += dt * 0.06;
+      this.orbit += dt * 0.06;
       cam.position.set(Math.sin(this.orbit) * 16, 5.5 + Math.sin(this.orbit * 0.7) * 1.2, Math.cos(this.orbit) * 16);
       cam.lookAt(0, 1.2, 0); R.focus.set(0, 0, 0);
       if (this.viewmodel) this.viewmodel.visible = false;
@@ -9221,7 +9260,6 @@ const Game = {
       return;
     }
     const cp = Math.cos(me.pitch), dir = _v2.set(-Math.sin(me.yaw) * cp, Math.sin(me.pitch), -Math.cos(me.yaw) * cp);
-    this.firstPerson = false;
     if (me.seat) {
       const se = World.ents.get(me.seat), ve = this.seatVeh(), V = ve && VEH[ve.d.veh], base = ve && ve.mesh ? ve.mesh : se && se.mesh;
       const target = base ? _v1.copy(base.position).add(_v3.set(0, V ? V.cam[1] : 1.3, 0)) : _v1.copy(me.renderPos);
@@ -9243,7 +9281,7 @@ const Game = {
       if (h) cam.position.copy(target).addScaledVector(back, Math.max(0.6, h.dist - 0.3));
       cam.lookAt(target);
     } else {
-      const eh = me.crouch ? CFG.eye - 0.5 : CFG.eye; this.firstPerson = true;
+      const eh = me.crouch ? CFG.eye - 0.5 : CFG.eye;
       this.eyeH = lerp(this.eyeH || eh, eh, 1 - Math.exp(-14 * dt));
       cam.position.set(me.renderPos.x, me.renderPos.y + this.eyeH, me.renderPos.z);
       // landing: remember the fastest fall, dip the view when we touch down
@@ -9252,7 +9290,7 @@ const Game = {
       this.land = Math.max(0, (this.land || 0) - dt * 3.2);
       cam.position.y -= Math.sin(Math.min(1, this.land) * Math.PI) * 0.09 * this.land;
       // view punch from recoil: kicks the camera (not the aim) and springs back
-      const pk = 1 - Math.exp(-11 * dt); this.punch[0] -= this.punch[0] * pk; this.punch[1] -= this.punch[1] * pk;
+      const pk = 1 - Math.exp(-(Tools.cool > 0 ? 6 : 9) * dt); this.punch[0] -= this.punch[0] * pk; this.punch[1] -= this.punch[1] * pk;   // recovers slower while you keep firing
       cam.rotation.set(me.pitch + this.punch[0], me.yaw + this.punch[1], 0, 'YXZ');
       if (me.dead) { cam.position.y = me.renderPos.y + 0.4; cam.rotation.z = 0.4; }
     }
@@ -9281,18 +9319,20 @@ const Game = {
       this.sprintK += ((sprint ? 1 : 0) - this.sprintK) * (1 - Math.exp(-8 * dt));
       this.drawT = Math.min(1, this.drawT + dt / 0.28); const dr = Math.pow(1 - this.drawT, 2);
       const ld = Math.sin(Math.min(1, this.land || 0) * Math.PI) * (this.land || 0), br = Math.sin(t * 1.7) * 0.0025 * (1 - mv);
+      this.swingT += dt; const sw = melee ? swingPose(this.swingT) : SWING_REST;
       const WM = Models.has('wp_' + Tools.weapon) && WEAPON_MODEL[Tools.weapon], VB = WM ? WM.vm : [0.26, -0.25, -0.48], VR = (WM && WM.vr) || [0, 0, 0], spr = melee ? 0.4 : 1;
       vm.position.set(
-        VB[0] + Math.sin(this.bob) * 0.012 * mv + this.sway[0] - this.sprintK * 0.03 * spr,
-        VB[1] + Math.abs(Math.cos(this.bob)) * 0.012 * mv - this.sway[1] + br - ld * 0.04 - this.sprintK * 0.035 - dr * 0.22,
-        VB[2] + k * 0.07);
+        VB[0] + Math.sin(this.bob) * 0.012 * mv + this.sway[0] - this.sprintK * 0.03 * spr + sw[3],
+        VB[1] + Math.abs(Math.cos(this.bob)) * 0.012 * mv - this.sway[1] + br - ld * 0.04 - this.sprintK * 0.035 - dr * 0.22 + sw[4],
+        VB[2] + (melee ? 0 : k * 0.07) + sw[5]);
       vm.rotation.set(
-        VR[0] + k * (melee ? -1.2 : 0.18) - this.sway[1] * 1.6 - this.sprintK * 0.22 * spr - dr * 0.7 - ld * 0.06,
-        VR[1] + (melee ? k * 0.8 : 0) - this.sway[0] * 1.8 + this.sprintK * 0.55 * spr,
-        VR[2] + this.sway[0] * -2.2 + (melee ? 0 : (this.kickRoll || 0) * k));
+        VR[0] + (melee ? 0 : k * 0.18) - this.sway[1] * 1.6 - this.sprintK * 0.22 * spr - dr * 0.7 - ld * 0.06 + sw[0],
+        VR[1] - this.sway[0] * 1.8 + this.sprintK * 0.55 * spr + sw[1],
+        VR[2] + this.sway[0] * -2.2 + (melee ? 0 : (this.kickRoll || 0) * k) + sw[2]);
     }
   },
   buildViewmodel() {
+    this.swingT = 9;
     if (!this.viewmodel) { this.viewmodel = new THREE.Group(); R.camera.add(this.viewmodel); }
     const vm = this.viewmodel; while (vm.children.length) vm.remove(vm.children[0]);
     const add = (geo, t, c, p, r) => { const m = matMesh(geo, t, c); m.castShadow = m.receiveShadow = false; if (p) m.position.set(...p); if (r) m.rotation.set(...r); vm.add(m); return m; };
