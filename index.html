@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <!-- auto-update config: stamped by tools/release/release.mjs (version, update server, public signing key) -->
-<meta name="tw-version" content="1.9.2">
+<meta name="tw-version" content="1.9.3">
 <meta name="tw-update-url" content="https://tumblewright.vercel.app/">
 <meta name="tw-update-key" content="MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEY+Cnn8Lm7Qg8qyzAHUGYObpBjSgdckeo7PetlABb0TomToEhaMbLW/zaRHOAbvsMn1TRCb4I/cPFv1ghZ6CgWw==">
-<meta name="tw-notes" content="Pixel font for the whole interface (turn it off in Settings > Graphics).">
+<meta name="tw-notes" content="Weapons feel punchier: recoil, muzzle flashes, viewmodel sway and draw animations, hitmarkers on NPCs with headshot and kill variants, clearer hotbar icons.">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Tumblewright — Multiplayer Physics Sandbox</title>
 <meta name="description" content="Tumblewright: a multiplayer 3D physics sandbox. Build, weld, drive and blow things up together in your browser.">
@@ -103,8 +103,13 @@ kbd,.glyph{display:inline-flex;align-items:center;justify-content:center;min-wid
 #crosshair:after{top:10px;left:3px;height:2px;width:16px}
 #crosshair.dot:before{left:9px;top:9px;width:4px;height:4px;border-radius:50%}
 #crosshair.dot:after{display:none}
-#hitmarker{position:absolute;left:50%;top:50%;width:26px;height:26px;transform:translate(-50%,-50%) rotate(45deg);opacity:0;transition:opacity .15s}
-#hitmarker:before,#hitmarker:after{content:'';position:absolute;background:#ff5a5f}
+#hitmarker{position:absolute;left:50%;top:50%;width:26px;height:26px;transform:translate(-50%,-50%) rotate(45deg);opacity:0;transition:opacity .15s,transform .12s ease-out}
+#hitmarker:before,#hitmarker:after{content:'';position:absolute;background:currentColor;box-shadow:0 0 2px rgba(0,0,0,.8)}
+#hitmarker{color:#fff;-webkit-mask:radial-gradient(circle,transparent 5px,#000 5.5px);mask:radial-gradient(circle,transparent 5px,#000 5.5px)}
+#hitmarker.head{color:#f2c230}
+#hitmarker.kill{color:#ff4d4d;width:34px;height:34px}
+#hitmarker.kill:before{left:16px;height:34px}#hitmarker.kill:after{top:16px;width:34px}
+#hitmarker.pop{transition:none;transform:translate(-50%,-50%) rotate(45deg) scale(1.35)}
 #hitmarker:before{left:12px;top:0;width:2px;height:26px}#hitmarker:after{top:12px;left:0;height:2px;width:26px}
 #vitals{position:absolute;left:24px;bottom:24px;display:flex;align-items:flex-end;gap:14px}
 #hpBox{padding:10px 14px;min-width:190px}
@@ -284,7 +289,7 @@ button.primary .ms{color:#1a1206}
 /* hotbar */
 #slots{gap:8px;bottom:18px}
 .slot{width:74px;height:62px;padding:4px;position:relative;display:flex;align-items:center;justify-content:center;border-radius:12px;transition:transform .15s,background .15s,border-color .15s}
-.slot img{width:58px;height:44px;object-fit:contain;filter:drop-shadow(0 2px 3px rgba(0,0,0,.6))}
+.slot img{width:58px;height:44px;object-fit:contain;filter:drop-shadow(0 0 1px rgba(255,255,255,.5)) drop-shadow(0 2px 3px rgba(0,0,0,.6))}
 .slot .emo{font-size:24px}
 .slot b{position:absolute;top:4px;left:7px;font-size:10px;color:#8a94a6}
 .slot.act{background:linear-gradient(180deg,rgba(255,177,59,.34),rgba(255,177,59,.1));border-color:var(--acc);transform:translateY(-5px);color:var(--text)}
@@ -295,7 +300,7 @@ button.primary .ms{color:#1a1206}
 #toolBox{padding:12px 14px;min-width:250px;max-width:320px;bottom:18px;right:18px}
 #toolHead{display:flex;gap:10px;align-items:center}
 #toolIcon{width:46px;height:46px;min-width:46px;border-radius:11px;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;overflow:hidden}
-#toolIcon img{width:44px;height:34px;object-fit:contain}
+#toolIcon img{width:44px;height:34px;object-fit:contain;filter:drop-shadow(0 0 1px rgba(255,255,255,.5)) drop-shadow(0 2px 3px rgba(0,0,0,.6))}
 #toolIcon .ms{font-size:26px;color:var(--acc)}
 #toolName{font-size:16px}
 #toolModes{display:flex;flex-wrap:wrap;gap:4px;margin-top:9px}
@@ -349,7 +354,7 @@ button.primary .ms{color:#1a1206}
 #radialSvg path.sel{fill:rgba(255,177,59,.88)}
 #radialSvg path.on{stroke:var(--acc2);stroke-width:2.5}
 .rItem{width:84px;height:66px;margin:-33px 0 0 -42px;background:transparent;border:0;box-shadow:none;pointer-events:none}
-.rItem img{width:54px;height:38px;object-fit:contain;filter:drop-shadow(0 2px 3px rgba(0,0,0,.6))}
+.rItem img{width:54px;height:38px;object-fit:contain;filter:drop-shadow(0 0 1px rgba(255,255,255,.5)) drop-shadow(0 2px 3px rgba(0,0,0,.6))}
 .rItem .ms{font-size:28px}
 .rItem .lbl{font-size:10.5px;margin-top:2px}
 .rItem.sel{background:transparent;transform:scale(1.1)}
@@ -2724,14 +2729,14 @@ function prefabBottom(pf) {
 const WEAPONS = [
   { id: 'physgun', name: 'Physics Gun', icon: '🧲', desc: 'Grab, move, rotate and freeze objects.' },
   { id: 'toolgun', name: 'Tool Gun', icon: '🔧', desc: '' },
-  { id: 'pistol', name: 'Pistol', icon: '🔫', desc: 'Semi-automatic. Knocks props around.', rate: 0.22, dmg: 22, imp: 1.2, dv: 8, spread: 0.004, range: 300 },
-  { id: 'shotgun', name: 'Shotgun', icon: '💥', desc: 'Pump action, 8 pellets. Devastating up close.', rate: 0.85, dmg: 11, imp: 0.9, dv: 2, spread: 0.055, pellets: 8, range: 120, push: 2 },
-  { id: 'rifle', name: 'Rifle', icon: '🎯', desc: 'Automatic rifle.', rate: 0.09, dmg: 13, imp: 0.7, dv: 5, spread: 0.011, auto: true, range: 300 },
-  { id: 'sniper', name: 'Sniper Rifle', icon: '🔭', desc: 'Hold alt-fire to scope in. Inaccurate from the hip.', rate: 1.2, dmg: 95, imp: 4, dv: 16, spread: 0, hipSpread: 0.03, zoom: 1, range: 800, push: 3 },
-  { id: 'rocket', name: 'Rocket Launcher', icon: '🚀', desc: 'Rockets explode on impact. Rocket-jump if you dare.', rate: 1.0, proj: 'rocket' },
+  { id: 'pistol', name: 'Pistol', icon: '🔫', desc: 'Semi-automatic. Knocks props around.', rate: 0.22, dmg: 22, imp: 1.2, dv: 8, spread: 0.004, range: 300, vp: 0.022 },
+  { id: 'shotgun', name: 'Shotgun', icon: '💥', desc: 'Pump action, 8 pellets. Devastating up close.', rate: 0.85, dmg: 11, imp: 0.9, dv: 2, spread: 0.055, pellets: 8, range: 120, push: 2, vp: 0.06 },
+  { id: 'rifle', name: 'Rifle', icon: '🎯', desc: 'Automatic rifle.', rate: 0.09, dmg: 13, imp: 0.7, dv: 5, spread: 0.011, auto: true, range: 300, vp: 0.011 },
+  { id: 'sniper', name: 'Sniper Rifle', icon: '🔭', desc: 'Hold alt-fire to scope in. Inaccurate from the hip.', rate: 1.2, dmg: 95, imp: 4, dv: 16, spread: 0, hipSpread: 0.03, zoom: 1, range: 800, push: 3, vp: 0.07 },
+  { id: 'rocket', name: 'Rocket Launcher', icon: '🚀', desc: 'Rockets explode on impact. Rocket-jump if you dare.', rate: 1.0, proj: 'rocket', vp: 0.045 },
   { id: 'grenade', name: 'Grenade', icon: '💣', desc: 'Throw it. It explodes after 2.5 s. One every 2.5 s.', rate: 2.5 },
-  { id: 'crowbar', name: 'Crowbar', icon: '🪓', desc: 'Melee. Great for smashing ragdolls.', rate: 0.42, dmg: 34, imp: 3, dv: 10, range: 2.4, push: 4 },
-  { id: 'propcannon', name: 'Prop Cannon', icon: '📦', desc: 'Fires random props. They vanish after 30 s.', rate: 0.35, proj: 'prop' },
+  { id: 'crowbar', name: 'Crowbar', icon: '🪓', desc: 'Melee. Great for smashing ragdolls.', rate: 0.42, dmg: 34, imp: 3, dv: 10, range: 2.4, push: 4, vp: 0.012 },
+  { id: 'propcannon', name: 'Prop Cannon', icon: '📦', desc: 'Fires random props. They vanish after 30 s.', rate: 0.35, proj: 'prop', vp: 0.03 },
   { id: 'deleter', name: 'Delete Gun', icon: '🗑️', desc: 'Deletes whatever you shoot: props, NPCs, map pieces, trees, rocks and containers. Map and world objects need edit permission.', rate: 0.2 },
 ];
 // random cone spread around a direction
@@ -2764,13 +2769,13 @@ const Tools = {
     R.scene.add(this.marker);
     this.beam = new Beam(0x6fe3ff, 0.05);
   },
-  setWeapon(id) { if (!W_BY_ID[id] || this.weapon === id) return; this.release(); this.weapon = id; this.first = null; Game.buildViewmodel(); UI.refreshTool(); Audio.play('draw'); },
+  setWeapon(id) { if (!W_BY_ID[id] || this.weapon === id) return; this.release(); this.weapon = id; this.first = null; Game.drawT = 0; Game.buildViewmodel(); UI.refreshTool(); Audio.play('draw'); },
   cycleWeapon(dir) { const i = W_BY_ID[this.weapon].idx; this.setWeapon(WEAPONS[(i + dir + WEAPONS.length) % WEAPONS.length].id); },
   setMode(id) { this.mode = id; this.first = null; UI.refreshTool(); },
   cycleMode(dir) { const i = TOOL_MODES.findIndex(m => m.id === this.mode); this.setMode(TOOL_MODES[(i + dir + TOOL_MODES.length) % TOOL_MODES.length].id); Audio.play('switch'); },
   release() { if (this.grab) { Net.toHost({ t: 'drop' }); this.grab = null; } this.rotating = false; },
   onEntRemoved(id) { if (this.grab && this.grab.e === id) this.grab = null; if (this.first && this.first.e === id) this.first = null; },
-  aim(o, d) { R.camera.getWorldPosition(o); R.camera.getWorldDirection(d); return { o, d }; },
+  aim(o, d) { R.camera.getWorldPosition(o); R.camera.getWorldDirection(d); if (Game.firstPerson && Players.local) Players.aimDir(Players.local, d); return { o, d }; },   // first person: view punch is cosmetic, shots go where you look
   cast(max) { const o = new V3(), d = new V3(); this.aim(o, d); const p = Players.local; return Phys.cast(o, d, max, p ? p.body : null); },
   localPoint(e, wp) { return wp.clone().sub(e.mesh.position).applyQuaternion(_q1.copy(e.mesh.quaternion).invert()); },
   hitInfo(hit) {
@@ -2796,12 +2801,12 @@ const Tools = {
     if (!this.grab) {
       if (Input.hit('fire')) {
         const h = this.cast(90), hi = h && this.hitInfo(h);
-        if (hi && hi.ent && hi.ent.d.k !== 'map') { this.grab = { e: hi.e, lp: hi.lp, dist: h.dist }; Net.toHost({ t: 'grab', e: hi.e, lp: hi.lp, dist: h.dist }); Audio.play('pg_grab'); }
+        if (hi && hi.ent && hi.ent.d.k !== 'map') { this.grab = { e: hi.e, lp: hi.lp, dist: h.dist }; Net.toHost({ t: 'grab', e: hi.e, lp: hi.lp, dist: h.dist }); Audio.play('pg_grab'); FX.spark(h.point, h.normal, 0x6fe3ff, 8); this.kick = 0.45; }
         else if (hi && hi.ent && hi.ent.d.k === 'map') UI.toast('Map pieces are moved in Edit mode');
       }
       if (Input.hit('reload')) {
         const h = this.cast(90), hi = h && this.hitInfo(h);
-        if (hi && hi.ent && hi.ent.d.fz) { Net.toHost({ t: 'unfreeze', e: hi.e }); UI.toast('Unfrozen'); Audio.play('unfreeze'); }
+        if (hi && hi.ent && hi.ent.d.fz) { Net.toHost({ t: 'unfreeze', e: hi.e }); FX.spark(h.point, h.normal, 0x6fe3ff, 10); this.kick = 0.4; UI.toast('Unfrozen'); Audio.play('unfreeze'); }
       }
       return;
     }
@@ -2815,7 +2820,7 @@ const Tools = {
       this.rot[0] += Input.dx * 0.006 + Input.axes[2] * 3.2 * dt;
       this.rot[1] += Input.dy * 0.006 + Input.axes[3] * 3.2 * dt;
     }
-    if (Input.hit('alt')) { Net.toHost({ t: 'freeze' }); this.grab = null; Audio.play('freeze'); UI.toast('Frozen'); return; }
+    if (Input.hit('alt')) { const fe = World.ents.get(g.e); if (fe && fe.mesh) { FX.spark(fe.mesh.position, null, 0xbfefff, 18); FX.smoke(fe.mesh.position, 2, 0.5, 0.4, 0xd8f4ff); } Net.toHost({ t: 'freeze' }); this.grab = null; this.kick = 0.7; Audio.play('freeze'); UI.toast('Frozen'); return; }
     if (!Input.down('fire')) { Net.toHost({ t: 'drop' }); this.grab = null; Audio.play('pg_drop'); }
   },
   updToolgun() {
@@ -2896,7 +2901,11 @@ const Tools = {
   muzzle() { const vm = Game.viewmodel; const m = vm && vm.getObjectByName('muzzle'); return m ? m.getWorldPosition(new V3()) : R.camera.position.clone(); },
   fireGun(W) {
     this.cool = W.rate; this.kick = W.pellets || W.proj || W.zoom ? 1.5 : 1;
+    if (W.vp) { const z = W.zoom && Game.zoomed ? 0.5 : 1; Game.punch[0] += W.vp * z * (0.85 + Math.random() * 0.3); Game.punch[1] += (Math.random() - 0.5) * W.vp * 0.5 * z; }
+    Game.kickRoll = (Math.random() - 0.5) * 0.12;
     const o = new V3(), d = new V3(); this.aim(o, d);
+    const mzo = Game.viewmodel && Game.viewmodel.getObjectByName('muzzle');
+    if (W.id !== 'crowbar') FX.muzzle(mzo && Game.viewmodel.visible ? mzo : this.muzzle(), W.proj ? 'puff' : W.pellets || W.zoom ? 'big' : 'small');
     const spread = W.zoom && !Game.zoomed ? W.hipSpread : W.spread;
     if (spread && !W.pellets) jitter(d, spread);
     if (W.proj === 'rocket') Audio.play('rocket_fire'); else if (W.proj) Audio.play('propcannon'); else if (W.id === 'crowbar') Audio.play('swing'); else Audio.gun(W.id, R.camera.position, true);
@@ -2905,7 +2914,7 @@ const Tools = {
       const p = Players.local, n = W.pellets || 1;
       for (let i = 0; i < n; i++) {
         const dd = n > 1 ? jitter(d.clone(), W.spread) : d, h = Phys.cast(o, dd, W.range, p.body);
-        if (W.id === 'crowbar') { if (h) { FX.spark(h.point, h.normal); const s = Audio.surfaceAt(h), b = HIT_OF[s] || 'hit_metal'; Audio.at(s === 'body' ? 'punch' : SND[b + '_h'] ? b + '_h' : b, h.point); } }
+        if (W.id === 'crowbar') { if (h) { Game.punch[0] += 0.02; Game.punch[1] += (Math.random() - 0.5) * 0.03; FX.spark(h.point, h.normal); const s = Audio.surfaceAt(h), b = HIT_OF[s] || 'hit_metal'; Audio.at(s === 'body' ? 'punch' : SND[b + '_h'] ? b + '_h' : b, h.point); } }
         else { const end = h ? h.point : o.clone().addScaledVector(dd, W.range); FX.tracer(this.muzzle(), end); if (h) { FX.spark(h.point, h.normal, null, n > 1 ? 4 : 10); if (i < 3) Audio.bulletHit(o, h.point, h.normal); } }
         if (h && typeof h.id === 'string' && Rules.combat) UI.hitmarker();
       }
@@ -4785,7 +4794,7 @@ const Net = {
       case 'kb': if (me && !me.noclip) { me.kb = new V3().fromArray(m.v); me.grounded = false; } break;
       case 'hurt': if (me) { me.hp = m.hp; UI.damageFlash(m.f); } break;
       case 'hm': UI.hitmarker(); break;
-      case 'dn': DmgNum.add(m); Audio.play('hitmark', 0.8); break;
+      case 'dn': DmgNum.add(m); UI.hitmarker(m.k ? 'kill' : m.h ? 'head' : ''); break;
       case 'bots': Bots.recv(m.b); break;
       case 'seat': { const p = Players.map.get(m.pid); if (p) { p.seat = m.e; if (p.isLocal) Game.onSeat(m.e); } break; }
       case 'kill': UI.killfeed(m); if (m.v === this.me && me) { me.dead = true; me.hp = 0; Audio.play('death_m', 0.8); } break;
@@ -5766,7 +5775,7 @@ const Thumbs = {
   },
   generate() {
     const r = R.renderer, size = 112, pr = r.getPixelRatio(), H = r.domElement.height;
-    if (H < size * pr || r.domElement.width < size * pr) return;
+    if (H < size * pr || r.domElement.width < size * pr) { this.retryOnResize(); return; }
     const sc = new THREE.Scene(); sc.environment = R.envTex;
     const cam = new THREE.PerspectiveCamera(30, 1, 0.05, 200);
     const l = new THREE.DirectionalLight(0xffffff, 2.6); l.position.set(3, 6, 4); sc.add(l, new THREE.HemisphereLight(0xffffff, 0x888888, 0.9));
@@ -5786,6 +5795,7 @@ const Thumbs = {
       this.urls[it.key] = cv.toDataURL('image/png');
       sc.remove(g);
     }
+    const fill = new THREE.DirectionalLight(0xffffff, 1.8); sc.add(fill);   // weapons are mostly dark metal: light them from the camera too
     for (const w of WEAPONS) {   // weapon thumbnails (without the first-person hand)
       const mk = 'wp_' + w.id, W = WEAPON_MODEL[w.id]; if (!Models.has(mk)) continue;
       const g = Models.instance(mk, W.t, W.c), hand = g.getObjectByName(mk + '_hand'); if (hand) hand.visible = false;
@@ -5793,12 +5803,24 @@ const Thumbs = {
       box.makeEmpty(); g.traverseVisible(o => { if (o.isMesh) box.expandByObject(o); }); box.getCenter(ctr); box.getSize(sz);
       const rad = Math.max(sz.length() * 0.5, 0.05), dist = rad / Math.sin(THREE.MathUtils.degToRad(15)) * 1.05;
       cam.position.copy(ctr).add(new V3(1.2, 0.45, -0.35).normalize().multiplyScalar(dist)); cam.lookAt(ctr); cam.near = dist / 50; cam.far = dist * 4; cam.updateProjectionMatrix();
+      fill.position.copy(cam.position).add(new V3(0, dist * 0.5, 0)); fill.target.position.copy(ctr); fill.target.updateMatrixWorld();
       r.clear(); r.render(sc, cam);
       ctx.clearRect(0, 0, size, size); ctx.drawImage(r.domElement, 0, H - size * pr, size * pr, size * pr, 0, 0, size, size);
       this.urls[mk] = cv.toDataURL('image/png');
       sc.remove(g);
     }
     r.setScissorTest(false); r.setClearColor(0x000000, 1); R.resize();
+    this.done = true;
+  },
+  // the canvas was too small to render into (window minimised or tiny while loading): try again once it grows
+  retryOnResize() {
+    if (this.waiting) return; this.waiting = true;
+    const go = () => {
+      this.generate(); if (!this.done) return;
+      removeEventListener('resize', go); this.waiting = false;
+      UI.buildSlots(); UI.refreshTool(); if (UI.open === 'spawn') UI.buildSpawn();
+    };
+    addEventListener('resize', go);
   },
 };
 
@@ -6368,7 +6390,13 @@ const UI = {
     this._damageFlash();
   },
   _damageFlash() { const hud = $('#hud'); hud.style.boxShadow = 'inset 0 0 140px rgba(255,30,30,.55)'; clearTimeout(this._df); this._df = setTimeout(() => hud.style.boxShadow = '', 180); if (!this._hurtT || now() - this._hurtT > 0.45) { this._hurtT = now(); Audio.play('pain_m', 0.55); Audio.play('punch', 0.35); } },
-  hitmarker() { Audio.play('hitmark'); const hm = $('#hitmarker'); hm.style.opacity = 1; clearTimeout(this._hm); this._hm = setTimeout(() => hm.style.opacity = 0, 140); },
+  // kind: '' (hit), 'head' or 'kill'. The host can report one hit twice (damage number + player hit), so the tick is debounced
+  hitmarker(kind = '') {
+    const t = now(), hm = $('#hitmarker'), fresh = t - (this._hmT || 0) > 0.05; this._hmT = t;
+    if (fresh) Audio.play('hitmark'); if (kind === 'kill' && hm.className !== 'kill') Audio.play('kill');
+    if (fresh || kind) { hm.className = kind + ' pop'; void hm.offsetWidth; hm.classList.remove('pop'); }
+    hm.style.opacity = 1; clearTimeout(this._hm); this._hm = setTimeout(() => { hm.style.opacity = 0; this._hm = setTimeout(() => hm.className = '', 160); }, kind === 'kill' ? 420 : 160);
+  },
   killfeed(m) {
     const v = Players.map.get(m.v), a = m.a ? Players.map.get(m.a) : null;
     const nm = p => `<span style="color:${esc(p ? p.color : '#fff')}">${esc(p ? p.name : '?')}</span>`;
@@ -6484,7 +6512,7 @@ const UI = {
       key: it.key, name: it.name, icon: it.icon, desc: it.desc, cat,
       sub: cat === 'vehicles' ? 'Sit to drive' : it.desc ? it.desc : (() => { const d = it.pf().ents[0]; return (MATDEFS[d.m] ? MATDEFS[d.m].name : ''); })(),
       tag: it.key === 'zombie' ? 'HOSTILE' : ['xbarrel', 'propane'].includes(it.key) ? 'EXPLOSIVE' : null, tagCls: 'hostile', onclick: () => { Game.spawnItem(it.key); close(); } }));
-    if (cat === 'weapons') return WEAPONS.map((w, i) => ({ key: 'wp_' + w.id, name: w.name, icon: w.icon, sub: w.desc, tag: 'SLOT ' + ((i + 1) % 10), cat, onclick: () => { Tools.setWeapon(w.id); this.closeMenu(); } }));
+    if (cat === 'weapons') return WEAPONS.map((w, i) => ({ key: 'wp_' + w.id, name: w.name, icon: w.icon, sub: w.desc, tag: (j => j >= 0 ? 'SLOT ' + HOTBAR_LABEL[j] : null)(Hotbar.get().findIndex(e => e && e.w === w.id && !e.m)), cat, onclick: () => { Tools.setWeapon(w.id); this.closeMenu(); } }));
     if (cat === 'tools') return TOOL_MODES.map(m => ({ name: m.name, icon: m.icon, sub: m.desc, cat, onclick: () => { Tools.setWeapon('toolgun'); Tools.setMode(m.id); this.buildSpawn(); } }));
     if (cat === 'map') return CATALOG.map.map(it => ({ key: it.key, name: it.name, icon: it.icon, sub: 'Edit mode', cat, onclick: () => { if (!Editor.active) Editor.toggle(true); if (Editor.active) { Editor.arm(it.key); this.closeMenu(); this.toast('Click to place ' + it.name + (Input.device === 'pad' ? ' (RT)' : ''), 'architecture'); } } }));
     return [];
@@ -7538,6 +7566,23 @@ const FX = {
     this.list.push({ t: 0, life, upd: (k) => { bm.mesh.material.opacity = 1 - k; }, end: () => { bm.mesh.visible = false; } });
   },
   tracer(a, b) { this.beam(a, b, 0xffd27a, 0.07, 0.018); },
+  // muzzle flash: a hot core and an orange bloom for a couple of frames, a flicker of light, and smoke for big guns.
+  // `at` is the viewmodel's muzzle (the flash rides along with the gun) or a world position (other players).
+  muzzle(at, kind) {
+    const big = kind === 'big', puff = kind === 'puff', obj = at.isObject3D ? at : null, wp = obj ? obj.getWorldPosition(new V3()) : at;
+    if (!puff) for (const [col, sz, op] of [[0xfff2c8, big ? 0.2 : 0.13, 1], [0xff9a3c, big ? 0.55 : 0.34, 0.8]]) {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.smokeTex, color: col, transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false, rotation: Math.random() * Math.PI }));
+      sp.material.userData.outlineParameters = { visible: false }; sp.renderOrder = 10;
+      const s0 = sz * (0.8 + Math.random() * 0.4); sp.scale.setScalar(s0);
+      if (obj) obj.add(sp); else { sp.position.copy(wp); R.scene.add(sp); }
+      this.list.push({ t: 0, life: 0.06, upd: k => { sp.material.opacity = op * (1 - k); sp.scale.setScalar(s0 * (1 + k * 0.6)); }, end: () => { sp.removeFromParent(); sp.material.dispose(); } });
+    }
+    if (this.light.intensity < 2 && !puff) {   // shares the explosion light: only when no explosion is lighting things up
+      this.light.position.copy(wp); this.light.intensity = big ? 9 : 6;
+      this.list.push({ t: 0, life: 0.05, upd: k => { if (this.light.intensity <= 9) this.light.intensity = (big ? 9 : 6) * (1 - k); }, end: () => { if (this.light.intensity <= 9) this.light.intensity = 0; } });
+    }
+    if (big || puff) this.smoke(wp, puff ? 2 : 1, puff ? 0.35 : 0.18, 0.6, 0xcfcfcf);
+  },
   zap(a, b) { this.beam(a, b, 0x9ff3ff, 0.12, 0.03); this.spark(b, null, 0x9ff3ff, 6); },
   spark(p, n, color, count) {
     count = count || 10;
@@ -7591,6 +7636,7 @@ const FX = {
   remote(m) {
     if (m.k === 'shot') {
       const o = new V3().fromArray(m.o), ends = Array.isArray(m.e[0]) ? m.e : [m.e];
+      if (o.distanceTo(R.camera.position) > 1.5 && m.w !== 'crowbar') this.muzzle(_v1.fromArray(ends[0]).sub(o).normalize().multiplyScalar(0.7).add(o).clone(), ends.length > 1 || m.w === 'sniper' ? 'big' : 'small');
       ends.forEach((a, i) => { const e = new V3().fromArray(a); this.tracer(o, e); if (m.n) this.spark(e, new V3().fromArray(m.n)); else if (ends.length > 1) this.spark(e, null, null, 4); if (i < 3) Audio.bulletHit(o, e, m.n || ends.length > 1 ? UP : null); Audio.flyby(o, e); });
       Audio.gun(m.w, o);
     }
@@ -8657,7 +8703,7 @@ const HOLO = {
 const AIM_ASSIST = [0, 0.55, 1, 1.45];   // Settings.aimAssist: off / low / standard / strong
 const Game = {
   state: 'loading', viewmodel: null, detected: null, pendingWorld: null, aimSeat: 0, lockReleaseOk: false,
-  acc: 0, last: 0, orbit: 0, shake: 0, moveInp: { mx: 0, my: 0, jump: false, sprint: false, up: 0 }, autoT: 20, hiddenTicker: null, bob: 0, fellT: 0,
+  acc: 0, last: 0, orbit: 0, shake: 0, punch: [0, 0], sway: [0, 0], drawT: 1, sprintK: 0, moveInp: { mx: 0, my: 0, jump: false, sprint: false, up: 0 }, autoT: 20, hiddenTicker: null, bob: 0, fellT: 0,
   async boot() {
     const lt = $('#loadingText');
     try {
@@ -9167,7 +9213,7 @@ const Game = {
   updateCamera(dt) {
     const cam = R.camera, me = Players.local;
     if (this.state !== 'playing' || !me) {
-      this.orbit += dt * 0.06;
+      this.firstPerson = false; this.orbit += dt * 0.06;
       cam.position.set(Math.sin(this.orbit) * 16, 5.5 + Math.sin(this.orbit * 0.7) * 1.2, Math.cos(this.orbit) * 16);
       cam.lookAt(0, 1.2, 0); R.focus.set(0, 0, 0);
       if (this.viewmodel) this.viewmodel.visible = false;
@@ -9175,6 +9221,7 @@ const Game = {
       return;
     }
     const cp = Math.cos(me.pitch), dir = _v2.set(-Math.sin(me.yaw) * cp, Math.sin(me.pitch), -Math.cos(me.yaw) * cp);
+    this.firstPerson = false;
     if (me.seat) {
       const se = World.ents.get(me.seat), ve = this.seatVeh(), V = ve && VEH[ve.d.veh], base = ve && ve.mesh ? ve.mesh : se && se.mesh;
       const target = base ? _v1.copy(base.position).add(_v3.set(0, V ? V.cam[1] : 1.3, 0)) : _v1.copy(me.renderPos);
@@ -9196,10 +9243,17 @@ const Game = {
       if (h) cam.position.copy(target).addScaledVector(back, Math.max(0.6, h.dist - 0.3));
       cam.lookAt(target);
     } else {
-      const eh = me.crouch ? CFG.eye - 0.5 : CFG.eye;
+      const eh = me.crouch ? CFG.eye - 0.5 : CFG.eye; this.firstPerson = true;
       this.eyeH = lerp(this.eyeH || eh, eh, 1 - Math.exp(-14 * dt));
       cam.position.set(me.renderPos.x, me.renderPos.y + this.eyeH, me.renderPos.z);
-      cam.rotation.set(me.pitch, me.yaw, 0, 'YXZ');
+      // landing: remember the fastest fall, dip the view when we touch down
+      if (!me.grounded) this.airVy = Math.min(this.airVy || 0, me.vel.y);
+      else { if (this.airVy < -4) this.land = Math.max(this.land || 0, clamp(-this.airVy / 14, 0.25, 1)); this.airVy = 0; }
+      this.land = Math.max(0, (this.land || 0) - dt * 3.2);
+      cam.position.y -= Math.sin(Math.min(1, this.land) * Math.PI) * 0.09 * this.land;
+      // view punch from recoil: kicks the camera (not the aim) and springs back
+      const pk = 1 - Math.exp(-11 * dt); this.punch[0] -= this.punch[0] * pk; this.punch[1] -= this.punch[1] * pk;
+      cam.rotation.set(me.pitch + this.punch[0], me.yaw + this.punch[1], 0, 'YXZ');
       if (me.dead) { cam.position.y = me.renderPos.y + 0.4; cam.rotation.z = 0.4; }
     }
     if (this.shake > 0) { this.shake = Math.max(0, this.shake - dt); cam.position.x += (Math.random() - 0.5) * this.shake * 0.4; cam.position.y += (Math.random() - 0.5) * this.shake * 0.4; }
@@ -9214,11 +9268,28 @@ const Game = {
     const vm = this.viewmodel;
     if (vm) {
       vm.visible = !me.seat && !me.dead && !Editor.active && !scoped && !(me.disg && Rules.mode === 'prophunt');
-      const spd = Math.hypot(me.vel.x, me.vel.z); this.bob += dt * spd * (me.grounded ? 1.6 : 0.3);
-      const k = Tools.kick;
+      const spd = Math.hypot(me.vel.x, me.vel.z), mv = Math.min(1, spd / 5); this.bob += dt * spd * (me.grounded ? 1.6 : 0.3);
+      const k = Tools.kick, melee = Tools.weapon === 'crowbar', t = now();
+      // sway: the gun lags behind where you look
+      let dyaw = me.yaw - (this.lastYaw ?? me.yaw); while (dyaw > Math.PI) dyaw -= Math.PI * 2; while (dyaw < -Math.PI) dyaw += Math.PI * 2;
+      const dpitch = me.pitch - (this.lastPitch ?? me.pitch); this.lastYaw = me.yaw; this.lastPitch = me.pitch;
+      const sk = 1 - Math.exp(-9 * dt), sdt = Math.max(dt, 1 / 240);
+      this.sway[0] += (clamp(dyaw / sdt * 0.006, -0.035, 0.035) - this.sway[0]) * sk;
+      this.sway[1] += (clamp(dpitch / sdt * 0.006, -0.03, 0.03) - this.sway[1]) * sk;
+      // sprinting lowers and turns the gun in; drawing raises it from below
+      const sprint = this.moveInp.sprint && me.grounded && spd > 4 && !Tools.grab && Tools.cool <= 0;
+      this.sprintK += ((sprint ? 1 : 0) - this.sprintK) * (1 - Math.exp(-8 * dt));
+      this.drawT = Math.min(1, this.drawT + dt / 0.28); const dr = Math.pow(1 - this.drawT, 2);
+      const ld = Math.sin(Math.min(1, this.land || 0) * Math.PI) * (this.land || 0), br = Math.sin(t * 1.7) * 0.0025 * (1 - mv);
       const VB = Models.has('wp_' + Tools.weapon) && WEAPON_MODEL[Tools.weapon] ? WEAPON_MODEL[Tools.weapon].vm : [0.26, -0.25, -0.48];
-      vm.position.set(VB[0] + Math.sin(this.bob) * 0.012 * Math.min(1, spd / 5), VB[1] + Math.abs(Math.cos(this.bob)) * 0.012 * Math.min(1, spd / 5), VB[2] + k * 0.07);
-      vm.rotation.set(k * (Tools.weapon === 'crowbar' ? -1.2 : 0.18), Tools.weapon === 'crowbar' ? k * 0.8 : 0, 0);
+      vm.position.set(
+        VB[0] + Math.sin(this.bob) * 0.012 * mv + this.sway[0] - this.sprintK * 0.03,
+        VB[1] + Math.abs(Math.cos(this.bob)) * 0.012 * mv - this.sway[1] + br - ld * 0.04 - this.sprintK * 0.035 - dr * 0.22,
+        VB[2] + k * 0.07);
+      vm.rotation.set(
+        k * (melee ? -1.2 : 0.18) - this.sway[1] * 1.6 - this.sprintK * 0.22 - dr * 0.7 - ld * 0.06,
+        (melee ? k * 0.8 : 0) - this.sway[0] * 1.8 + this.sprintK * 0.55,
+        this.sway[0] * -2.2 + (melee ? 0 : (this.kickRoll || 0) * k));
     }
   },
   buildViewmodel() {
@@ -9296,7 +9367,7 @@ const Game = {
 };
 
 // debug handle for testing from the console
-window.TW = { Social, PH, ZS, Prog, DiscordAct, Online, Owner, Hotbar, Audio, Models, Game, Net, World, Players, R, Auth, Tools, Editor, UI, Rules, Settings, Phys, Input, Admin, Save, FX, Mats, Vehicles, VEH, Gore, Env };
+window.TW = { Thumbs, Social, PH, ZS, Prog, DiscordAct, Online, Owner, Hotbar, Audio, Models, Game, Net, World, Players, R, Auth, Tools, Editor, UI, Rules, Settings, Phys, Input, Admin, Save, FX, Mats, Vehicles, VEH, Gore, Env };
 Game.boot();
 </script>
 
