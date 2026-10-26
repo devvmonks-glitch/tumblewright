@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <!-- auto-update config: stamped by tools/release/release.mjs (version, update server, public signing key) -->
-<meta name="tw-version" content="1.9.3">
+<meta name="tw-version" content="1.9.4">
 <meta name="tw-update-url" content="https://tumblewright.vercel.app/">
 <meta name="tw-update-key" content="MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEY+Cnn8Lm7Qg8qyzAHUGYObpBjSgdckeo7PetlABb0TomToEhaMbLW/zaRHOAbvsMn1TRCb4I/cPFv1ghZ6CgWw==">
-<meta name="tw-notes" content="Weapons feel punchier: recoil, muzzle flashes, viewmodel sway and draw animations, hitmarkers on NPCs with headshot and kill variants, clearer hotbar icons.">
+<meta name="tw-notes" content="The crowbar is now held upright with its hook showing, and chops diagonally when you swing.">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Tumblewright — Multiplayer Physics Sandbox</title>
 <meta name="description" content="Tumblewright: a multiplayer 3D physics sandbox. Build, weld, drive and blow things up together in your browser.">
@@ -1654,7 +1654,7 @@ const WEAPON_MODEL = {
   pistol: { t: 'metal', c: '#2a2c31', muzzle: [0, 0.018, -0.155], vm: [0.19, -0.17, -0.5] },
   rifle: { t: 'plastic', c: '#3d4a32', muzzle: [0, 0, -0.65], vm: [0.17, -0.17, -0.74] },
   grenade: { t: 'plastic', c: '#4b5b3a', muzzle: [0, 0, -0.06], vm: [0.2, -0.16, -0.5] },
-  crowbar: { t: 'metal', c: '#c0392b', muzzle: [0, 0.24, -0.47], vm: [0.22, -0.2, -0.52] },
+  crowbar: { t: 'metal', c: '#c0392b', muzzle: [0, 0.24, -0.47], vm: [0.23, -0.27, -0.4], vr: [0.9, 0.3, 0.85] },   // vr: resting tilt (held up across the body, twisted so the hook shows side-on)
   shotgun: { t: 'metal', c: '#2e3238', muzzle: [0, 0.022, -0.66], vm: [0.18, -0.17, -0.62] },
   sniper: { t: 'plastic', c: '#6b6247', muzzle: [0, 0.008, -0.88], vm: [0.17, -0.16, -0.72] },
   rocket: { t: 'plastic', c: '#55653f', muzzle: [0, 0.06, -0.64], vm: [0.2, -0.2, -0.46] },
@@ -9281,15 +9281,15 @@ const Game = {
       this.sprintK += ((sprint ? 1 : 0) - this.sprintK) * (1 - Math.exp(-8 * dt));
       this.drawT = Math.min(1, this.drawT + dt / 0.28); const dr = Math.pow(1 - this.drawT, 2);
       const ld = Math.sin(Math.min(1, this.land || 0) * Math.PI) * (this.land || 0), br = Math.sin(t * 1.7) * 0.0025 * (1 - mv);
-      const VB = Models.has('wp_' + Tools.weapon) && WEAPON_MODEL[Tools.weapon] ? WEAPON_MODEL[Tools.weapon].vm : [0.26, -0.25, -0.48];
+      const WM = Models.has('wp_' + Tools.weapon) && WEAPON_MODEL[Tools.weapon], VB = WM ? WM.vm : [0.26, -0.25, -0.48], VR = (WM && WM.vr) || [0, 0, 0], spr = melee ? 0.4 : 1;
       vm.position.set(
-        VB[0] + Math.sin(this.bob) * 0.012 * mv + this.sway[0] - this.sprintK * 0.03,
+        VB[0] + Math.sin(this.bob) * 0.012 * mv + this.sway[0] - this.sprintK * 0.03 * spr,
         VB[1] + Math.abs(Math.cos(this.bob)) * 0.012 * mv - this.sway[1] + br - ld * 0.04 - this.sprintK * 0.035 - dr * 0.22,
         VB[2] + k * 0.07);
       vm.rotation.set(
-        k * (melee ? -1.2 : 0.18) - this.sway[1] * 1.6 - this.sprintK * 0.22 - dr * 0.7 - ld * 0.06,
-        (melee ? k * 0.8 : 0) - this.sway[0] * 1.8 + this.sprintK * 0.55,
-        this.sway[0] * -2.2 + (melee ? 0 : (this.kickRoll || 0) * k));
+        VR[0] + k * (melee ? -1.2 : 0.18) - this.sway[1] * 1.6 - this.sprintK * 0.22 * spr - dr * 0.7 - ld * 0.06,
+        VR[1] + (melee ? k * 0.8 : 0) - this.sway[0] * 1.8 + this.sprintK * 0.55 * spr,
+        VR[2] + this.sway[0] * -2.2 + (melee ? 0 : (this.kickRoll || 0) * k));
     }
   },
   buildViewmodel() {
@@ -9367,7 +9367,7 @@ const Game = {
 };
 
 // debug handle for testing from the console
-window.TW = { Thumbs, Social, PH, ZS, Prog, DiscordAct, Online, Owner, Hotbar, Audio, Models, Game, Net, World, Players, R, Auth, Tools, Editor, UI, Rules, Settings, Phys, Input, Admin, Save, FX, Mats, Vehicles, VEH, Gore, Env };
+window.TW = { Thumbs, WEAPON_MODEL, Social, PH, ZS, Prog, DiscordAct, Online, Owner, Hotbar, Audio, Models, Game, Net, World, Players, R, Auth, Tools, Editor, UI, Rules, Settings, Phys, Input, Admin, Save, FX, Mats, Vehicles, VEH, Gore, Env };
 Game.boot();
 </script>
 
