@@ -1,0 +1,13 @@
+{
+  "name": "tumblewright-sim-harness",
+  "private": true,
+  "description": "Runs the game's simulation headless in Node (no page, no renderer). Versions match the import map in src/01_head.html.",
+  "type": "module",
+  "scripts": {
+    "test": "node sim-test.mjs"
+  },
+  "devDependencies": {
+    "@dimforge/rapier3d-compat": "0.14.0",
+    "three": "0.169.0"
+  }
+}

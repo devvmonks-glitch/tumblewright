@@ -29,6 +29,7 @@ the host runs the physics.
 | `tools/sounds/` | Our sound synthesizer and the bank builder (needs ffmpeg and the source libraries) |
 | `tools/owner/` | Owner access key (see below) |
 | `tools/release/` | Publishing script and the Vercel functions (TURN relay credentials, keep-alive) |
+| `tools/sim/` | Headless simulation test: runs the host simulation in Node and lists what it still calls in the renderer / UI (`npm install`, then `node sim-test.mjs`) |
 
 ## Building
 

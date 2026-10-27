@@ -18,3 +18,6 @@ node_modules/
 sounds/*.7z
 *.7z
 *.zip
+
+# headless simulation harness output
+tools/sim/.out/
