@@ -483,6 +483,8 @@ const SWING_KEYS = [
   [0.46, [0, 0, 0, 0, 0, 0], ''],
 ];
 const SWING_HIT = 0.12, SWING_REST = [0, 0, 0, 0, 0, 0];
+// host physics quality levels, cheapest last (cost = rough relative CPU per second of simulation)
+const PHYS_LEVELS = [{ dt: 1 / 60, it: 6, cost: 1 }, { dt: 1 / 60, it: 4, cost: 0.8 }, { dt: 1 / 30, it: 4, cost: 0.42 }];
 const _swOut = [0, 0, 0, 0, 0, 0];
 function swingPose(t) {
   if (t >= SWING_KEYS[SWING_KEYS.length - 1][0]) return SWING_REST;
@@ -2292,18 +2294,38 @@ const Game = {
     Input.poll();
     if (this.state === 'playing' && render) this.handleInput(dt);
     this.acc += dt; let n = 0;
-    while (this.acc >= CFG.dt && n < 6) { this.fixedStep(CFG.dt); this.acc -= CFG.dt; n++; }
-    if (n === 6) this.acc = 0;
+    const sdt = this.stepDt, maxN = sdt > 1 / 45 ? 2 : 3, tp = performance.now();
+    while (this.acc >= sdt && n < maxN) { this.fixedStep(sdt); this.acc -= sdt; n++; }
+    if (n === maxN) this.acc = Math.min(this.acc, sdt);   // can't keep up this frame: drop the backlog rather than spiral into ever longer frames
+    this.governPhysics(performance.now() - tp, dt);
     Net.update(dt);
     if (this.state === 'playing' && Net.online) { this.autoT -= dt; if (this.autoT <= 0) { this.autoT = 20; this.autosave(); } }
     if (render) {
       Env.update();
-      this.updateVisuals(dt, this.acc / CFG.dt);
+      this.updateVisuals(dt, this.acc / this.stepDt);
       if (this.state === 'playing') UI.update(dt); else Nav.update(dt);
       R.render(dt);
       R.drsTick(frameMs);
     }
     Input.endFrame();
+  },
+  // ---- physics governor (host) ---------------------------------------------------------------
+  // The host simulates everything, so on a slow CPU physics eats the frame and the host lags while clients are fine.
+  // Every few seconds: if physics took over 30% of the time, step down (fewer solver iterations, then 30 steps/s
+  // instead of 60); with plenty of headroom, step back up. Clients always run level 0 (they only follow snapshots).
+  stepDt: 1 / 60, physLvl: 0, govMs: 0, govT: 0, govHold: 0,
+  setPhysLevel(l) {
+    const L = PHYS_LEVELS[l]; this.physLvl = l; this.stepDt = L.dt; this.govHold = 4;
+    if (Phys.world) { Phys.world.timestep = L.dt; Phys.world.integrationParameters.numSolverIterations = L.it; }
+  },
+  governPhysics(ms, dt) {
+    if (!Net.isHost || this.state !== 'playing') { if (this.physLvl) this.setPhysLevel(0); this.govMs = this.govT = 0; return; }
+    this.govMs += ms; this.govT += dt; this.govHold -= dt;
+    if (this.govT < 2) return;
+    const load = this.govMs / (this.govT * 1000); this.govMs = this.govT = 0; this.physLoad = load;
+    if (this.govHold > 0) return;
+    if (load > 0.3 && this.physLvl < PHYS_LEVELS.length - 1) this.setPhysLevel(this.physLvl + 1);
+    else if (this.physLvl > 0 && load * PHYS_LEVELS[this.physLvl - 1].cost / PHYS_LEVELS[this.physLvl].cost < 0.2) this.setPhysLevel(this.physLvl - 1);
   },
   frame() { requestAnimationFrame(() => this.frame()); this.lastRaf = performance.now(); if (!document.hidden) this.tick(true); },
 };

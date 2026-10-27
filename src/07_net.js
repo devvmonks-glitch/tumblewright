@@ -33,7 +33,15 @@ const Net = {
   activeThr: new Set(),
   auth() { return this.isHost; },
   hostTime() { return now() - this.t0; },
-  renderTime() { return this.offset == null ? 0 : now() + this.offset - this.interp; },
+  // the host time remote objects are drawn at. It follows (local time + clock offset - interp delay) but never jumps:
+  // it runs up to 15% fast or slow to catch up, and only snaps after a big change (joining, a long stall)
+  renderTime() { return this.offset == null ? 0 : this.rt ?? now() + this.offset - this.interp; },
+  tickClock(dt) {
+    if (this.offset == null) { this.rt = null; return; }
+    const target = now() + this.offset - this.interp;
+    if (this.rt == null || Math.abs(target - this.rt) > 0.25) this.rt = target;
+    else this.rt += dt * (1 + clamp((target - this.rt) * 4, -0.15, 0.15));
+  },
   // Cloudflare TURN credentials from the site's /api/turn: players whose routers block direct connections go
   // through the relay instead of failing to join. Fetched ahead of time (see UI.init) and cached for a few hours.
   // ---- diagnostics: a join timeline + per-connection details, copied from the pause menu / Settings > Network ----
@@ -96,7 +104,7 @@ const Net = {
     this.diag = []; this.diagT0 = now(); this.errT = 0;
     this.log('start', { asHost, room: code, via: L.map(l => l.kind).join('+'), relayServers: relay.length, ua: navigator.userAgent.replace(/^Mozilla\/5\.0 /, '').slice(0, 90) });
     this.probeIce(relay); this.code = code; this.isHost = asHost; this.hostId = asHost ? this.me : null; this.online = true; this.ready = asHost;
-    this.peers.clear(); this.pending = []; this.banned.clear(); this.offset = null; this.joinCounter = 0; this.hostConfirmed = true;
+    this.peers.clear(); this.pending = []; this.banned.clear(); this.offset = this.rt = null; this.joinCounter = 0; this.hostConfirmed = true;
     const turn = relay.slice();
     if (Settings.turnUrl) turn.push({ urls: Settings.turnUrl.split(',').map(s => s.trim()).filter(Boolean), username: Settings.turnUser || undefined, credential: Settings.turnPass || undefined });
     const relays = (Settings.relays || '').split(',').map(x => x.trim()).filter(Boolean);
@@ -252,7 +260,7 @@ const Net = {
     World.load(s.world);
     for (const e of World.ents.values()) e.buf.length = 0;
     this.applyPlayers(s.players || []);
-    this.offset = null;
+    this.offset = this.rt = null;
     const first = !this.ready; this.ready = true;
     if (first) Game.enterPlay(s.you && s.you.spawn ? new V3().fromArray(s.you.spawn) : null);
     else if (s.migrated) UI.chat({ sys: 1, text: 'New host. World resynced.' });
@@ -390,6 +398,7 @@ const Net = {
     const s = this.stats; s.t += dt;
     if (s.t >= 1) { s.inRate = s.inB / s.t; s.outRate = s.outB / s.t; s.snapRate = s.snaps / s.t; s.inB = s.outB = s.snaps = 0; s.t = 0; }
     if (!this.online || !this.ready) return;
+    if (!this.isHost) this.tickClock(dt);
     if (this.isHost) {
       this.snapT -= dt; this.keyT -= dt;
       if (this.snapT <= 0) {
@@ -400,7 +409,12 @@ const Net = {
       }
     } else {
       this.inT -= dt;
-      if (this.inT <= 0) { this.inT += 1 / CFG.inputRate; if (this.inT < 0) this.inT = 0; const inp = Game.buildInput(); if (inp) this.send('in', inp, this.hostId); }
+      if (this.inT <= 0) {
+        this.inT += 1 / CFG.inputRate; if (this.inT < 0) this.inT = 0;
+        // standing still sends nothing new: skip repeats, but keep a 4/s heartbeat (rotation deltas are always sent, they are used up)
+        const inp = Game.buildInput(), s = inp && JSON.stringify(inp);
+        if (inp && (inp.rd || s !== this.lastIn || now() - this.lastInT > 0.25)) { this.lastIn = s; this.lastInT = now(); this.send('in', inp, this.hostId); }
+      }
     }
     this.pingT -= dt;
     if (this.pingT <= 0) {

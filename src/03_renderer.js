@@ -166,6 +166,8 @@ const R = {
       g.updateGtaoMaterial({ radius: 0.55, distanceExponent: 1.4, thickness: 1.2, scale: 1.0, samples: this.tier === 'ultra' ? 16 : 8 });
       g.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 4, rings: 2, samples: this.tier === 'ultra' ? 16 : 8 });
       // see-through effects (tracers, beams, smoke, holograms) must not cast AO, or they render as dark smears
+      // AO is soft and low-frequency: compute it (and the normal pass it needs) at half resolution, a quarter of the pixels
+      const gs = g.setSize.bind(g); g.setSize = (w2, h2) => gs(Math.max(1, Math.round(w2 / 2)), Math.max(1, Math.round(h2 / 2)));
       const ov = g.overrideVisibility.bind(g);
       g.overrideVisibility = () => { ov(); this.scene.traverse(o => { const m = o.material; if (m && !Array.isArray(m) && m.transparent && !m.depthWrite) o.visible = false; }); };
       c.addPass(g);
@@ -240,7 +242,13 @@ const R = {
   },
   render(dt) {
     const sc = this.scene, cam = this.camera;
-    if (this.csm) { cam.updateMatrixWorld(); this.csm.update(); }
+    if (this.csm) {
+      cam.updateMatrixWorld(); this.csm.update();
+      // far cascades cover a lot of ground at low detail: redraw them every 2nd / 4th frame (the near two every frame).
+      // A skipped cascade keeps its old shadow matrix too, so its shadows stay put; they just update a few ms later.
+      const f = this.frameN = (this.frameN || 0) + 1;
+      this.csm.lights.forEach((l, i) => { l.shadow.autoUpdate = false; l.shadow.needsUpdate = i < 2 || (i === 2 ? f % 2 === 0 : (f + i) % 4 === 0); });
+    }
     else if (this.sun.castShadow) {
       this.sun.target.position.copy(this.focus); this.sun.position.copy(this.focus).addScaledVector(SUN_DIR, -80);
     } else { this.sun.position.copy(SUN_DIR).multiplyScalar(-80); this.sun.target.position.set(0, 0, 0); }

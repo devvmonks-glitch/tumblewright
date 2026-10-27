@@ -437,7 +437,9 @@ function rayCapsule(o, d, x, y0, z, y1, r) {   // the capsule is a cylinder plus
   return best;
 }
 const Rules = { combat: false, editPerm: 'all', propLimit: CFG.propLimit, allowNoclip: true, aimAssist: true, dismember: true, env: 'plains', envGone: [], mode: 'sandbox', bots: 3, carMph: 0, npcHp: 100 };   // npcHp: NPC health (100 = normal); damage to NPCs is scaled by 100 / npcHp
-const npcDmgK = () => 100 / clamp(Rules.npcHp || 100, 10, 2000);   // carMph 0 = each vehicle's own top speed
+const npcDmgK = () => 100 / clamp(Rules.npcHp || 100, 10, 2000);
+// a blend tuned as "fraction f per 60 Hz step", made rate-independent (the host may step at 30 Hz on slow machines)
+const perStep = (f, dt) => 1 - Math.pow(1 - f, dt * 60);   // carMph 0 = each vehicle's own top speed
 const MPH = 0.44704;   // m/s per mph
 // NPC firearms: damage per hit, seconds between shots, shots per burst, pause after a burst, spread
 const NPC_GUNS = { pistol: { dmg: 13, rate: 0.45, burst: 1, pause: 0.65, spread: 0.03 }, rifle: { dmg: 10, rate: 0.11, burst: 4, pause: 0.95, spread: 0.035 } };
@@ -1288,7 +1290,7 @@ const Auth = {
       const pi = JOINT_PART[k], t2 = g.lh ? tone * clamp(g.lh[pi] / PART_HP[pi] * 1.7, 0.04, 1) : tone;
       const ra = ea.body.rotation(), rb = eb.body.rotation(), qa = _sq1.set(ra.x, ra.y, ra.z, ra.w);
       const qr = _sq2.copy(qa).invert().multiply(_sq3.set(rb.x, rb.y, rb.z, rb.w)), ang = -2 * Math.atan2(qr.x, qr.w);
-      const w = clamp(((P[k] || 0) - ang) * 14, -12, 12), ax = _sv1.set(-1, 0, 0).applyQuaternion(qa), wa = ea.body.angvel(), wb = eb.body.angvel(), f = 0.6 * t2;
+      const w = clamp(((P[k] || 0) - ang) * 14, -12, 12), ax = _sv1.set(-1, 0, 0).applyQuaternion(qa), wa = ea.body.angvel(), wb = eb.body.angvel(), f = perStep(0.6 * t2, Phys.world.timestep);
       eb.body.setAngvel({ x: wb.x + (wa.x + ax.x * w - wb.x) * f, y: wb.y + (wa.y + ax.y * w - wb.y) * f, z: wb.z + (wa.z + ax.z * w - wb.z) * f }, true);
     }
   },
@@ -1539,7 +1541,8 @@ const Auth = {
         let tx = ax.x * kUp, tz = ax.z * kUp;
         if (b === head) { const hr = b.rotation(), hu = _v4.set(0, 1, 0).applyQuaternion(_q2.set(hr.x, hr.y, hr.z, hr.w)), hax = _v4.crossVectors(hu, UP); tx = hax.x * 6 * rec; tz = hax.z * 6 * rec; }
         const ty = yawErr * 2.4 * rec;
-        b.setAngvel({ x: av.x + (tx - av.x) * 0.3, y: av.y + (ty - av.y) * 0.3, z: av.z + (tz - av.z) * 0.3 }, true);
+        const ab = perStep(0.3, dt);
+        b.setAngvel({ x: av.x + (tx - av.x) * ab, y: av.y + (ty - av.y) * ab, z: av.z + (tz - av.z) * ab }, true);
       }
       // ---- support + propulsion ----
       const excl = c => { const id = Phys.colMap.get(c.handle); return !(typeof id === 'number' && g.parts.includes(id)); };
@@ -1554,7 +1557,7 @@ const Auth = {
         let mass = 0; for (const e of parts) mass += e.body.mass();
         const lift = (9.81 + (want - hgt) * 60 - pv.y * 8) * mass * dt * (g.state === 'getup' ? 0.45 + 0.75 * rec : 1);
         // steer horizontally first — setting the velocity after the lift impulse would cancel the lift
-        const dx = -Math.sin(moveYaw) * speed, dz = -Math.cos(moveYaw) * speed, k = (g.stag > 0 ? 0.2 : 0.12) * rec;
+        const dx = -Math.sin(moveYaw) * speed, dz = -Math.cos(moveYaw) * speed, k = perStep((g.stag > 0 ? 0.2 : 0.12) * rec, dt);
         pelvis.setLinvel({ x: pv.x + (dx - pv.x) * k, y: pv.y, z: pv.z + (dz - pv.z) * k }, true);
         pelvis.applyImpulse({ x: 0, y: Math.max(0, lift * 0.55), z: 0 }, true);
         torso.applyImpulse({ x: 0, y: Math.max(0, lift * 0.45), z: 0 }, true);
@@ -1737,7 +1740,7 @@ const Auth = {
     }
     // impact injuries (slammed with the physics gun, thrown, hit by a car, long falls): real contact forces from the
     // physics step. A physics gun waving a body around in the air makes no contacts, so it doesn't count.
-    const dtS = CFG.dt;
+    const dtS = Phys.world.timestep;
     for (const [h1, h2, F] of Phys.impacts) {
       const i1 = Phys.colMap.get(h1), i2 = Phys.colMap.get(h2);
       for (const [a, b] of [[i1, i2], [i2, i1]]) {
