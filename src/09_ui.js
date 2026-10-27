@@ -720,11 +720,11 @@ const UI = {
       $('#fpsBox').classList.toggle('hidden', !Settings.showFps); $('#fpsBox').textContent = `${fps} FPS · ${TIERS[R.tier].label} · ${Math.round(R.drs.scale * 100)}% res`;
       const ns = $('#netStats'); ns.classList.toggle('hidden', !Settings.showNet);
       if (Settings.showNet) {
-        const s = Net.stats; let bodies = 0, awake = 0; for (const e of World.ents.values()) if (e.d.k !== 'map') { bodies++; if (Net.isHost && e.body && e.body.isDynamic() && !e.body.isSleeping()) awake++; }
+        const s = Net.stats; let bodies = 0, awake = 0; for (const e of World.ents.values()) if (e.d.k !== 'map') { bodies++; if (Net.auth() && e.body && e.body.isDynamic() && !e.body.isSleeping()) awake++; }
         ns.textContent = `NETWORK ${Net.online ? (Net.isHost ? '(host)' : '(client)') : '(offline)'}\n` +
           `ping        ${Net.isHost ? '—' : ping + ' ms'}\n` + `in          ${(s.inRate / 1024).toFixed(1)} KB/s\n` + `out         ${(s.outRate / 1024).toFixed(1)} KB/s\n` +
           `snapshots   ${Net.isHost ? CFG.snapRate + '/s sent' : s.snapRate.toFixed(0) + '/s'}\n` + `interp      ${Math.round(Net.interp * 1000)} ms\n` + `jitter      ${(s.jitter * 1000).toFixed(1)} ms\n` +
-          `bodies      ${bodies}${Net.isHost ? ' (' + awake + ' awake)' : ''}\n` + `last snap   ${s.bodies} bodies\n` + (Net.isHost ? `physics     ${Math.round(1 / Sim.stepDt)} Hz, ${PHYS_LEVELS[Sim.physLvl].it} iters, ${Math.round((Sim.physLoad || 0) * 100)}% of frame time\n` : '') + `peers       ${Net.peers.size}\n` + `render      ${Math.round(R.drs.scale * 100)}% · ${R.renderer.info.render.calls} draws`;
+          `bodies      ${bodies}${Net.auth() ? ' (' + awake + ' awake)' : ''}\n` + `last snap   ${s.bodies} bodies\n` + (Net.auth() ? `physics     ${Math.round(1 / Sim.stepDt)} Hz, ${PHYS_LEVELS[Sim.physLvl].it} iters, ${Math.round((Sim.physLoad || 0) * 100)}% of frame time\n` : '') + `peers       ${Net.peers.size}\n` + `render      ${Math.round(R.drs.scale * 100)}% · ${R.renderer.info.render.calls} draws`;
       }
       if (this.open === 'settings') { const rs = $('#rsVal'); if (rs) rs.textContent = Math.round(R.drs.scale * 100) + '%'; }
     }

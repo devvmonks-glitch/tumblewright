@@ -1060,7 +1060,7 @@ const Game = {
   },
   // ---- room flow ---------------------------------------------------------------------
   profileName() { let n = ($('#inName').value || Settings.name || '').trim().slice(0, 18); if (!n) n = 'Player' + ((Math.random() * 900 + 100) | 0); Settings.name = n; $('#inName').value = n; saveSettings(); return n; },
-  resetForPlay() { Sim.reset(); Editor.undo = []; Editor.redo = []; $('#chatLog').innerHTML = ''; },
+  resetForPlay() { Net.link.reset(); Editor.undo = []; Editor.redo = []; $('#chatLog').innerHTML = ''; },
   async createRoom(code0) {
     const name = this.profileName(); UI.lobbyStatus('Creating room…');
     const code = code0 || randCode();
@@ -1334,7 +1334,7 @@ const Game = {
       else if (this.aimUse && this.aimUse.d.door) Net.toHost({ t: 'door', e: this.aimUse.id });
       else if (this.aimUse && this.aimUse.d.board) UI.openPaint(this.aimUse);
     }
-    if (Net.isHost) { const inp = this.buildInput(); if (inp) Auth.onInput(me, inp); }
+    if (Net.isHost) { const inp = this.buildInput(); if (inp) Net.link.input(me.id, inp); }
   },
   // ---- getting in: aim anywhere at a vehicle / contraption (or stand next to one) -------------
   // Picks the driver seat if it's free, otherwise the free seat closest to you.
@@ -1446,7 +1446,7 @@ const Game = {
       if (me.seat) { const se = World.ents.get(me.seat); if (se && se.body) { const t = se.body.translation(); me.prevPos.copy(me.pos); me.pos.set(t.x, t.y + 0.3, t.z); } }
       Players.simLocal(me, dt, this.moveInp);
     }
-    if (Net.isHost) Sim.step(dt);
+    if (Net.auth()) Net.link.step(dt);
     else {
       const rt = Net.renderTime();
       for (const e of World.ents.values()) {
@@ -1463,7 +1463,7 @@ const Game = {
   },
   // ---- visuals -------------------------------------------------------------------------------
   updateVisuals(dt, alpha) {
-    const host = Net.isHost, rt = Net.renderTime();
+    const host = Net.auth(), rt = Net.renderTime();   // simulated here: draw from the simulation's poses, else from snapshots
     for (const e of World.ents.values()) {
       if (e.d.k === 'map' || !e.mesh) continue;
       if (host) { e.mesh.position.lerpVectors(e.prevP, e.curP, alpha); e.mesh.quaternion.slerpQuaternions(e.prevQ, e.curQ, alpha); }
@@ -1639,7 +1639,7 @@ const Game = {
     const sdt = Sim.stepDt, maxN = sdt > 1 / 45 ? 2 : 3, tp = performance.now();
     while (this.acc >= sdt && n < maxN) { this.fixedStep(sdt); this.acc -= sdt; n++; }
     if (n === maxN) this.acc = Math.min(this.acc, sdt);   // can't keep up this frame: drop the backlog rather than spiral into ever longer frames
-    Sim.govern(performance.now() - tp, dt, Net.isHost && this.state === 'playing');
+    Net.link.govern(performance.now() - tp, dt, Net.auth() && this.state === 'playing');
     Net.update(dt);
     if (this.state === 'playing' && Net.online) { this.autoT -= dt; if (this.autoT <= 0) { this.autoT = 20; this.autosave(); } }
     if (render) {

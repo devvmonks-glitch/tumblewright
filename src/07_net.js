@@ -5,6 +5,49 @@
    host broadcasts binary snapshots (only moved bodies, quantized) at 20 Hz.
    Every peer is meshed so host migration needs no reconnection.
    ========================================================================== */
+// ---- where the authoritative simulation runs -----------------------------------------------------------------
+// The room host's window simulates the world itself (LocalLink) or, later, hands it to a worker. Everything the window
+// asks of the authority goes through Net.link: players' requests and inputs, joins and leaves, stepping, snapshots,
+// taking over as host. Clients have no use for it: their authority is the host, over the network.
+const LocalLink = {
+  local: true,   // the simulation lives in this window (Net.auth() is true for its room host)
+  request(pid, m) { Auth.handle(pid, m); },
+  input(pid, inp) { const p = Players.map.get(pid); if (p) Auth.onInput(p, inp); },
+  // a player was let into the room (Net checked bans, version and room size): add them and send them the world
+  join(pid, d, joinOrder) {
+    const used = new Set([...Players.map.values()].map(p => p.idx)); let idx = 1; while (used.has(idx)) idx++;
+    const name = String(d.name || 'Player').replace(/[<>]/g, '').slice(0, 18) || 'Player';
+    const p = Players.add({ id: pid, name, color: /^#[0-9a-f]{6}$/i.test(d.color) ? d.color : '#ff9f43', tier: TIERS[d.tier] ? d.tier : 'medium', idx, joinOrder, lvl: clamp(d.lvl | 0, 1, 999) });
+    const sp = Auth.pickSpawn(); p.pos.copy(sp); p.tpGrace = now() + 1.5;
+    Net.send('ws', { hostId: Net.me, rules: Rules, players: Net.playerList(), world: World.serialize(), you: { spawn: a3(sp) }, code: Net.code }, pid);
+    Srv.sendPlayers();
+    Srv.sysChat(`${p.name} joined the room`);
+    if (p.tier === 'low') Srv.sysChat(`${p.name} is on Low graphics (PS1 style).`, 'tier');
+  },
+  leave(pid) {
+    const p = Players.map.get(pid); if (!p) return;
+    if (p.seat) Auth.resetMotors(p.seat);
+    Players.remove(pid); Srv.sendPlayers(); Srv.sysChat(`${p.name} left the room`);
+  },
+  // this window just became the room host: its copy of the world becomes the real one
+  promote(oldHost) {
+    Players.remove(oldHost);
+    for (const lp of Net.lastPlayers) {
+      if (lp.id === oldHost || lp.id === Net.me || !Net.peers.has(lp.id)) { if (lp.id !== Net.me && Players.map.has(lp.id) && !Net.peers.has(lp.id)) Players.remove(lp.id); continue; }
+      const p = Players.add(lp); if (p.buf.length) p.pos.copy(p.buf[p.buf.length - 1].p);
+    }
+    World.promote();
+    for (const g of World.groups.values()) g.stun = 1;
+    for (const pid of Net.clientIds()) Net.send('ws', { hostId: Net.me, rules: Rules, players: Net.playerList(), world: World.serialize(), migrated: 1, code: Net.code }, pid);
+    Srv.sendPlayers();
+    Srv.sysChat(`${Players.local ? Players.local.name : 'A player'} is now the host.`);
+  },
+  step(dt) { Sim.step(dt); },
+  govern(ms, dt, hosting) { Sim.govern(ms, dt, hosting); },
+  snapshot(key, hostTime) { return Sim.snapshot(key, hostTime); },
+  forgetSent() { Sim.forgetSent(); },
+  reset() { Sim.reset(); },
+};
 const NOSTR_RELAYS = ['wss://nos.lol', 'wss://relay.primal.net', 'wss://relay.snort.social', 'wss://offchain.pub', 'wss://bucket.coracle.social'];
 
 // Trystero logs an abrupt peer disconnect (e.g. a closed tab) as console.error; we handle it via
@@ -15,8 +58,9 @@ const Net = {
   peers: new Map(), lastPlayers: [], joinCounter: 0, banned: new Set(), pending: [], ready: false,
   stats: { inB: 0, outB: 0, inRate: 0, outRate: 0, snaps: 0, snapRate: 0, bodies: 0, jitter: 0, t: 0, lastSnap: 0 },
   snapT: 0, keyT: 0, inT: 0, pingT: 0, offset: null, interp: CFG.interpDelay, t0: now(), hostConfirmed: true, migrateTimer: null,
-  activeThr: new Set(),
-  auth() { return this.isHost; },
+  activeThr: new Set(), link: LocalLink,
+  // isHost: this window is the room host (the role). auth(): the world is simulated in this window
+  auth() { return this.isHost && this.link.local; },
   hostTime() { return now() - this.t0; },
   // the host time remote objects are drawn at. It follows (local time + clock offset - interp delay) but never jumps:
   // it runs up to 15% fast or slow to catch up, and only snaps after a big change (joining, a long stall)
@@ -97,7 +141,7 @@ const Net = {
       hi: (d, pid) => this.onHi(pid, typeof d === 'string' ? JSON.parse(d) : d),
       ev: (d, pid) => this.onEv(pid, typeof d === 'string' ? JSON.parse(d) : d),
       ws: (d, pid) => this.onWorldState(pid, typeof d === 'string' ? JSON.parse(d) : d),
-      in: (d, pid) => { if (!this.isHost) return; const p = Players.map.get(pid); if (p && !this.banned.has(pid)) Auth.onInput(p, typeof d === 'string' ? JSON.parse(d) : d); },
+      in: (d, pid) => { if (!this.isHost) return; if (Players.map.has(pid) && !this.banned.has(pid)) this.link.input(pid, typeof d === 'string' ? JSON.parse(d) : d); },
       st: (d, pid) => { if (!this.isHost && pid === this.hostId) this.onSnap(d); },
     };
     this.rooms = []; this.via = new Map(); this.A = {};
@@ -166,7 +210,7 @@ const Net = {
     if (this.online && this.isHost) { const ids = this.clientIds().filter(id => id !== pid); if (ids.length) this.send('ev', m, ids); }
   },
   sendTo(pid, m) { if (pid === this.me) this.onEv(this.me, m, true); else if (this.online) this.send('ev', m, pid); },
-  toHost(m) { if (this.isHost) Auth.handle(this.me, m); else if (this.hostId) this.send('ev', m, this.hostId); },
+  toHost(m) { if (this.isHost) this.link.request(this.me, m); else if (this.hostId) this.send('ev', m, this.hostId); },
   notify(pid, text) { this.sendTo(pid, { t: 'note', text }); },
   sysChat(text, cls) { this.bcastAll({ t: 'chat', sys: 1, cls: cls || 'sys', text }); },
   playerList() {
@@ -187,14 +231,7 @@ const Net = {
       }
       if (Players.map.has(pid)) return;
       if (Players.map.size >= CFG.maxPlayers) { this.send('ev', { t: 'full' }, pid); return; }
-      const used = new Set([...Players.map.values()].map(p => p.idx)); let idx = 1; while (used.has(idx)) idx++;
-      const name = String(d.name || 'Player').replace(/[<>]/g, '').slice(0, 18) || 'Player';
-      const p = Players.add({ id: pid, name, color: /^#[0-9a-f]{6}$/i.test(d.color) ? d.color : '#ff9f43', tier: TIERS[d.tier] ? d.tier : 'medium', idx, joinOrder: ++this.joinCounter, lvl: clamp(d.lvl | 0, 1, 999) });
-      const sp = Auth.pickSpawn(); p.pos.copy(sp); p.tpGrace = now() + 1.5;
-      this.send('ws', { hostId: this.me, rules: Rules, players: this.playerList(), world: World.serialize(), you: { spawn: a3(sp) }, code: this.code }, pid);
-      this.sendPlayers();
-      this.sysChat(`${p.name} joined the room`);
-      if (p.tier === 'low') this.sysChat(`${p.name} is on Low graphics (PS1 style).`, 'tier');
+      this.link.join(pid, d, ++this.joinCounter);
     } else if (d.host) {
       this.gotHost = true;
       if (!this.hostId || !this.hostConfirmed) { this.hostId = pid; }
@@ -202,11 +239,8 @@ const Net = {
   },
   onPeerLeave(pid) {
     this.peers.delete(pid);
-    if (this.isHost) {
-      const p = Players.map.get(pid); if (!p) return;
-      if (p.seat) Auth.resetMotors(p.seat);
-      Players.remove(pid); this.sendPlayers(); this.sysChat(`${p.name} left the room`);
-    } else if (pid === this.hostId) this.migrate(pid);
+    if (this.isHost) this.link.leave(pid);
+    else if (pid === this.hostId) this.migrate(pid);
   },
   // ---- host migration -----------------------------------------------------------
   migrate(oldHost) {
@@ -221,22 +255,14 @@ const Net = {
   },
   promote(oldHost) {
     this.isHost = true; this.hostId = this.me; this.hostConfirmed = true;
-    Players.remove(oldHost);
-    for (const lp of this.lastPlayers) {
-      if (lp.id === oldHost || lp.id === this.me || !this.peers.has(lp.id)) { if (lp.id !== this.me && Players.map.has(lp.id) && !this.peers.has(lp.id)) Players.remove(lp.id); continue; }
-      const p = Players.add(lp); if (p.buf.length) p.pos.copy(p.buf[p.buf.length - 1].p);
-    }
     this.joinCounter = Math.max(0, ...this.lastPlayers.map(p => p.joinOrder || 0));
-    World.promote();
-    for (const g of World.groups.values()) g.stun = 1;
-    for (const pid of this.clientIds()) this.send('ws', { hostId: this.me, rules: Rules, players: this.playerList(), world: World.serialize(), migrated: 1, code: this.code }, pid);
-    this.sendPlayers();
-    this.sysChat(`${Players.local ? Players.local.name : 'A player'} is now the host.`); Online.updateRoom();
+    this.link.promote(oldHost);
+    Online.updateRoom();
     UI.refreshRoom();
   },
   // ---- world state & events ---------------------------------------------------------
   onWorldState(pid, s) {
-    if (this.isHost) return;
+    if (this.auth()) return;
     this.log('world', { p: pid.slice(0, 6), ents: s.world && s.world.ents ? s.world.ents.length : 0, migrated: !!s.migrated });
     if (this.hostId && pid !== this.hostId && !(s.migrated && s.hostId === pid)) return;
     this.hostId = pid; this.hostConfirmed = true;
@@ -254,7 +280,7 @@ const Net = {
   },
   onEv(from, m, local) {
     if (!m || !m.t) return;
-    if (this.isHost && !local) { if (!this.banned.has(from)) Auth.handle(from, m); return; }
+    if (this.isHost && !local) { if (!this.banned.has(from)) this.link.request(from, m); return; }
     if (!local && from !== this.hostId) { if (m.t === 'kick' && from === this.hostId) Game.kicked(); return; }
     if (!this.ready && !local) { this.pending.push([from, m]); return; }
     const me = Players.local;
@@ -288,7 +314,7 @@ const Net = {
   },
   applyPlayers(list) {
     this.lastPlayers = list;
-    if (!this.isHost) {
+    if (!this.auth()) {
       const ids = new Set(list.map(p => p.id));
       for (const id of [...Players.map.keys()]) if (!ids.has(id) && id !== this.me) Players.remove(id);
       for (const e of list) { const p = Players.add(Object.assign({}, e, { isLocal: e.id === this.me })); p.canEdit = !!e.canEdit; p.muted = !!e.muted; }
@@ -338,14 +364,14 @@ const Net = {
     const s = this.stats; s.t += dt;
     if (s.t >= 1) { s.inRate = s.inB / s.t; s.outRate = s.outB / s.t; s.snapRate = s.snaps / s.t; s.inB = s.outB = s.snaps = 0; s.t = 0; }
     if (!this.online || !this.ready) return;
-    if (!this.isHost) this.tickClock(dt);
+    if (!this.auth()) this.tickClock(dt);
     if (this.isHost) {
       this.snapT -= dt; this.keyT -= dt;
       if (this.snapT <= 0) {
         this.snapT += 1 / CFG.snapRate; if (this.snapT < 0) this.snapT = 0;
         const key = this.keyT <= 0; if (key) this.keyT = CFG.keyframeEvery;
-        if (this.clientIds().length) this.send('st', Sim.snapshot(key, this.hostTime()), this.clientIds());
-        else Sim.forgetSent();
+        if (this.clientIds().length) this.send('st', this.link.snapshot(key, this.hostTime()), this.clientIds());
+        else this.link.forgetSent();
       }
     } else {
       this.inT -= dt;
