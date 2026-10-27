@@ -8,7 +8,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { sim, setClock, ghost } from './env.mjs';
-import { buildSimBundle, PRESENTATION } from './bundle.mjs';
+import { buildSimBundle, staticCoupling, PRESENTATION } from './bundle.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url)), OUT = join(HERE, '.out');
 const STRICT = process.argv.includes('--strict'), JSON_OUT = process.argv.includes('--json');
@@ -132,12 +132,15 @@ for (const level of [0, 2]) {
 // ---- coupling report ------------------------------------------------------------------------------------
 const list = [...touches.values()].sort((a, b) => a.caller.localeCompare(b.caller) || b.n - a.n);
 const byCaller = new Map(); for (const t of list) { if (!byCaller.has(t.caller)) byCaller.set(t.caller, []); byCaller.get(t.caller).push(t); }
-writeFileSync(join(OUT, 'coupling.json'), JSON.stringify({ results, touches: list, failures: Object.fromEntries(failures) }, null, 2));
-if (JSON_OUT) console.log(JSON.stringify({ ok, results, touches: list.length }));
+const stat = staticCoupling(), clean = list.length === 0 && stat.length === 0;
+writeFileSync(join(OUT, 'coupling.json'), JSON.stringify({ results, touches: list, static: stat, failures: Object.fromEntries(failures) }, null, 2));
+if (JSON_OUT) console.log(JSON.stringify({ ok, results, touches: list.length, static: stat.length }));
 else {
   console.log(`\nSimulation -> presentation calls: ${list.length} distinct, from ${byCaller.size} places`);
   for (const [caller, ts] of byCaller) console.log(`  ${caller.padEnd(28)} ${ts[0].at.padEnd(26)} ${ts.map(t => `${t.sym}${t.n > 1 ? ' ×' + t.n : ''}`).join(', ')}`);
   if (failures.size) console.log(`\nPresentation calls that failed without a page (absorbed): ${[...failures.keys()].join(', ')}`);
-  console.log(`\n${ok ? 'PHYSICS OK' : 'PHYSICS FAILED'}${STRICT ? (list.length ? ', coupling not clean (--strict)' : ', coupling clean') : ''}`);
+  console.log(`\nSimulation code using presentation-side names (static, whole source): ${stat.length} modules`);
+  for (const s of stat) console.log(`  ${s.sim.padEnd(28)} ${s.at.padEnd(26)} ${s.uses.join(', ')}`);
+  console.log(`\n${ok ? 'PHYSICS OK' : 'PHYSICS FAILED'}${STRICT ? (clean ? ', coupling clean' : ', coupling not clean (--strict)') : ''}`);
 }
-process.exit(ok && (!STRICT || list.length === 0) ? 0 : 1);
+process.exit(ok && (!STRICT || clean) ? 0 : 1);

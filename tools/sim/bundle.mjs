@@ -15,6 +15,31 @@ export const PRESENTATION = ['R', 'UI', 'Audio', 'FX', 'Gore', 'DmgNum', 'Tools'
 // top-level functions that only build visuals / DOM; the harness wraps them to see who calls them
 export const PRESENTATION_FNS = ['buildVisual', 'matMesh', 'csmMat', 'ptsMat', 'addVehicleWheels', 'addNpcWeapon', 'rocketFlame', 'buildThruster', 'boardTexture', 'boardFace', 'drawBotFace', 'h', 'downloadJSON', 'pickJSON'];
 
+// ---- static check: which top-level names does simulation code use that are declared on the presentation side? -----
+// Catches data reads (tables, constants) and code paths the scripted run never reaches.
+export const SIM_DECLS = ['Phys', 'Ent', 'World', 'Players', 'Player', 'Vehicles', 'Auth', 'Rules', 'ZS', 'PH', 'Env', 'MAPS', 'THEMES', 'Save'];
+export const PRESENTATION_FILES = ['03_renderer.js', '08_social.js', '09_ui.js', '10_game.js'];   // everything declared in these is presentation
+export function staticCoupling() {
+  const parts = readdirSync(SRC).filter(f => /^\d\d_.*\.js$/.test(f)).sort(), decls = [], owner = new Map();
+  for (const f of parts) {
+    const L = readFileSync(join(SRC, f), 'utf8').replace(/\r\n/g, '\n').split('\n'), starts = [];
+    L.forEach((l, i) => { const m = l.match(/^(?:const|let|class|function|async function) ([A-Za-z_$][\w$]*)/); if (m) starts.push([i, m[1]]); });
+    starts.forEach(([i, n], k) => { const j = k + 1 < starts.length ? starts[k + 1][0] : L.length; decls.push({ f, n, body: L.slice(i, j).join('\n'), line: i + 1 }); owner.set(n, f); });
+  }
+  const isPres = n => PRESENTATION_FILES.includes(owner.get(n)) || PRESENTATION.includes(n) || PRESENTATION_FNS.includes(n);
+  const out = [];
+  for (const d of decls) {
+    if (!SIM_DECLS.includes(d.n) || isPres(d.n)) continue;
+    const code = d.body.replace(/'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`|\/\/[^\n]*/g, '');   // strings and comments don't count
+    // a name the code declares itself (const h = ..., (h) =>, a parameter) is a local, not the top-level one
+    const local = w => new RegExp(`(?:\\b(?:const|let|var)\\s+(?:[\\w$]+\\s*=[^,;]*,\\s*)*|[,(]\\s*)${w.replace(/\$/g, '\\$')}\\s*(?:=|,|\\)|=>|;)`).test(code);
+    // identifiers not after a dot (s.h is a property)
+    const used = [...new Set(code.match(/(?<![.\w$])[A-Za-z_$][\w$]*\b/g) || [])].filter(w => w !== d.n && owner.has(w) && isPres(w) && !local(w)).sort();
+    if (used.length) out.push({ sim: d.n, at: `${d.f}:${d.line}`, uses: used.map(w => `${w} (${owner.get(w)})`) });
+  }
+  return out;
+}
+
 export function buildSimBundle() {
   const parts = readdirSync(SRC).filter(f => /^\d\d_.*\.(html|js)$/.test(f)).sort();
   // line ranges of each part inside the concatenated page
