@@ -18,7 +18,7 @@ export const PRESENTATION_FNS = ['buildVisual', 'matMesh', 'csmMat', 'ptsMat', '
 
 // ---- static check: which top-level names does simulation code use that are declared on the presentation side? -----
 // Catches data reads (tables, constants) and code paths the scripted run never reaches.
-export const SIM_DECLS = ['Phys', 'Ent', 'World', 'Players', 'Player', 'Vehicles', 'Auth', 'Rules', 'ZS', 'PH', 'Env', 'MAPS', 'THEMES', 'canEdit', 'applyAdd', 'applyRem'];
+export const SIM_DECLS = ['Sim', 'Phys', 'Ent', 'World', 'Players', 'Player', 'Vehicles', 'Auth', 'Rules', 'ZS', 'PH', 'Env', 'MAPS', 'THEMES', 'canEdit', 'applyAdd', 'applyRem'];
 // the adapters between the simulation and the page: allowed to call across (View -> MeshView in the browser, Srv -> Net)
 export const BOUNDARY = ['View', 'VIEW_NONE', 'Srv'];
 export const PRESENTATION_FILES = ['03_renderer.js', '08_social.js', '09_ui.js', '09_view.js', '10_game.js'];   // everything declared in these is presentation

@@ -483,8 +483,6 @@ const SWING_KEYS = [
   [0.46, [0, 0, 0, 0, 0, 0], ''],
 ];
 const SWING_HIT = 0.12, SWING_REST = [0, 0, 0, 0, 0, 0];
-// host physics quality levels, cheapest last (cost = rough relative CPU per second of simulation)
-const PHYS_LEVELS = [{ dt: 1 / 60, it: 6, cost: 1 }, { dt: 1 / 60, it: 4, cost: 0.8 }, { dt: 1 / 30, it: 4, cost: 0.42 }];
 const _swOut = [0, 0, 0, 0, 0, 0];
 function swingPose(t) {
   if (t >= SWING_KEYS[SWING_KEYS.length - 1][0]) return SWING_REST;
@@ -1062,7 +1060,7 @@ const Game = {
   },
   // ---- room flow ---------------------------------------------------------------------
   profileName() { let n = ($('#inName').value || Settings.name || '').trim().slice(0, 18); if (!n) n = 'Player' + ((Math.random() * 900 + 100) | 0); Settings.name = n; $('#inName').value = n; saveSettings(); return n; },
-  resetForPlay() { ZS.st = null; Rules.zs = null; PH.st = null; Rules.ph = null; World.clear(); for (const id of [...Players.map.keys()]) Players.remove(id); Editor.undo = []; Editor.redo = []; Object.assign(Rules, { combat: false, editPerm: 'all', propLimit: CFG.propLimit, allowNoclip: true, aimAssist: true, dismember: true, env: 'plains', envGone: [], mode: 'sandbox', bots: 3 }); $('#chatLog').innerHTML = ''; Auth.nades = []; Auth.corpses = []; },
+  resetForPlay() { Sim.reset(); Editor.undo = []; Editor.redo = []; $('#chatLog').innerHTML = ''; },
   async createRoom(code0) {
     const name = this.profileName(); UI.lobbyStatus('Creating room…');
     const code = code0 || randCode();
@@ -1448,18 +1446,8 @@ const Game = {
       if (me.seat) { const se = World.ents.get(me.seat); if (se && se.body) { const t = se.body.translation(); me.prevPos.copy(me.pos); me.pos.set(t.x, t.y + 0.3, t.z); } }
       Players.simLocal(me, dt, this.moveInp);
     }
-    if (Net.isHost) {
-      for (const p of Players.map.values()) if (!p.isLocal) Players.driveRemote(p, p.pos);
-      Auth.step(dt);
-      Phys.step();
-      Auth.postStep();
-      for (const e of World.ents.values()) {
-        if (e.d.k === 'map' || !e.body) continue;
-        e.prevP.copy(e.curP); e.prevQ.copy(e.curQ);
-        if (e.body.isSleeping()) continue;
-        const t = e.body.translation(), r = e.body.rotation(); e.curP.set(t.x, t.y, t.z); e.curQ.set(r.x, r.y, r.z, r.w);
-      }
-    } else {
+    if (Net.isHost) Sim.step(dt);
+    else {
       const rt = Net.renderTime();
       for (const e of World.ents.values()) {
         if (e.d.k === 'map' || !e.body || !e.buf.length) continue;
@@ -1648,44 +1636,26 @@ const Game = {
     Input.poll();
     if (this.state === 'playing' && render) this.handleInput(dt);
     this.acc += dt; let n = 0;
-    const sdt = this.stepDt, maxN = sdt > 1 / 45 ? 2 : 3, tp = performance.now();
+    const sdt = Sim.stepDt, maxN = sdt > 1 / 45 ? 2 : 3, tp = performance.now();
     while (this.acc >= sdt && n < maxN) { this.fixedStep(sdt); this.acc -= sdt; n++; }
     if (n === maxN) this.acc = Math.min(this.acc, sdt);   // can't keep up this frame: drop the backlog rather than spiral into ever longer frames
-    this.governPhysics(performance.now() - tp, dt);
+    Sim.govern(performance.now() - tp, dt, Net.isHost && this.state === 'playing');
     Net.update(dt);
     if (this.state === 'playing' && Net.online) { this.autoT -= dt; if (this.autoT <= 0) { this.autoT = 20; this.autosave(); } }
     if (render) {
       Env.update();
-      this.updateVisuals(dt, this.acc / this.stepDt);
+      this.updateVisuals(dt, this.acc / Sim.stepDt);
       if (this.state === 'playing') UI.update(dt); else Nav.update(dt);
       R.render(dt);
       R.drsTick(frameMs);
     }
     Input.endFrame();
   },
-  // ---- physics governor (host) ---------------------------------------------------------------
-  // The host simulates everything, so on a slow CPU physics eats the frame and the host lags while clients are fine.
-  // Every few seconds: if physics took over 30% of the time, step down (fewer solver iterations, then 30 steps/s
-  // instead of 60); with plenty of headroom, step back up. Clients always run level 0 (they only follow snapshots).
-  stepDt: 1 / 60, physLvl: 0, govMs: 0, govT: 0, govHold: 0,
-  setPhysLevel(l) {
-    const L = PHYS_LEVELS[l]; this.physLvl = l; this.stepDt = L.dt; this.govHold = 4;
-    if (Phys.world) { Phys.world.timestep = L.dt; Phys.world.integrationParameters.numSolverIterations = L.it; }
-  },
-  governPhysics(ms, dt) {
-    if (!Net.isHost || this.state !== 'playing') { if (this.physLvl) this.setPhysLevel(0); this.govMs = this.govT = 0; return; }
-    this.govMs += ms; this.govT += dt; this.govHold -= dt;
-    if (this.govT < 2) return;
-    const load = this.govMs / (this.govT * 1000); this.govMs = this.govT = 0; this.physLoad = load;
-    if (this.govHold > 0) return;
-    if (load > 0.3 && this.physLvl < PHYS_LEVELS.length - 1) this.setPhysLevel(this.physLvl + 1);
-    else if (this.physLvl > 0 && load * PHYS_LEVELS[this.physLvl - 1].cost / PHYS_LEVELS[this.physLvl].cost < 0.2) this.setPhysLevel(this.physLvl - 1);
-  },
   frame() { requestAnimationFrame(() => this.frame()); this.lastRaf = performance.now(); if (!document.hidden) this.tick(true); },
 };
 
 // debug handle for testing from the console
-window.TW = { Thumbs, WEAPON_MODEL, View, PlayerView, Srv, Social, PH, ZS, Prog, DiscordAct, Online, Owner, Hotbar, Audio, Models, Game, Net, World, Players, R, Auth, Tools, Editor, UI, Rules, Settings, Phys, Input, Admin, Save, FX, Mats, Vehicles, VEH, Gore, Env };
+window.TW = { Thumbs, WEAPON_MODEL, View, PlayerView, Srv, Sim, Social, PH, ZS, Prog, DiscordAct, Online, Owner, Hotbar, Audio, Models, Game, Net, World, Players, R, Auth, Tools, Editor, UI, Rules, Settings, Phys, Input, Admin, Save, FX, Mats, Vehicles, VEH, Gore, Env };
 Game.boot();
 </script>
 

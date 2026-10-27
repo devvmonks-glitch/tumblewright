@@ -724,7 +724,7 @@ const UI = {
         ns.textContent = `NETWORK ${Net.online ? (Net.isHost ? '(host)' : '(client)') : '(offline)'}\n` +
           `ping        ${Net.isHost ? '—' : ping + ' ms'}\n` + `in          ${(s.inRate / 1024).toFixed(1)} KB/s\n` + `out         ${(s.outRate / 1024).toFixed(1)} KB/s\n` +
           `snapshots   ${Net.isHost ? CFG.snapRate + '/s sent' : s.snapRate.toFixed(0) + '/s'}\n` + `interp      ${Math.round(Net.interp * 1000)} ms\n` + `jitter      ${(s.jitter * 1000).toFixed(1)} ms\n` +
-          `bodies      ${bodies}${Net.isHost ? ' (' + awake + ' awake)' : ''}\n` + `last snap   ${s.bodies} bodies\n` + (Net.isHost ? `physics     ${Math.round(1 / Game.stepDt)} Hz, ${PHYS_LEVELS[Game.physLvl].it} iters, ${Math.round((Game.physLoad || 0) * 100)}% of frame time\n` : '') + `peers       ${Net.peers.size}\n` + `render      ${Math.round(R.drs.scale * 100)}% · ${R.renderer.info.render.calls} draws`;
+          `bodies      ${bodies}${Net.isHost ? ' (' + awake + ' awake)' : ''}\n` + `last snap   ${s.bodies} bodies\n` + (Net.isHost ? `physics     ${Math.round(1 / Sim.stepDt)} Hz, ${PHYS_LEVELS[Sim.physLvl].it} iters, ${Math.round((Sim.physLoad || 0) * 100)}% of frame time\n` : '') + `peers       ${Net.peers.size}\n` + `render      ${Math.round(R.drs.scale * 100)}% · ${R.renderer.info.render.calls} draws`;
       }
       if (this.open === 'settings') { const rs = $('#rsVal'); if (rs) rs.textContent = Math.round(R.drs.scale * 100) + '%'; }
     }

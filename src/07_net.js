@@ -5,21 +5,6 @@
    host broadcasts binary snapshots (only moved bodies, quantized) at 20 Hz.
    Every peer is meshed so host migration needs no reconnection.
    ========================================================================== */
-const SNAP_BODY = 2 + 6 + 4, SNAP_PLAYER = 1 + 6 + 2 + 2 + 1 + 1 + 1 + 2 + 6;
-function packQuat(q) {
-  const a = [q.x, q.y, q.z, q.w]; let mi = 0;
-  for (let i = 1; i < 4; i++) if (Math.abs(a[i]) > Math.abs(a[mi])) mi = i;
-  const s = a[mi] < 0 ? -1 : 1; let out = mi << 30, sh = 20;
-  for (let i = 0; i < 4; i++) { if (i === mi) continue; const v = clamp(a[i] * s, -0.7072, 0.7072); out |= Math.round((v / 0.7072 * 0.5 + 0.5) * 1023) << sh; sh -= 10; }
-  return out >>> 0;
-}
-function unpackQuat(u, out) {
-  const mi = u >>> 30, a = [0, 0, 0, 0]; let sh = 20, sum = 0;
-  for (let i = 0; i < 4; i++) { if (i === mi) continue; const v = (((u >>> sh) & 1023) / 1023 - 0.5) * 2 * 0.7072; a[i] = v; sum += v * v; sh -= 10; }
-  a[mi] = Math.sqrt(Math.max(0, 1 - sum));
-  return out.set(a[0], a[1], a[2], a[3]).normalize();
-}
-const i16 = v => clamp(Math.round(v * 100), -32767, 32767);
 const NOSTR_RELAYS = ['wss://nos.lol', 'wss://relay.primal.net', 'wss://relay.snort.social', 'wss://offchain.pub', 'wss://bucket.coracle.social'];
 
 // Trystero logs an abrupt peer disconnect (e.g. a closed tab) as console.error; we handle it via
@@ -29,7 +14,7 @@ const Net = {
   online: false, isHost: true, me: 'local', hostId: 'local', rooms: [], via: new Map(), code: '', A: {}, T: null,
   peers: new Map(), lastPlayers: [], joinCounter: 0, banned: new Set(), pending: [], ready: false,
   stats: { inB: 0, outB: 0, inRate: 0, outRate: 0, snaps: 0, snapRate: 0, bodies: 0, jitter: 0, t: 0, lastSnap: 0 },
-  snapT: 0, keyT: 0, inT: 0, pingT: 0, seq: 0, offset: null, interp: CFG.interpDelay, t0: now(), hostConfirmed: true, migrateTimer: null,
+  snapT: 0, keyT: 0, inT: 0, pingT: 0, offset: null, interp: CFG.interpDelay, t0: now(), hostConfirmed: true, migrateTimer: null,
   activeThr: new Set(),
   auth() { return this.isHost; },
   hostTime() { return now() - this.t0; },
@@ -312,41 +297,6 @@ const Net = {
     UI.refreshRoom(); UI.refreshScoreboard();
   },
   // ---- snapshots ------------------------------------------------------------------------
-  buildSnap(key) {
-    const bodies = [];
-    for (const e of World.ents.values()) {
-      if (e.d.k === 'map' || !e.body) continue;
-      const t = e.body.translation(), r = e.body.rotation();
-      _v1.set(t.x, t.y, t.z); _q1.set(r.x, r.y, r.z, r.w);
-      if (!key && _v1.distanceToSquared(e.sentP) < 1e-6 && Math.abs(_q1.dot(e.sentQ)) > 0.999995) continue;
-      e.sentP.copy(_v1); e.sentQ.copy(_q1); bodies.push(e);
-    }
-    const players = [...Players.map.values()];
-    const thr = Auth.activeThr, nThr = thr.length / 2;
-    const buf = new ArrayBuffer(16 + bodies.length * SNAP_BODY + players.length * SNAP_PLAYER + nThr * 3);
-    const dv = new DataView(buf); let o = 0;
-    dv.setUint8(o, 1); o++; dv.setUint8(o, key ? 1 : 0); o++; dv.setUint16(o, this.seq = (this.seq + 1) & 0xffff); o += 2;
-    dv.setFloat64(o, this.hostTime()); o += 8;
-    dv.setUint16(o, bodies.length); o += 2; dv.setUint8(o, players.length); o++; dv.setUint8(o, nThr); o++;
-    for (const e of bodies) {
-      dv.setUint16(o, e.id); o += 2;
-      dv.setInt16(o, i16(e.sentP.x)); dv.setInt16(o + 2, i16(e.sentP.y)); dv.setInt16(o + 4, i16(e.sentP.z)); o += 6;
-      dv.setUint32(o, packQuat(e.sentQ)); o += 4;
-    }
-    for (const p of players) {
-      dv.setUint8(o, p.idx); o++;
-      dv.setInt16(o, i16(p.pos.x)); dv.setInt16(o + 2, i16(p.pos.y)); dv.setInt16(o + 4, i16(p.pos.z)); o += 6;
-      let y = p.yaw % (Math.PI * 2); if (y > Math.PI) y -= Math.PI * 2; if (y < -Math.PI) y += Math.PI * 2;
-      dv.setInt16(o, Math.round(y * 10000)); dv.setInt16(o + 2, Math.round(clamp(p.pitch, -1.6, 1.6) * 10000)); o += 4;
-      dv.setUint8(o, clamp(Math.round(p.hp), 0, 255)); o++;
-      dv.setUint8(o, (p.dead ? 1 : 0) | (p.seat ? 2 : 0) | (p.crouch ? 4 : 0) | (p.noclip ? 8 : 0) | (p.beamEnd && p.grab ? 16 : 0) | (p.firing ? 32 : 0) | (p.protUntil && now() < p.protUntil ? 64 : 0)); o++;
-      dv.setUint8(o, W_BY_ID[p.weapon] ? W_BY_ID[p.weapon].idx : 0); o++;
-      dv.setUint16(o, clamp(Math.round(p.ping || 0), 0, 65535)); o += 2;
-      const b = p.beamEnd || p.pos; dv.setInt16(o, i16(b.x)); dv.setInt16(o + 2, i16(b.y)); dv.setInt16(o + 4, i16(b.z)); o += 6;
-    }
-    for (let i = 0; i < thr.length; i += 2) { dv.setUint16(o, thr[i]); dv.setUint8(o + 2, thr[i + 1]); o += 3; }
-    return buf;
-  },
   onSnap(buf) {
     if (!this.ready || !buf) return;
     const dv = buf instanceof ArrayBuffer ? new DataView(buf) : ArrayBuffer.isView(buf) ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength) : null;
@@ -394,8 +344,8 @@ const Net = {
       if (this.snapT <= 0) {
         this.snapT += 1 / CFG.snapRate; if (this.snapT < 0) this.snapT = 0;
         const key = this.keyT <= 0; if (key) this.keyT = CFG.keyframeEvery;
-        if (this.clientIds().length) this.send('st', this.buildSnap(key), this.clientIds());
-        else for (const e of World.ents.values()) e.sentP.set(1e9, 0, 0);
+        if (this.clientIds().length) this.send('st', Sim.snapshot(key, this.hostTime()), this.clientIds());
+        else Sim.forgetSent();
       }
     } else {
       this.inT -= dt;

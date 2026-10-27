@@ -75,7 +75,7 @@ let ok = true;
 const check = (name, pass, detail) => { results.push({ name, pass, detail }); if (!pass) ok = false; log(`  ${pass ? 'ok  ' : 'FAIL'} ${name}${detail ? '  (' + detail + ')' : ''}`); };
 
 const mods = await import(pathToFileURL(bundlePath).href);
-const { Phys, World, Players, Auth, Net, Game, Rules, Env, THREE, R, View, VIEW_NONE } = mods;
+const { Phys, World, Players, Auth, Net, Sim, Rules, Env, THREE, R, View, VIEW_NONE } = mods;
 R.scene = new THREE.Scene(); R.camera = new THREE.PerspectiveCamera(70, 16 / 9, 0.1, 2000);   // shared code still adds meshes to these
 instrument(mods);
 if (!BROWSER_VIEW) Object.assign(View, VIEW_NONE);   // nothing is drawn: entities get no meshes, players no avatars
@@ -84,17 +84,17 @@ let clock = 1; setClock(clock);
 await Phys.init(); Players.init(); View.init();
 
 function startSession(level) {
-  Game.resetForPlay(); Net.startOffline();
+  Sim.reset(); Net.startOffline();
   Players.add({ id: 'local', name: 'Sim', color: '#ff9f43', tier: 'medium', idx: 0, joinOrder: 0, isLocal: true, lvl: 1 });
   const me = Players.local; Players.setPos(me, Auth.pickSpawn()); me.yaw = 0; me.pitch = 0; me.hp = 100; me.dead = false; me.seat = 0;
-  Game.state = 'playing'; Env.update(); Game.setPhysLevel(level);
+  Env.update(); Sim.setPhysLevel(level);
   return me;
 }
-// steps the host simulation; watch(t) is called every ~0.1 s of simulated time
+// steps the host simulation the way the host worker will: Sim.step only, no game loop; watch(t) every ~0.1 s of simulated time
 function run(seconds, watch) {
-  const dt = Game.stepDt, n = Math.round(seconds / dt), every = Math.max(1, Math.round(0.1 / dt)); let ms = 0;
+  const dt = Sim.stepDt, n = Math.round(seconds / dt), every = Math.max(1, Math.round(0.1 / dt)); let ms = 0;
   for (let i = 0; i < n; i++) {
-    clock += dt; setClock(clock); const t0 = process.hrtime.bigint(); Game.fixedStep(dt); ms += Number(process.hrtime.bigint() - t0) / 1e6;
+    clock += dt; setClock(clock); const t0 = process.hrtime.bigint(); Sim.step(dt); ms += Number(process.hrtime.bigint() - t0) / 1e6;
     if (watch && i % every === 0) watch((i + 1) * dt);
   }
   return ms / n;
