@@ -64,28 +64,33 @@ const Sim = {
     if (load > 0.3 && this.physLvl < PHYS_LEVELS.length - 1) this.setPhysLevel(this.physLvl + 1);
     else if (this.physLvl > 0 && load * PHYS_LEVELS[this.physLvl - 1].cost / PHYS_LEVELS[this.physLvl].cost < 0.2) this.setPhysLevel(this.physLvl - 1);
   },
-  // the binary snapshot for clients: bodies that moved (all of them on a keyframe), players, firing thrusters
-  snapshot(key, hostTime) {
-    const bodies = [];
+  // the binary snapshot for clients: bodies that moved (all of them on a keyframe), players, firing thrusters.
+  // track = false: a full picture of everything (for the host window's own view) that leaves the clients' stream alone
+  snapshot(key, hostTime, track = true) {
+    const bodies = [], ps = [], qs = [];
+    if (!track) key = true;
     for (const e of World.ents.values()) {
       if (e.d.k === 'map' || !e.body) continue;
       const t = e.body.translation(), r = e.body.rotation();
       _v1.set(t.x, t.y, t.z); _q1.set(r.x, r.y, r.z, r.w);
-      if (!key && _v1.distanceToSquared(e.sentP) < 1e-6 && Math.abs(_q1.dot(e.sentQ)) > 0.999995) continue;
-      e.sentP.copy(_v1); e.sentQ.copy(_q1); bodies.push(e);
+      if (track) {
+        if (!key && _v1.distanceToSquared(e.sentP) < 1e-6 && Math.abs(_q1.dot(e.sentQ)) > 0.999995) continue;
+        e.sentP.copy(_v1); e.sentQ.copy(_q1);
+      }
+      bodies.push(e); ps.push(_v1.x, _v1.y, _v1.z); qs.push(packQuat(_q1));
     }
     const players = [...Players.map.values()];
     const thr = Auth.activeThr, nThr = thr.length / 2;
     const buf = new ArrayBuffer(16 + bodies.length * SNAP_BODY + players.length * SNAP_PLAYER + nThr * 3);
     const dv = new DataView(buf); let o = 0;
-    dv.setUint8(o, 1); o++; dv.setUint8(o, key ? 1 : 0); o++; dv.setUint16(o, this.seq = (this.seq + 1) & 0xffff); o += 2;
+    dv.setUint8(o, 1); o++; dv.setUint8(o, key ? 1 : 0); o++; dv.setUint16(o, track ? (this.seq = (this.seq + 1) & 0xffff) : this.seq); o += 2;
     dv.setFloat64(o, hostTime); o += 8;
     dv.setUint16(o, bodies.length); o += 2; dv.setUint8(o, players.length); o++; dv.setUint8(o, nThr); o++;
-    for (const e of bodies) {
+    bodies.forEach((e, i) => {
       dv.setUint16(o, e.id); o += 2;
-      dv.setInt16(o, i16(e.sentP.x)); dv.setInt16(o + 2, i16(e.sentP.y)); dv.setInt16(o + 4, i16(e.sentP.z)); o += 6;
-      dv.setUint32(o, packQuat(e.sentQ)); o += 4;
-    }
+      dv.setInt16(o, i16(ps[i * 3])); dv.setInt16(o + 2, i16(ps[i * 3 + 1])); dv.setInt16(o + 4, i16(ps[i * 3 + 2])); o += 6;
+      dv.setUint32(o, qs[i]); o += 4;
+    });
     for (const p of players) {
       dv.setUint8(o, p.idx); o++;
       dv.setInt16(o, i16(p.pos.x)); dv.setInt16(o + 2, i16(p.pos.y)); dv.setInt16(o + 4, i16(p.pos.z)); o += 6;

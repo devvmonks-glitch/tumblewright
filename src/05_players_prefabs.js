@@ -19,6 +19,10 @@ class Player {
 const SIT_POSE = { seat: [0.07, 0], chair: [0.025, Math.PI], couch: [0.02, Math.PI] };
 const Players = {
   map: new Map(), local: null, cc: null,
+  // who's in the room, as every player's list shows it
+  list() {
+    return [...this.map.values()].map(p => ({ id: p.id, name: p.name, color: p.color, tier: p.tier, idx: p.idx, joinOrder: p.joinOrder, kills: p.kills, deaths: p.deaths, canEdit: p.canEdit, muted: p.muted, lvl: p.lvl || 1, team: p.team || null, disg: p.disg || null }));
+  },
   init() {
     const cc = this.cc = Phys.world.createCharacterController(0.02);
     cc.setUp({ x: 0, y: 1, z: 0 }); cc.setMaxSlopeClimbAngle(50 * Math.PI / 180); cc.setMinSlopeSlideAngle(60 * Math.PI / 180);

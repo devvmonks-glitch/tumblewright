@@ -511,6 +511,23 @@ const Auth = {
     }
     p.lastInputT = t;
   },
+  // ---- players coming and going (the window checked bans, version and room size first) ----
+  addPlayer(pid, d, joinOrder) {
+    const used = new Set([...Players.map.values()].map(p => p.idx)); let idx = 1; while (used.has(idx)) idx++;
+    const name = String(d.name || 'Player').replace(/[<>]/g, '').slice(0, 18) || 'Player';
+    const p = Players.add({ id: pid, name, color: /^#[0-9a-f]{6}$/i.test(d.color) ? d.color : '#ff9f43', tier: TIERS[d.tier] ? d.tier : 'medium', idx, joinOrder, lvl: clamp(d.lvl | 0, 1, 999) });
+    const sp = this.pickSpawn(); p.pos.copy(sp); p.tpGrace = now() + 1.5;
+    Srv.welcome(pid, a3(sp));
+    Srv.sendPlayers();
+    Srv.sysChat(`${p.name} joined the room`);
+    if (p.tier === 'low') Srv.sysChat(`${p.name} is on Low graphics (PS1 style).`, 'tier');
+    return p;
+  },
+  removePlayer(pid) {
+    const p = Players.map.get(pid); if (!p) return;
+    if (p.seat) this.resetMotors(p.seat);
+    Players.remove(pid); Srv.sendPlayers(); Srv.sysChat(`${p.name} left the room`);
+  },
   // ---- player requests that change the room (chat, graphics tier, map edits, admin) ----
   chat(p, text) {
     text = String(text || '').trim().slice(0, 160); if (!text) return;

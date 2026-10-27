@@ -8,8 +8,10 @@ const Srv = {
   bcast(m) { Net.bcast(m); }, bcastAll(m) { Net.bcastAll(m); }, bcastExcept(pid, m) { Net.bcastExcept(pid, m); },
   sendTo(pid, m) { Net.sendTo(pid, m); }, notify(pid, text) { Net.notify(pid, text); }, sysChat(text, cls) { Net.sysChat(text, cls); },
   sendPlayers() { Net.sendPlayers(); }, sendRules() { Net.sendRules(); },
+  // a player who just joined: the whole world, the rules, who's here and where they spawn
+  welcome(pid, spawn) { Net.send('ws', { hostId: Net.me, rules: Rules, players: Players.list(), world: World.serialize(), you: { spawn }, code: Net.code }, pid); },
   // the whole world again, to everyone already in the room (after the host loads a world)
-  sendWorld() { for (const pid of Net.clientIds()) Net.send('ws', { hostId: Net.me, rules: Rules, players: Net.playerList(), world: World.serialize(), code: Net.code }, pid); },
+  sendWorld() { for (const pid of Net.clientIds()) Net.send('ws', { hostId: Net.me, rules: Rules, players: Players.list(), world: World.serialize(), code: Net.code }, pid); },
   ban(pid) { Net.banned.add(pid); },
   // XP for player pid (an id or 'p:id'); each player keeps their own progress
   award(pid, kind, n) {

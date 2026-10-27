@@ -14,21 +14,8 @@ const LocalLink = {
   request(pid, m) { Auth.handle(pid, m); },
   input(pid, inp) { const p = Players.map.get(pid); if (p) Auth.onInput(p, inp); },
   // a player was let into the room (Net checked bans, version and room size): add them and send them the world
-  join(pid, d, joinOrder) {
-    const used = new Set([...Players.map.values()].map(p => p.idx)); let idx = 1; while (used.has(idx)) idx++;
-    const name = String(d.name || 'Player').replace(/[<>]/g, '').slice(0, 18) || 'Player';
-    const p = Players.add({ id: pid, name, color: /^#[0-9a-f]{6}$/i.test(d.color) ? d.color : '#ff9f43', tier: TIERS[d.tier] ? d.tier : 'medium', idx, joinOrder, lvl: clamp(d.lvl | 0, 1, 999) });
-    const sp = Auth.pickSpawn(); p.pos.copy(sp); p.tpGrace = now() + 1.5;
-    Net.send('ws', { hostId: Net.me, rules: Rules, players: Net.playerList(), world: World.serialize(), you: { spawn: a3(sp) }, code: Net.code }, pid);
-    Srv.sendPlayers();
-    Srv.sysChat(`${p.name} joined the room`);
-    if (p.tier === 'low') Srv.sysChat(`${p.name} is on Low graphics (PS1 style).`, 'tier');
-  },
-  leave(pid) {
-    const p = Players.map.get(pid); if (!p) return;
-    if (p.seat) Auth.resetMotors(p.seat);
-    Players.remove(pid); Srv.sendPlayers(); Srv.sysChat(`${p.name} left the room`);
-  },
+  join(pid, d, joinOrder) { Auth.addPlayer(pid, d, joinOrder); },
+  leave(pid) { Auth.removePlayer(pid); },
   // this window just became the room host: its copy of the world becomes the real one
   promote(oldHost) {
     Players.remove(oldHost);
@@ -213,9 +200,7 @@ const Net = {
   toHost(m) { if (this.isHost) this.link.request(this.me, m); else if (this.hostId) this.send('ev', m, this.hostId); },
   notify(pid, text) { this.sendTo(pid, { t: 'note', text }); },
   sysChat(text, cls) { this.bcastAll({ t: 'chat', sys: 1, cls: cls || 'sys', text }); },
-  playerList() {
-    return [...Players.map.values()].map(p => ({ id: p.id, name: p.name, color: p.color, tier: p.tier, idx: p.idx, joinOrder: p.joinOrder, kills: p.kills, deaths: p.deaths, canEdit: p.canEdit, muted: p.muted, lvl: p.lvl || 1, team: p.team || null, disg: p.disg || null }));
-  },
+  playerList() { return Players.list(); },
   sendPlayers() { this.bcastAll({ t: 'pl', list: this.playerList(), host: this.me }); if (this.isHost) Online.updateRoom(); },
   sendRules() { this.bcastAll({ t: 'rules', rules: Rules }); if (this.isHost) Online.updateRoom(); },
   // ---- peers ------------------------------------------------------------------------
