@@ -2,13 +2,6 @@
 /* ============================================================================
    2. RENDERER (quality tiers, post-processing, dynamic resolution, benchmark)
    ========================================================================== */
-const TIERS = {
-  low:    { label: 'Low',    path: 'ps1',  shadows: false, ao: false, bloom: false, reflections: false, csm: false, shadowSize: 0,    maxPR: 1.0,  lights: 4,  aniso: 1 },
-  medium: { label: 'Medium', path: 'pbr',  shadows: true,  ao: false, bloom: false, reflections: false, csm: false, shadowSize: 1024, maxPR: 1.25, lights: 6,  aniso: 4 },
-  high:   { label: 'High',   path: 'pbr',  shadows: true,  ao: true,  bloom: true,  reflections: false, csm: true, cascades: 3, shadowSize: 1024, maxPR: 1.5, lights: 8, aniso: 8 },
-  ultra:  { label: 'Ultra',  path: 'pbr',  shadows: true,  ao: true,  bloom: true,  reflections: true,  csm: true, cascades: 4, shadowSize: 2048, maxPR: 2.0, lights: 12, aniso: 16 },
-};
-const TIER_KEYS = ['low', 'medium', 'high', 'ultra'];
 const tierBadge = t => `<span class="badge t-${t || 'medium'}" title="Graphics: ${TIERS[t] ? TIERS[t].label : '?'}">${(TIERS[t] ? TIERS[t].label : '?').toUpperCase()}</span>`;
 const SUN_DIR = new V3(0.5, -0.72, 0.42).normalize();
 // ---- Low tier: PS1-style rendering ----------------------------------------------------------

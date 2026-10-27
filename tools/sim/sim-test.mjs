@@ -8,7 +8,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { sim, setClock, ghost } from './env.mjs';
-import { buildSimBundle, staticCoupling, PRESENTATION } from './bundle.mjs';
+import { buildSimBundle, staticCoupling, PRESENTATION, BOUNDARY } from './bundle.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url)), OUT = join(HERE, '.out');
 const STRICT = process.argv.includes('--strict'), JSON_OUT = process.argv.includes('--json');
@@ -30,7 +30,7 @@ function callerOf(stack) {
     if (!m || m[2] !== bundleUrl) continue;
     const w = where(+m[3]), fn = (m[1] || '').replace(/^Object\./, '').replace(/^new /, '');
     if (PASS_THROUGH.has(w.decl)) continue;
-    if (PRESENTATION.includes(w.decl) || presentationFns.has(w.decl)) return null;   // presentation calling presentation
+    if (PRESENTATION.includes(w.decl) || presentationFns.has(w.decl) || BOUNDARY.includes(w.decl)) return null;   // presentation calling presentation, or the adapters
     const name = !fn || fn === w.decl ? w.decl : fn.includes('.') ? fn : `${w.decl}.${fn}`;
     return { name, at: `${w.file}:${w.line}` };
   }

@@ -172,35 +172,6 @@ const Editor = {
     }
   },
   // ---- host side ----------------------------------------------------------------
-  cleanShape(sh) {
-    const ok = ['box', 'ramp', 'light', 'spawn'];
-    if (!sh || !ok.includes(sh.t)) return null;
-    const o = { t: sh.t }; if (sh.s) o.s = sh.s.slice(0, 3).map(v => clamp(+v || 1, 0.1, 200));
-    if ((sh.t === 'box' || sh.t === 'ramp') && !o.s) return null;
-    return o;
-  },
-  hostEdit(p, m) {
-    if (!canEdit(p)) return Net.notify(p.id, 'Map editing is disabled for you.');
-    if (m.op === 'add') {
-      const d0 = m.d || {}, sh = this.cleanShape(d0.sh); if (!sh) return;
-      let mapCount = 0; for (const e of World.ents.values()) if (e.d.k === 'map') mapCount++;
-      if (mapCount > 1500) return Net.notify(p.id, 'Map piece limit reached');
-      const id = (d0.id && !World.ents.has(d0.id) && !World.cons.has(d0.id) && d0.id < 65000) ? d0.id : World.allocId();
-      const d = { id, k: 'map', sh, m: MATDEFS[d0.m] ? d0.m : 'dev', c: /^#[0-9a-f]{6}$/i.test(d0.c) ? d0.c : null, o: 'map', by: p.id, p: (d0.p || [0, 0, 0]).map(v => clamp(+v || 0, -CFG.worldHalf, CFG.worldHalf)), q: d0.q || [0, 0, 0, 1] };
-      if (sh.t === 'light') d.light = { c: (d0.light && /^#[0-9a-f]{6}$/i.test(d0.light.c)) ? d0.light.c : '#ffd9a0', i: clamp(+(d0.light && d0.light.i) || 25, 1, 80), r: clamp(+(d0.light && d0.light.r) || 18, 2, 60) };
-      const msg = { t: 'add', ents: [d], cons: [], groups: [] }; applyAdd(msg); Net.bcast(msg);
-    } else if (m.op === 'set') {
-      const e = World.ents.get(m.id); if (!e || e.d.k !== 'map' || !m.d) return;
-      const patch = {};
-      if (m.d.p) patch.p = m.d.p.map(v => clamp(+v || 0, -CFG.worldHalf, CFG.worldHalf));
-      if (m.d.q) patch.q = m.d.q.map(v => +v || 0);
-      if (m.d.sh) { const sh = this.cleanShape(m.d.sh); if (sh && sh.t === e.d.sh.t) patch.sh = sh; }
-      World.patch(e.id, patch); Net.bcast({ t: 'upd', e: e.id, patch });
-    } else if (m.op === 'del') {
-      const e = World.ents.get(m.id); if (!e || e.d.k !== 'map') return;
-      const msg = { t: 'rem', ents: [e.id] }; applyRem(msg); Net.bcast(msg);
-    }
-  },
 };
 
 /* ============================================================================
@@ -224,60 +195,13 @@ const Save = {
     if (store.set('dupes', all)) UI.toast('Dupe saved: ' + name); else UI.toast('Storage full');
   },
   deleteDupe(name) { const all = this.dupes(); delete all[name]; store.set('dupes', all); },
-  validWorld(d) { return d && Array.isArray(d.ents) && d.ents.every(e => e && e.id && e.sh && Array.isArray(e.p) && Array.isArray(e.q)); },
-  validDupe(d) { return d && Array.isArray(d.ents) && d.ents.length && d.ents.every(e => e && e.sh && Array.isArray(e.p) && Array.isArray(e.q)); },
+  validWorld(d) { return World.validWorld(d); }, validDupe(d) { return World.validDupe(d); },
 };
 
 /* ============================================================================
-   Host admin actions (only the host's own requests are accepted)
+   Host admin actions: the UI's requests (the host carries them out in Auth.adminAction)
    ========================================================================== */
 const Admin = {
-  hostAction(p, m) {
-    if (p.id !== Net.hostId && !p.owner) return;   // the host, or a player who proved owner access
-    const target = m.id ? Players.map.get(m.id) : null;
-    switch (m.a) {
-      case 'kick': if (target && !target.isLocal) this.kick(target); break;
-      case 'mute': if (target && !target.isLocal) { target.muted = !target.muted; Net.sendPlayers(); Net.sysChat(`${target.name} was ${target.muted ? 'muted' : 'unmuted'} by the host`); } break;
-      case 'canEdit': if (target) { target.canEdit = !target.canEdit; Net.sendPlayers(); Net.notify(target.id, target.canEdit ? 'You can now edit the map.' : 'Map editing revoked.'); } break;
-      case 'clearAll': { const ids = [...World.ents.values()].filter(e => e.d.k !== 'map').map(e => e.id); if (ids.length) Auth.removeEnts(ids); Net.sysChat('The host cleared all props.'); break; }
-      case 'clearMap': { const ids = [...World.ents.values()].filter(e => e.d.k === 'map').map(e => e.id); if (ids.length) { applyRem({ ents: ids }); Net.bcast({ t: 'rem', ents: ids }); } Net.sysChat('The host cleared the map.'); break; }
-      case 'clearPlayer': if (target) { const ids = [...World.ents.values()].filter(e => e.d.o === target.id && e.d.k !== 'map').map(e => e.id); if (ids.length) Auth.removeEnts(ids); Net.sysChat(`The host cleared ${target.name}'s props.`); } break;
-      case 'freezeAll': case 'unfreezeAll': {
-        const fz = m.a === 'freezeAll' ? 1 : 0, list = [];
-        for (const e of World.ents.values()) if (e.d.k !== 'map' && e.d.k !== 'nade' && !!e.d.fz !== !!fz && e.body) { World.patch(e.id, { fz }); list.push([e.id, { fz }]); }
-        for (const p2 of Players.map.values()) p2.grab = null;
-        if (list.length) Net.bcast({ t: 'upd', list });
-        Net.sysChat(fz ? 'The host froze everything.' : 'The host unfroze everything.'); break;
-      }
-      case 'combat': Rules.combat = !!m.v; Net.sendRules(); Net.sysChat(Rules.combat ? 'Combat on. Weapons hurt players.' : 'Combat off.'); if (!Rules.combat) for (const q of Players.map.values()) q.hp = 100; break;
-      case 'editPerm': if (['host', 'all', 'list'].includes(m.v)) { Rules.editPerm = m.v; Net.sendRules(); Net.sysChat('Map editing: ' + { host: 'host only', all: 'everyone', list: 'selected players' }[m.v]); } break;
-      case 'noclip': Rules.allowNoclip = !!m.v; Net.sendRules(); break;
-      case 'env': if (THEMES[m.v]) {
-        Rules.env = m.v; Rules.envGone = []; Auth.bots = []; Net.sendRules(); Net.sysChat(`Map: ${THEMES[m.v].label}.`);
-        if (THEMES[m.v].spawns) for (const q of Players.map.values()) { if (q.seat) Auth.exitSeat(q); const sp = Auth.pickSpawn(); q.pos.copy(sp); q.tpGrace = now() + 0.6; Net.sendTo(q.id, { t: 'tp', p: a3(sp) }); }   // hand-built maps: everyone to a spawn
-      } break;
-      case 'mode': if (m.v === 'sandbox' || m.v === 'nextbot' || m.v === 'zombies' || m.v === 'prophunt') {
-        const was = Rules.mode; Rules.mode = m.v; Auth.bots = [];
-        if (was === 'zombies' && m.v !== 'zombies') ZS.stop();
-        if (was === 'prophunt' && m.v !== 'prophunt') PH.stop();
-        if (m.v === 'zombies') ZS.start(); else if (m.v === 'prophunt') PH.start(); else Net.sysChat(m.v === 'nextbot' ? 'Nextbot chase! Run. Don\'t let them touch you.' : 'Back to sandbox.');
-        Net.sendRules(); UI.refreshAdmin && UI.refreshAdmin();
-      } break;
-      case 'bots': Rules.bots = clamp(m.v | 0, 1, 8); Net.sendRules(); break;
-      case 'dismember': Rules.dismember = !!m.v; Net.sendRules(); break;
-      case 'aimAssist': Rules.aimAssist = !!m.v; Net.sendRules(); Net.sysChat(Rules.aimAssist ? 'Controller aim assist on.' : 'Controller aim assist turned off by the host.'); break;
-      case 'propLimit': Rules.propLimit = clamp(Math.round(+m.v || 0), 10, 900); Net.sendRules(); break;
-      case 'npcHp': { Rules.npcHp = clamp(Math.round(+m.v || 100), 10, 2000); Net.sendRules(); Net.sysChat(Rules.npcHp === 100 ? 'NPCs are back to normal health.' : `Host set NPC health to ${Rules.npcHp} HP.`); break; }
-      case 'carMph': { const v = Math.round(+m.v || 0); Rules.carMph = v > 0 ? clamp(v, 15, 300) : 0; Net.sendRules(); Net.sysChat(Rules.carMph ? `Host set car top speed to ${Rules.carMph} mph.` : 'Cars are back to their own top speeds.'); break; }
-      case 'loadWorld': Game.hostLoadWorld(m.world); break;
-    }
-    UI.refreshScoreboard(); UI.refreshAdmin();
-  },
-  kick(t) {
-    Net.sendTo(t.id, { t: 'kick' }); Net.banned.add(t.id);
-    if (t.seat) Auth.resetMotors(t.seat);
-    Players.remove(t.id); Net.sendPlayers(); Net.sysChat(`${t.name} was kicked.`);
-  },
   req(a, extra) { Net.toHost(Object.assign({ t: 'admin', a }, extra || {})); },
 };
 

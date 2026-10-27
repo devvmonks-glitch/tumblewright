@@ -1155,14 +1155,6 @@ const Game = {
     if (this.state === 'playing') { if (!Net.isHost) return UI.toast('Only the host can load worlds'); Admin.req('loadWorld', { world: d }); UI.closeMenu(); }
     else { this.pendingWorld = d; UI.closeMenu(); UI.lobbyStatus(`World "${d.name || 'world'}" loaded. Create a room or play solo to start it.`); }
   },
-  hostLoadWorld(d) {
-    if (!Save.validWorld(d)) return UI.toast('Invalid world');
-    for (const p of Players.map.values()) { p.grab = null; if (p.seat) { p.seat = 0; Net.bcastAll({ t: 'seat', pid: p.id, e: 0 }); } }
-    World.load(d); Auth.nades = []; Auth.corpses = [];
-    for (const pid of Net.clientIds()) Net.send('ws', { hostId: Net.me, rules: Rules, players: Net.playerList(), world: World.serialize(), code: Net.code }, pid);
-    Net.sysChat(`The host loaded "${String(d.name || 'world').slice(0, 40)}".`);
-    for (const p of Players.map.values()) Auth.respawn(p);
-  },
   setTier(k) {
     R.applyTier(k, true);
     const me = Players.local; if (me) me.tier = k;
@@ -1693,7 +1685,7 @@ const Game = {
 };
 
 // debug handle for testing from the console
-window.TW = { Thumbs, WEAPON_MODEL, View, PlayerView, Social, PH, ZS, Prog, DiscordAct, Online, Owner, Hotbar, Audio, Models, Game, Net, World, Players, R, Auth, Tools, Editor, UI, Rules, Settings, Phys, Input, Admin, Save, FX, Mats, Vehicles, VEH, Gore, Env };
+window.TW = { Thumbs, WEAPON_MODEL, View, PlayerView, Srv, Social, PH, ZS, Prog, DiscordAct, Online, Owner, Hotbar, Audio, Models, Game, Net, World, Players, R, Auth, Tools, Editor, UI, Rules, Settings, Phys, Input, Admin, Save, FX, Mats, Vehicles, VEH, Gore, Env };
 Game.boot();
 </script>
 

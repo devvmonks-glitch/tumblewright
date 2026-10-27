@@ -311,16 +311,6 @@ const Net = {
     for (const p of Players.map.values()) PlayerView.updatePlate(p, true);
     UI.refreshRoom(); UI.refreshScoreboard();
   },
-  hostChat(p, text) {
-    text = String(text || '').trim().slice(0, 160); if (!text) return;
-    if (p.muted) return this.notify(p.id, 'You are muted.');
-    this.bcastAll({ t: 'chat', pid: p.id, name: p.name, color: p.color, text });
-  },
-  hostTier(p, tier) {
-    if (!TIERS[tier] || p.tier === tier) return;
-    const old = p.tier; p.tier = tier; this.sendPlayers();
-    this.sysChat(`${p.name} switched graphics to ${TIERS[tier].label}${tier === 'low' ? ' (PS1 style)' : ''}.`, 'tier');
-  },
   // ---- snapshots ------------------------------------------------------------------------
   buildSnap(key) {
     const bodies = [];

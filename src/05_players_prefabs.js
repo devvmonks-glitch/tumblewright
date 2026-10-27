@@ -49,7 +49,7 @@ const Players = {
     Phys.colMap.set(p.col.handle, 'p:' + p.id);
   },
   // spawn protection: the host knows the deadline, everyone else gets a snapshot flag
-  isProt(p) { return Net.isHost ? !!(p.protUntil && now() < p.protUntil) : !!p.prot; },
+  isProt(p) { return Srv.isHost() ? !!(p.protUntil && now() < p.protUntil) : !!p.prot; },
   eyePos(p, out) { return out.set(p.renderPos.x, p.renderPos.y + (p.crouch ? CFG.eye - 0.5 : CFG.eye), p.renderPos.z); },
   aimDir(p, out) { const cp = Math.cos(p.pitch); return out.set(-Math.sin(p.yaw) * cp, Math.sin(p.pitch), -Math.cos(p.yaw) * cp); },
   // ---- local movement (client-side prediction; host validates) ------------

@@ -11,13 +11,16 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..'), SRC = jo
 
 // modules that belong to the page: the simulation should not call them (Editor / Admin / Prog are listed because the
 // host-side parts that live in them have to move out)
-export const PRESENTATION = ['R', 'UI', 'Audio', 'FX', 'Gore', 'DmgNum', 'Tools', 'Editor', 'Admin', 'Prog', 'Input', 'Hotbar', 'Thumbs', 'Nav', 'Models', 'Mats', 'Tex', 'Geo', 'Bots', 'Social', 'Online', 'DiscordAct', 'BoardTex', 'HOLO', 'MeshView', 'PlayerView'];
+// Net is the window's connection to the other players: host code talks to it only through Srv (06_srv.js)
+export const PRESENTATION = ['Net', 'R', 'UI', 'Audio', 'FX', 'Gore', 'DmgNum', 'Tools', 'Editor', 'Admin', 'Prog', 'Input', 'Hotbar', 'Thumbs', 'Nav', 'Models', 'Mats', 'Tex', 'Geo', 'Bots', 'Social', 'Online', 'DiscordAct', 'BoardTex', 'HOLO', 'MeshView', 'PlayerView'];
 // top-level functions that only build visuals / DOM; the harness wraps them to see who calls them
 export const PRESENTATION_FNS = ['buildVisual', 'matMesh', 'csmMat', 'ptsMat', 'addVehicleWheels', 'addNpcWeapon', 'rocketFlame', 'buildThruster', 'boardTexture', 'boardFace', 'drawBotFace', 'h', 'downloadJSON', 'pickJSON'];
 
 // ---- static check: which top-level names does simulation code use that are declared on the presentation side? -----
 // Catches data reads (tables, constants) and code paths the scripted run never reaches.
-export const SIM_DECLS = ['Phys', 'Ent', 'World', 'Players', 'Player', 'Vehicles', 'Auth', 'Rules', 'ZS', 'PH', 'Env', 'MAPS', 'THEMES', 'Save'];
+export const SIM_DECLS = ['Phys', 'Ent', 'World', 'Players', 'Player', 'Vehicles', 'Auth', 'Rules', 'ZS', 'PH', 'Env', 'MAPS', 'THEMES', 'canEdit', 'applyAdd', 'applyRem'];
+// the adapters between the simulation and the page: allowed to call across (View -> MeshView in the browser, Srv -> Net)
+export const BOUNDARY = ['View', 'VIEW_NONE', 'Srv'];
 export const PRESENTATION_FILES = ['03_renderer.js', '08_social.js', '09_ui.js', '09_view.js', '10_game.js'];   // everything declared in these is presentation
 export function staticCoupling() {
   const parts = readdirSync(SRC).filter(f => /^\d\d_.*\.js$/.test(f)).sort(), decls = [], owner = new Map();

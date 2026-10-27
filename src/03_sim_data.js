@@ -17,5 +17,14 @@ const MATDEFS = {
 const MAT_KEYS = Object.keys(MATDEFS);
 const PAINT_COLORS = ['#ffffff', '#d4d8de', '#7a808a', '#2a2c31', '#ff5a5f', '#ff9f43', '#fed330', '#26de81', '#20bf6b', '#2bcbba', '#45aaf2', '#4b7bec', '#a55eea', '#f368e0', '#b8835a', '#6d4c33'];
 
+// graphics tiers: the renderer's settings per tier (the host also checks a player's tier and names it in chat)
+const TIERS = {
+  low:    { label: 'Low',    path: 'ps1',  shadows: false, ao: false, bloom: false, reflections: false, csm: false, shadowSize: 0,    maxPR: 1.0,  lights: 4,  aniso: 1 },
+  medium: { label: 'Medium', path: 'pbr',  shadows: true,  ao: false, bloom: false, reflections: false, csm: false, shadowSize: 1024, maxPR: 1.25, lights: 6,  aniso: 4 },
+  high:   { label: 'High',   path: 'pbr',  shadows: true,  ao: true,  bloom: true,  reflections: false, csm: true, cascades: 3, shadowSize: 1024, maxPR: 1.5, lights: 8, aniso: 8 },
+  ultra:  { label: 'Ultra',  path: 'pbr',  shadows: true,  ao: true,  bloom: true,  reflections: true,  csm: true, cascades: 4, shadowSize: 2048, maxPR: 2.0, lights: 12, aniso: 16 },
+};
+const TIER_KEYS = ['low', 'medium', 'high', 'ultra'];
+
 // collider + mesh points of a ramp: rises toward -Z
 function wedgePoints(w, hgt, d) { const x = w / 2, y = hgt / 2, z = d / 2; return new Float32Array([-x, -y, z, x, -y, z, x, -y, -z, -x, -y, -z, -x, y, -z, x, y, -z]); }

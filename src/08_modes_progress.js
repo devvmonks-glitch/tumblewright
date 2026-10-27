@@ -14,14 +14,14 @@ const ZS = {
     this.st = { wave: 0, phase: 'prep', t: this.PREP0, toSpawn: 0, ids: new Set(), spawnT: 0 };
     Rules.combat = true;
     for (const p of Players.map.values()) if (p.dead) Auth.respawn(p);
-    Net.sysChat(`Zombie Survival! Build your defences: the first wave comes in ${this.PREP0} seconds.`);
+    Srv.sysChat(`Zombie Survival! Build your defences: the first wave comes in ${this.PREP0} seconds.`);
     this.publish();
   },
   stop() { this.clearZombies(true); this.st = null; Rules.zs = null; },
   publish() {
     const s = this.st;
     Rules.zs = s ? { wave: s.wave, phase: s.phase, t: Math.max(0, Math.ceil(s.t)), left: s.toSpawn + s.ids.size, best: this.best } : null;
-    Net.sendRules();
+    Srv.sendRules();
   },
   step(dt) {
     if (Rules.mode !== 'zombies') return;
@@ -29,7 +29,7 @@ const ZS = {
     s.t -= dt; this._pub = (this._pub || 0) - dt;
     for (const gid of s.ids) {   // wave zombies that died since last step: credit whoever hit them last
       const g = World.groups.get(gid);
-      if (!g || !g.alive) { s.ids.delete(gid); if (g && g._lastBy) Prog.award(g._lastBy, 'zkill'); }
+      if (!g || !g.alive) { s.ids.delete(gid); if (g && g._lastBy) Srv.award(g._lastBy, 'zkill'); }
     }
     if (s.phase === 'prep') { if (s.t <= 0) this.nextWave(); }
     else if (s.phase === 'wave') {
@@ -42,17 +42,17 @@ const ZS = {
   },
   nextWave() {
     const s = this.st; s.wave++; s.phase = 'wave'; s.toSpawn = 4 + s.wave * 3; s.spawnT = 0;
-    Net.sysChat(`Wave ${s.wave}: ${s.toSpawn} zombies incoming!`); this.publish();
+    Srv.sysChat(`Wave ${s.wave}: ${s.toSpawn} zombies incoming!`); this.publish();
   },
   waveCleared() {
     const s = this.st; s.phase = 'prep'; s.t = this.PREP; this.best = Math.max(this.best, s.wave);
     this.clearZombies(false);   // tidy up this wave's bodies
-    for (const p of Players.map.values()) { if (p.dead) Auth.respawn(p); Prog.award(p.id, 'wave', s.wave); }
-    Net.sysChat(`Wave ${s.wave} cleared! Next wave in ${this.PREP} seconds.`); this.publish();
+    for (const p of Players.map.values()) { if (p.dead) Auth.respawn(p); Srv.award(p.id, 'wave', s.wave); }
+    Srv.sysChat(`Wave ${s.wave} cleared! Next wave in ${this.PREP} seconds.`); this.publish();
   },
   gameOver() {
     const s = this.st, n = s.wave - 1; s.phase = 'over'; s.t = this.OVER;
-    Net.sysChat(`Everyone is down. You survived ${n} wave${n === 1 ? '' : 's'}. Restarting in ${this.OVER} seconds.`); this.publish();
+    Srv.sysChat(`Everyone is down. You survived ${n} wave${n === 1 ? '' : 's'}. Restarting in ${this.OVER} seconds.`); this.publish();
   },
   // a zombie on solid ground 18-30 m from a random living player (or at one of the map's bot spawns)
   spawnZombie() {
@@ -91,14 +91,14 @@ const PH = {
   start() {
     this.scatter();
     Rules.combat = true; this.st = null;
-    Net.sysChat('Prop Hunt! Props: press E on an object to become it. Hunters: find them, but wrong guesses hurt.');
+    Srv.sysChat('Prop Hunt! Props: press E on an object to become it. Hunters: find them, but wrong guesses hurt.');
     this.newRound();
   },
   stop() {
     this.st = null; Rules.ph = null;
     for (const p of Players.map.values()) { p.team = null; p.disg = null; if (p.dead) Auth.respawn(p); }
     const ids = this.spawned.filter(id => World.ents.has(id)); if (ids.length) Auth.removeEnts(ids); this.spawned = [];
-    Net.sendPlayers();
+    Srv.sendPlayers();
   },
   // hiding spots: a spread of everyday objects around the spawn area
   scatter() {
@@ -115,26 +115,26 @@ const PH = {
   publish() {
     const s = this.st, ps = [...Players.map.values()];
     Rules.ph = s ? { phase: s.phase, t: Math.max(0, Math.ceil(s.t)), round: s.round || 0, left: ps.filter(p => p.team === 'prop' && !p.dead).length, win: s.win || null } : null;
-    Net.sendRules();
+    Srv.sendRules();
   },
   newRound() {
     const ps = [...Players.map.values()], round = ((this.st && this.st.round) || 0) + 1;
     for (const p of ps) { p.disg = null; if (p.dead) Auth.respawn(p); p.hp = 100; }
-    if (ps.length < 2) { for (const p of ps) p.team = 'prop'; this.st = { phase: 'wait', t: 0, round: round - 1 }; Net.sendPlayers(); return this.publish(); }
+    if (ps.length < 2) { for (const p of ps) p.team = 'prop'; this.st = { phase: 'wait', t: 0, round: round - 1 }; Srv.sendPlayers(); return this.publish(); }
     const nH = Math.max(1, Math.round(ps.length / 3));   // about a third hunt; whoever hunted least goes first
     ps.sort((a, b) => (a.phH || 0) - (b.phH || 0) || Math.random() - 0.5)
       .forEach((p, i) => { p.team = i < nH ? 'hunter' : 'prop'; if (p.team === 'hunter') p.phH = (p.phH || 0) + 1; });
     this.st = { phase: 'hide', t: this.HIDE, round };
-    Net.sendPlayers(); Net.sysChat(`Round ${round}: props have ${this.HIDE} seconds to hide.`); this.publish();
+    Srv.sendPlayers(); Srv.sysChat(`Round ${round}: props have ${this.HIDE} seconds to hide.`); this.publish();
   },
   step(dt) {
     if (Rules.mode !== 'prophunt') return;
     const s = this.st; if (!s) return this.start();
     s.t -= dt; this._pub = (this._pub || 0) - dt;
     const ps = [...Players.map.values()];
-    for (const p of ps) if (!p.team) { p.team = s.phase === 'hide' ? 'prop' : 'hunter'; Net.sendPlayers(); }   // joined mid-round
+    for (const p of ps) if (!p.team) { p.team = s.phase === 'hide' ? 'prop' : 'hunter'; Srv.sendPlayers(); }   // joined mid-round
     if (s.phase === 'wait') { if (ps.length >= 2) return this.newRound(); }
-    else if (s.phase === 'hide') { if (s.t <= 0) { s.phase = 'hunt'; s.t = this.HUNT; Net.sysChat('Ready or not, here come the hunters!'); this.publish(); } }
+    else if (s.phase === 'hide') { if (s.t <= 0) { s.phase = 'hunt'; s.t = this.HUNT; Srv.sysChat('Ready or not, here come the hunters!'); this.publish(); } }
     else if (s.phase === 'hunt') {
       const props = ps.filter(p => p.team === 'prop'), hunters = ps.filter(p => p.team === 'hunter' && !p.dead);
       if (!props.some(p => !p.dead)) this.end('hunter');
@@ -144,8 +144,8 @@ const PH = {
   },
   end(win) {
     const s = this.st; s.phase = 'end'; s.t = this.END; s.win = win;
-    for (const p of Players.map.values()) if (p.team === win) Prog.award(p.id, 'phwin', win === 'prop' && !p.dead ? 60 : 40);
-    Net.sysChat(win === 'hunter' ? 'Hunters win! Every prop was found.' : 'Props win! The hunters ran out of time.'); this.publish();
+    for (const p of Players.map.values()) if (p.team === win) Srv.award(p.id, 'phwin', win === 'prop' && !p.dead ? 60 : 40);
+    Srv.sysChat(win === 'hunter' ? 'Hunters win! Every prop was found.' : 'Props win! The hunters ran out of time.'); this.publish();
   },
   live() { return Rules.mode === 'prophunt' && this.st && (this.st.phase === 'hide' || this.st.phase === 'hunt'); },
   // a prop asks to become entity eid
@@ -154,10 +154,10 @@ const PH = {
     const e = World.ents.get(eid); if (!e || !e.body || e.d.k === 'part' || e.d.veh || e.d.sh.t === 'spawn') return;
     const t = e.body.translation(); if (p.pos.distanceTo(_v1.set(t.x, t.y, t.z)) > 9) return;
     const box = Phys.bounds(e, new THREE.Box3()), s = box.getSize(new V3());   // its physical size (the simulation has no meshes)
-    if (Math.max(s.x, s.y, s.z) > 3.2 || Math.max(s.x, s.y, s.z) < 0.15) return Net.notify(p.id, 'Too big or too small to hide as.');
+    if (Math.max(s.x, s.y, s.z) > 3.2 || Math.max(s.x, s.y, s.z) < 0.15) return Srv.notify(p.id, 'Too big or too small to hide as.');
     const d = {}; for (const k of ['sh', 'm', 'c', 'c2', 'vis', 'hc']) if (e.d[k] !== undefined) d[k] = e.d[k];
     p.disg = { d, s: [r4(s.x), r4(s.y), r4(s.z)], b: r4(box.min.y - t.y) };
-    Net.sendPlayers();
+    Srv.sendPlayers();
   },
   // host hit test size for a disguised player: a capsule roughly the object's size
   hitShape(v) {
@@ -233,13 +233,6 @@ const Prog = {
       if (this.d.dp[id] >= c.n) { this.d.done[id] = 1; this.save(); UI.toast(`Daily challenge done: ${DAILY_POOL.find(p => p.id === id).text(c.n)}`, 'task_alt'); this.gain(100, 'Daily challenge'); }
     }
     this.save();
-  },
-  // host: tell player pid (an id or 'p:id') what they earned
-  award(pid, kind, n) {
-    if (!Net.isHost) return;
-    const p = Players.map.get(String(pid).replace(/^p:/, '')); if (!p) return;
-    const m = { t: 'xp', k: kind, n: n || 0 };
-    if (p.isLocal) this.onXp(m); else Net.sendTo(p.id, m);
   },
   onXp(m) {
     if (m.k === 'zkill') { this.bump('zkills'); this.gain(XP_FOR.zkill, 'Zombie'); }

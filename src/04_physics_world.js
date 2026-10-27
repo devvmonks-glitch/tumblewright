@@ -45,7 +45,7 @@ const Phys = {
     });
   },
   makeBody(e) {
-    const d = e.d, auth = Net.auth(), B = RAPIER.RigidBodyDesc;
+    const d = e.d, auth = Srv.auth(), B = RAPIER.RigidBodyDesc;
     let desc;
     if (d.k === 'map') desc = B.fixed();
     else if (!auth) desc = B.kinematicPositionBased();
@@ -131,6 +131,7 @@ const VIEW_NONE = Object.freeze({
   playerAdded(p) { }, playerLook(p) { }, playerShow(p) { }, playerRemoved(p) { },
   sound(name, pos, vol) { },   // pos null = at the listener (your own character)
   localFellOut() { },
+  adminChanged() { },   // room settings / players changed by an admin action (the host's panels)
   // the map's look (Env lays it out): key = rebuild when it changes, begin = a builder for the decor or null
   envKey() { return ''; }, envBegin(Th) { return null; }, envRemoveItem(it) { }, envTick(dt) { },
 });
@@ -168,7 +169,7 @@ const World = {
     if (this.cons.has(c.id)) this.removeCon(c.id);
     if (c.id >= this.nextId) this.nextId = c.id + 1;
     this.cons.set(c.id, c);
-    if (Net.auth()) this.makeJoint(c);
+    if (Srv.auth()) this.makeJoint(c);
     View.conAdded(c);
     this.consVer++;
   },
@@ -204,7 +205,7 @@ const World = {
   // Replace an entity's descriptor fields (painter, thrusters, freeze, map edits)
   patch(id, patch) {
     const e = this.ents.get(id); if (!e) return;
-    const auth = Net.auth();
+    const auth = Srv.auth();
     if (auth && e.body && e.d.k !== 'map') { const t = e.body.translation(), r = e.body.rotation(); e.d.p = [t.x, t.y, t.z]; e.d.q = [r.x, r.y, r.z, r.w]; }
     Object.assign(e.d, patch);
     const structural = 'sh' in patch || (e.d.k === 'map' && ('p' in patch || 'q' in patch)) || 'm' in patch;
@@ -218,10 +219,10 @@ const World = {
     const linked = [...this.cons.values()].filter(c => c.a === e.id || c.b === e.id);
     for (const c of linked) if (c.j) { try { Phys.world.removeImpulseJoint(c.j, true); } catch (err) { } c.j = null; }
     let lv = null, av = null;
-    if (Net.auth() && e.body && e.body.isDynamic()) { lv = e.body.linvel(); av = e.body.angvel(); }
+    if (Srv.auth() && e.body && e.body.isDynamic()) { lv = e.body.linvel(); av = e.body.angvel(); }
     Phys.removeBody(e); Phys.makeBody(e);
     if (lv) { e.body.setLinvel(lv, true); e.body.setAngvel(av, true); }
-    if (Net.auth()) for (const c of linked) this.makeJoint(c);
+    if (Srv.auth()) for (const c of linked) this.makeJoint(c);
   },
   clear() {
     for (const id of [...this.cons.keys()]) this.removeCon(id);
@@ -245,11 +246,13 @@ const World = {
     for (const c of this.cons.values()) if (!c.j) this.makeJoint(c);
   },
   // ---- snapshots of descriptors with live pose -----------------------------
+  validWorld(d) { return d && Array.isArray(d.ents) && d.ents.every(e => e && e.id && e.sh && Array.isArray(e.p) && Array.isArray(e.q)); },
+  validDupe(d) { return d && Array.isArray(d.ents) && d.ents.length && d.ents.every(e => e && e.sh && Array.isArray(e.p) && Array.isArray(e.q)); },
   liveDesc(e) {
     const d = Object.assign({}, e.d);
     if (e.body && e.d.k !== 'map') {   // on clients the kinematic body follows the snapshots
       const t = e.body.translation(), r = e.body.rotation(); d.p = [r4(t.x), r4(t.y), r4(t.z)]; d.q = [r4(r.x), r4(r.y), r4(r.z), r4(r.w)];
-      if (Net.auth() && e.body.isDynamic()) { const lv = e.body.linvel(), av = e.body.angvel(); d.v = [r4(lv.x), r4(lv.y), r4(lv.z)]; d.w = [r4(av.x), r4(av.y), r4(av.z)]; }
+      if (Srv.auth() && e.body.isDynamic()) { const lv = e.body.linvel(), av = e.body.angvel(); d.v = [r4(lv.x), r4(lv.y), r4(lv.z)]; d.w = [r4(av.x), r4(av.y), r4(av.z)]; }
       else { delete d.v; delete d.w; }
     }
     return d;

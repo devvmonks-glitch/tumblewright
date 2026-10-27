@@ -82,6 +82,7 @@ const MeshView = {
   sound(name, pos, vol) { if (pos) Audio.at(name, pos, vol); else Audio.play(name, vol); },
   envKey() { return EnvView.key(); }, envBegin(Th) { return EnvView.begin(Th); }, envRemoveItem(it) { EnvView.removeItem(it); }, envTick(dt) { EnvView.tick(dt); },
   localFellOut() { Game.localFellOut(); },
+  adminChanged() { UI.refreshScoreboard(); UI.refreshAdmin(); },
 };
 Object.assign(View, MeshView);
 

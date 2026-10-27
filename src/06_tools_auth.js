@@ -231,7 +231,7 @@ const Vehicles = {
     let c = this.ctl.get(e.id);
     if (c && c.body === e.body) return c;
     if (c) this.drop(e.id);
-    const V = VEH[e.d.veh]; if (!V || !e.body || !e.body.isDynamic() || !Net.auth()) return null;
+    const V = VEH[e.d.veh]; if (!V || !e.body || !e.body.isDynamic() || !Srv.auth()) return null;
     const vc = Phys.world.createVehicleController(e.body);
     V.w.forEach((w, i) => {
       vc.addWheel({ x: w[0], y: w[1] + V.rest * 0.72, z: w[2] }, { x: 0, y: -1, z: 0 }, { x: 1, y: 0, z: 0 }, V.rest, V.r);
@@ -246,7 +246,7 @@ const Vehicles = {
   drop(id) { const c = this.ctl.get(id); if (!c) return; try { Phys.world.removeVehicleController(c.vc); } catch (err) { } this.ctl.delete(id); },
   step(dt) {
     ZS.step(dt); PH.step(dt);
-    const send = ++this.n % 4 === 0 && Net.online, out = [];
+    const send = ++this.n % 4 === 0 && Srv.online(), out = [];
     for (const id of World.vehicles) {
       const e = World.ents.get(id); if (!e) continue;
       const c = this.ensure(e); if (!c) continue;
@@ -282,7 +282,7 @@ const Vehicles = {
       }
       if (send) { const a = [id, Math.round(c.steer * 1000)]; for (let i = 0; i < V.w.length; i++) a.push(Math.round(vc.wheelSuspensionLength(i) * 1000)); a.push(Math.round(thr * 1000)); out.push(a); }
     }
-    if (send && out.length) Net.bcast({ t: 'vs', v: out });
+    if (send && out.length) Srv.bcast({ t: 'vs', v: out });
   },
   drives(V, w) { return V.drive === 'awd' || (V.drive === 'rwd' ? w[2] > 0 : w[2] < 0); },
   // wheel suspension / steering / roll visuals (host reads the controller, clients use the last 'vs')
@@ -444,7 +444,7 @@ const MPH = 0.44704;   // m/s per mph
 // NPC firearms: damage per hit, seconds between shots, shots per burst, pause after a burst, spread
 const NPC_GUNS = { pistol: { dmg: 13, rate: 0.45, burst: 1, pause: 0.65, spread: 0.03 }, rifle: { dmg: 10, rate: 0.11, burst: 4, pause: 0.95, spread: 0.035 } };
 const npcFac = g => g.fac || (g.brain === 'zombie' ? 'mutant' : g.brain === 'none' ? null : 'civ');
-function canEdit(p) { if (!p) return false; if (!Net.online || p.id === Net.hostId) return true; return Rules.editPerm === 'all' || (Rules.editPerm === 'list' && p.canEdit); }
+function canEdit(p) { if (!p) return false; if (!Srv.online() || p.id === Srv.hostId()) return true; return Rules.editPerm === 'all' || (Rules.editPerm === 'list' && p.canEdit); }
 function applyAdd(m) {
   for (const d of m.ents || []) World.create(d);
   for (const g of m.groups || []) World.groups.set(g.id, g);
@@ -457,7 +457,7 @@ function applyRem(m) {
 }
 const Auth = {
   nades: [], rockets: [], fuses: [], activeThr: [], contraptions: new Map(), cVer: -1, corpses: [],
-  broadcast(m) { Net.bcast(m); },
+  broadcast(m) { Srv.bcast(m); },
   // ---- entry point for every client request (host only) --------------------
   handle(pid, m) {
     const p = Players.map.get(pid); if (!p || !m || !m.t) return;
@@ -473,16 +473,16 @@ const Auth = {
       case 'nade': return this.throwNade(p, m);
       case 'use': return this.use(p, m);
       case 'undo': return this.undo(p);
-      case 'chat': return Net.hostChat(p, m.text);
-      case 'tier': return Net.hostTier(p, m.tier);
-      case 'edit': return Editor.hostEdit(p, m);
-      case 'admin': return Admin.hostAction(p, m);
+      case 'chat': return this.chat(p, m.text);
+      case 'tier': return this.setTier(p, m.tier);
+      case 'edit': return this.mapEdit(p, m);
+      case 'admin': return this.adminAction(p, m);
       case 'ownerHello': return Owner.hostHello(p);
       case 'ownerProof': return Owner.hostProof(p, m);
       case 'respawnme': if (!p.dead) this.respawn(p); return;
-      case 'lvl': p.lvl = clamp(m.v | 0, 1, 999); Net.sendPlayers(); return;
+      case 'lvl': p.lvl = clamp(m.v | 0, 1, 999); Srv.sendPlayers(); return;
       case 'disg': return PH.disguise(p, m.e);
-      case 'cleanme': { const ids = [...World.ents.values()].filter(e => e.d.o === p.id && e.d.k !== 'map').map(e => e.id); if (ids.length) this.removeEnts(ids); Net.notify(p.id, ids.length ? 'Your props were cleaned up' : 'You have no props to clean up'); return; }
+      case 'cleanme': { const ids = [...World.ents.values()].filter(e => e.d.o === p.id && e.d.k !== 'map').map(e => e.id); if (ids.length) this.removeEnts(ids); Srv.notify(p.id, ids.length ? 'Your props were cleaned up' : 'You have no props to clean up'); return; }
       case 'flip': return this.flipVehicle(p);
       case 'del': return this.deleteGun(p, m);
       case 'door': return this.useDoor(p, m);
@@ -496,7 +496,7 @@ const Auth = {
       const np = new V3().fromArray(m.p), dt = Math.max(0.03, t - p.lastInputT);
       const maxd = (m.n ? 120 : 24) * dt + 1.5;   // noclip can be sped up to 5x (110 m/s sprinting)
       if (p.tpGrace > t || p.dead || p.seat) { /* ignore client position during teleports */ }
-      else if (np.distanceTo(p.pos) > maxd || !isFinite(np.x + np.y + np.z)) Net.sendTo(p.id, { t: 'tp', p: a3(p.pos) });
+      else if (np.distanceTo(p.pos) > maxd || !isFinite(np.x + np.y + np.z)) Srv.sendTo(p.id, { t: 'tp', p: a3(p.pos) });
       else { p.vel.subVectors(np, p.pos).divideScalar(dt); p.pos.copy(np); }
     }
     p.yaw = +m.y || 0; p.pitch = clamp(+m.x || 0, -1.55, 1.55); p.crouch = !!m.c;
@@ -510,6 +510,103 @@ const Auth = {
       if (m.rd && (m.rd[0] || m.rd[1])) { const qy = _q1.setFromAxisAngle(UP, clamp(m.rd[0], -3, 3)), qx = _q2.setFromAxisAngle(_v1.set(1, 0, 0), clamp(m.rd[1], -3, 3)); p.grab.rq.premultiply(qx).premultiply(qy); }
     }
     p.lastInputT = t;
+  },
+  // ---- player requests that change the room (chat, graphics tier, map edits, admin) ----
+  chat(p, text) {
+    text = String(text || '').trim().slice(0, 160); if (!text) return;
+    if (p.muted) return Srv.notify(p.id, 'You are muted.');
+    Srv.bcastAll({ t: 'chat', pid: p.id, name: p.name, color: p.color, text });
+  },
+  setTier(p, tier) {
+    if (!TIERS[tier] || p.tier === tier) return;
+    const old = p.tier; p.tier = tier; Srv.sendPlayers();
+    Srv.sysChat(`${p.name} switched graphics to ${TIERS[tier].label}${tier === 'low' ? ' (PS1 style)' : ''}.`, 'tier');
+  },
+  cleanShape(sh) {
+    const ok = ['box', 'ramp', 'light', 'spawn'];
+    if (!sh || !ok.includes(sh.t)) return null;
+    const o = { t: sh.t }; if (sh.s) o.s = sh.s.slice(0, 3).map(v => clamp(+v || 1, 0.1, 200));
+    if ((sh.t === 'box' || sh.t === 'ramp') && !o.s) return null;
+    return o;
+  },
+  // map editing (Edit mode): add, move or delete map pieces
+  mapEdit(p, m) {
+    if (!canEdit(p)) return Srv.notify(p.id, 'Map editing is disabled for you.');
+    if (m.op === 'add') {
+      const d0 = m.d || {}, sh = this.cleanShape(d0.sh); if (!sh) return;
+      let mapCount = 0; for (const e of World.ents.values()) if (e.d.k === 'map') mapCount++;
+      if (mapCount > 1500) return Srv.notify(p.id, 'Map piece limit reached');
+      const id = (d0.id && !World.ents.has(d0.id) && !World.cons.has(d0.id) && d0.id < 65000) ? d0.id : World.allocId();
+      const d = { id, k: 'map', sh, m: MATDEFS[d0.m] ? d0.m : 'dev', c: /^#[0-9a-f]{6}$/i.test(d0.c) ? d0.c : null, o: 'map', by: p.id, p: (d0.p || [0, 0, 0]).map(v => clamp(+v || 0, -CFG.worldHalf, CFG.worldHalf)), q: d0.q || [0, 0, 0, 1] };
+      if (sh.t === 'light') d.light = { c: (d0.light && /^#[0-9a-f]{6}$/i.test(d0.light.c)) ? d0.light.c : '#ffd9a0', i: clamp(+(d0.light && d0.light.i) || 25, 1, 80), r: clamp(+(d0.light && d0.light.r) || 18, 2, 60) };
+      const msg = { t: 'add', ents: [d], cons: [], groups: [] }; applyAdd(msg); Srv.bcast(msg);
+    } else if (m.op === 'set') {
+      const e = World.ents.get(m.id); if (!e || e.d.k !== 'map' || !m.d) return;
+      const patch = {};
+      if (m.d.p) patch.p = m.d.p.map(v => clamp(+v || 0, -CFG.worldHalf, CFG.worldHalf));
+      if (m.d.q) patch.q = m.d.q.map(v => +v || 0);
+      if (m.d.sh) { const sh = this.cleanShape(m.d.sh); if (sh && sh.t === e.d.sh.t) patch.sh = sh; }
+      World.patch(e.id, patch); Srv.bcast({ t: 'upd', e: e.id, patch });
+    } else if (m.op === 'del') {
+      const e = World.ents.get(m.id); if (!e || e.d.k !== 'map') return;
+      const msg = { t: 'rem', ents: [e.id] }; applyRem(msg); Srv.bcast(msg);
+    }
+  },
+  // host settings and moderation, from the host or a player who proved owner access
+  adminAction(p, m) {
+    if (p.id !== Srv.hostId() && !p.owner) return;   // the host, or a player who proved owner access
+    const target = m.id ? Players.map.get(m.id) : null;
+    switch (m.a) {
+      case 'kick': if (target && !target.isLocal) this.kickPlayer(target); break;
+      case 'mute': if (target && !target.isLocal) { target.muted = !target.muted; Srv.sendPlayers(); Srv.sysChat(`${target.name} was ${target.muted ? 'muted' : 'unmuted'} by the host`); } break;
+      case 'canEdit': if (target) { target.canEdit = !target.canEdit; Srv.sendPlayers(); Srv.notify(target.id, target.canEdit ? 'You can now edit the map.' : 'Map editing revoked.'); } break;
+      case 'clearAll': { const ids = [...World.ents.values()].filter(e => e.d.k !== 'map').map(e => e.id); if (ids.length) Auth.removeEnts(ids); Srv.sysChat('The host cleared all props.'); break; }
+      case 'clearMap': { const ids = [...World.ents.values()].filter(e => e.d.k === 'map').map(e => e.id); if (ids.length) { applyRem({ ents: ids }); Srv.bcast({ t: 'rem', ents: ids }); } Srv.sysChat('The host cleared the map.'); break; }
+      case 'clearPlayer': if (target) { const ids = [...World.ents.values()].filter(e => e.d.o === target.id && e.d.k !== 'map').map(e => e.id); if (ids.length) Auth.removeEnts(ids); Srv.sysChat(`The host cleared ${target.name}'s props.`); } break;
+      case 'freezeAll': case 'unfreezeAll': {
+        const fz = m.a === 'freezeAll' ? 1 : 0, list = [];
+        for (const e of World.ents.values()) if (e.d.k !== 'map' && e.d.k !== 'nade' && !!e.d.fz !== !!fz && e.body) { World.patch(e.id, { fz }); list.push([e.id, { fz }]); }
+        for (const p2 of Players.map.values()) p2.grab = null;
+        if (list.length) Srv.bcast({ t: 'upd', list });
+        Srv.sysChat(fz ? 'The host froze everything.' : 'The host unfroze everything.'); break;
+      }
+      case 'combat': Rules.combat = !!m.v; Srv.sendRules(); Srv.sysChat(Rules.combat ? 'Combat on. Weapons hurt players.' : 'Combat off.'); if (!Rules.combat) for (const q of Players.map.values()) q.hp = 100; break;
+      case 'editPerm': if (['host', 'all', 'list'].includes(m.v)) { Rules.editPerm = m.v; Srv.sendRules(); Srv.sysChat('Map editing: ' + { host: 'host only', all: 'everyone', list: 'selected players' }[m.v]); } break;
+      case 'noclip': Rules.allowNoclip = !!m.v; Srv.sendRules(); break;
+      case 'env': if (THEMES[m.v]) {
+        Rules.env = m.v; Rules.envGone = []; Auth.bots = []; Srv.sendRules(); Srv.sysChat(`Map: ${THEMES[m.v].label}.`);
+        if (THEMES[m.v].spawns) for (const q of Players.map.values()) { if (q.seat) Auth.exitSeat(q); const sp = Auth.pickSpawn(); q.pos.copy(sp); q.tpGrace = now() + 0.6; Srv.sendTo(q.id, { t: 'tp', p: a3(sp) }); }   // hand-built maps: everyone to a spawn
+      } break;
+      case 'mode': if (m.v === 'sandbox' || m.v === 'nextbot' || m.v === 'zombies' || m.v === 'prophunt') {
+        const was = Rules.mode; Rules.mode = m.v; Auth.bots = [];
+        if (was === 'zombies' && m.v !== 'zombies') ZS.stop();
+        if (was === 'prophunt' && m.v !== 'prophunt') PH.stop();
+        if (m.v === 'zombies') ZS.start(); else if (m.v === 'prophunt') PH.start(); else Srv.sysChat(m.v === 'nextbot' ? 'Nextbot chase! Run. Don\'t let them touch you.' : 'Back to sandbox.');
+        Srv.sendRules();
+      } break;
+      case 'bots': Rules.bots = clamp(m.v | 0, 1, 8); Srv.sendRules(); break;
+      case 'dismember': Rules.dismember = !!m.v; Srv.sendRules(); break;
+      case 'aimAssist': Rules.aimAssist = !!m.v; Srv.sendRules(); Srv.sysChat(Rules.aimAssist ? 'Controller aim assist on.' : 'Controller aim assist turned off by the host.'); break;
+      case 'propLimit': Rules.propLimit = clamp(Math.round(+m.v || 0), 10, 900); Srv.sendRules(); break;
+      case 'npcHp': { Rules.npcHp = clamp(Math.round(+m.v || 100), 10, 2000); Srv.sendRules(); Srv.sysChat(Rules.npcHp === 100 ? 'NPCs are back to normal health.' : `Host set NPC health to ${Rules.npcHp} HP.`); break; }
+      case 'carMph': { const v = Math.round(+m.v || 0); Rules.carMph = v > 0 ? clamp(v, 15, 300) : 0; Srv.sendRules(); Srv.sysChat(Rules.carMph ? `Host set car top speed to ${Rules.carMph} mph.` : 'Cars are back to their own top speeds.'); break; }
+      case 'loadWorld': this.loadWorld(m.world, p); break;
+    }
+    View.adminChanged();
+  },
+  kickPlayer(t) {
+    Srv.sendTo(t.id, { t: 'kick' }); Srv.ban(t.id);
+    if (t.seat) Auth.resetMotors(t.seat);
+    Players.remove(t.id); Srv.sendPlayers(); Srv.sysChat(`${t.name} was kicked.`);
+  },
+  // replace the world (admin action): everyone gets it again and respawns
+  loadWorld(d, by) {
+    if (!World.validWorld(d)) return Srv.notify(by ? by.id : Srv.hostId(), 'Invalid world');
+    for (const p of Players.map.values()) { p.grab = null; if (p.seat) { p.seat = 0; Srv.bcastAll({ t: 'seat', pid: p.id, e: 0 }); } }
+    World.load(d); this.nades = []; this.corpses = [];
+    Srv.sendWorld();
+    Srv.sysChat(`The host loaded "${String(d.name || 'world').slice(0, 40)}".`);
+    for (const p of Players.map.values()) this.respawn(p);
   },
   // ---- physgun ---------------------------------------------------------------
   grab(p, m) {
@@ -551,9 +648,9 @@ const Auth = {
   },
   // ---- spawning ---------------------------------------------------------------
   canSpawn(p, n) {
-    if (World.countOwned(p.id) + n > Rules.propLimit) { Net.notify(p.id, `Prop limit reached (${Rules.propLimit})`); return false; }
+    if (World.countOwned(p.id) + n > Rules.propLimit) { Srv.notify(p.id, `Prop limit reached (${Rules.propLimit})`); return false; }
     let total = 0; for (const e of World.ents.values()) if (e.d.k !== 'map') total++;
-    if (total + n > CFG.maxBodies) { Net.notify(p.id, 'Object limit reached. Remove some props first.'); return false; }
+    if (total + n > CFG.maxBodies) { Srv.notify(p.id, 'Object limit reached. Remove some props first.'); return false; }
     return true;
   },
   spawnPrefab(pf, pos, yaw, owner, opts = {}) {
@@ -597,22 +694,22 @@ const Auth = {
     this.pushUndo(p, r);
   },
   spawnDupe(p, m) {
-    const pf = m.data; if (!pf || !Array.isArray(pf.ents) || pf.ents.length > 300) return Net.notify(p.id, 'Dupe too large');
+    const pf = m.data; if (!pf || !Array.isArray(pf.ents) || pf.ents.length > 300) return Srv.notify(p.id, 'Dupe too large');
     const pos = this.spawnPoint(p, m); if (!pos) return;
-    for (const d of pf.ents) if (!d || !d.sh || !Array.isArray(d.p) || !Array.isArray(d.q)) return Net.notify(p.id, 'Invalid dupe');
+    for (const d of pf.ents) if (!d || !d.sh || !Array.isArray(d.p) || !Array.isArray(d.q)) return Srv.notify(p.id, 'Invalid dupe');
     for (const d of pf.ents) { if (d.k === 'map') d.k = 'prop'; if (MATDEFS[d.m] == null) d.m = 'plastic'; }
     if (!this.canSpawn(p, pf.ents.length)) return;
     const r = this.spawnPrefab(pf, pos, +m.yaw || 0, p.id);
     this.pushUndo(p, r);
-    Net.sysChat(`${p.name} spawned dupe "${String(pf.name || 'Contraption').slice(0, 40)}" (${pf.ents.length} objects)`);
+    Srv.sysChat(`${p.name} spawned dupe "${String(pf.name || 'Contraption').slice(0, 40)}" (${pf.ents.length} objects)`);
   },
   pushUndo(p, r) { (p.undo || (p.undo = [])).push(r); if (p.undo.length > 60) p.undo.shift(); },
   undo(p) {
-    const u = p.undo && p.undo.pop(); if (!u) return Net.notify(p.id, 'Nothing to undo');
+    const u = p.undo && p.undo.pop(); if (!u) return Srv.notify(p.id, 'Nothing to undo');
     const cons = (u.cons || []).filter(id => World.cons.has(id)), ents = (u.ents || []).filter(id => World.ents.has(id));
     if (!cons.length && !ents.length) return this.undo(p);
     if (ents.length) this.removeEnts(ents, cons); else { applyRem({ cons }); this.broadcast({ t: 'rem', cons }); }
-    Net.notify(p.id, 'Undone');
+    Srv.notify(p.id, 'Undone');
   },
   removeEnts(ids, extraCons) {
     const all = new Set(ids), groups = new Set();
@@ -629,9 +726,9 @@ const Auth = {
     const want = Rules.mode === 'nextbot' ? clamp(Rules.bots | 0 || 3, 1, 8) : 0;
     if (this.bots.length > want) this.bots.length = want;
     while (this.bots.length < want) this.bots.push(this.newBot(this.bots.length));
-    if (!want) { if (this.botsSent) { Net.bcastAll({ t: 'bots', b: [] }); this.botsSent = 0; } return; }
+    if (!want) { if (this.botsSent) { Srv.bcastAll({ t: 'bots', b: [] }); this.botsSent = 0; } return; }
     for (const b of this.bots) this.moveBot(b, dt);
-    if ((this.botNetT -= dt) <= 0) { this.botNetT = 0.1; this.botsSent = 1; Net.bcastAll({ t: 'bots', b: this.bots.map(b => [b.id, r4(b.x), r4(b.y), r4(b.z), b.face]) }); }
+    if ((this.botNetT -= dt) <= 0) { this.botNetT = 0.1; this.botsSent = 1; Srv.bcastAll({ t: 'bots', b: this.bots.map(b => [b.id, r4(b.x), r4(b.y), r4(b.z), b.face]) }); }
   },
   newBot(i) {
     const th = THEMES[Rules.env], sp = th && th.botSpawns;
@@ -657,7 +754,7 @@ const Auth = {
     const gh = Phys.cast(new V3(b.x, b.y + 2.2, b.z), new V3(0, -1, 0), 10, null, c => this.botSolid(c));   // ride floors and ramps
     b.y += ((gh ? gh.point.y : 0) - b.y) * Math.min(1, 10 * dt);
     if ((b.chk -= dt) <= 0) { b.chk = 2.5; if (tgt && Math.hypot(b.x - b.lx, b.z - b.lz) < 1.5) { b.x += dx * 2.5; b.z += dz * 2.5; } b.lx = b.x; b.lz = b.z; }   // unstick
-    if (tgt && bd < 1.15 && Math.abs(tgt.pos.y - b.y) < 2.2) { Net.sendTo(tgt.id, { t: 'fx', k: 'jumpscare', f: b.face }); this.kill(tgt, null, 'Nextbot'); }
+    if (tgt && bd < 1.15 && Math.abs(tgt.pos.y - b.y) < 2.2) { Srv.sendTo(tgt.id, { t: 'fx', k: 'jumpscare', f: b.face }); this.kill(tgt, null, 'Nextbot'); }
   },
   // doors: E swings the door open (away from you) or shut; the hinge is servo-driven in stepDoors
   useDoor(p, m) {
@@ -668,7 +765,7 @@ const Auth = {
     if (Math.abs(this.doorAngle(c) || 0) > 0.35) c.dT = 0;
     else { const side = _v2.set(p.pos.x - t.x, 0, p.pos.z - t.z).dot(_v3.set(0, 0, 1).applyQuaternion(q)); c.dT = side >= 0 ? 1.5 : -1.5; }   // swing away from the player
     d.body.wakeUp();
-    Net.bcastAll({ t: 'fx', k: 'sfx', n: c.dT ? 'door_open' : 'door_close', p: [r4(t.x), r4(t.y), r4(t.z)] });
+    Srv.bcastAll({ t: 'fx', k: 'sfx', n: c.dT ? 'door_open' : 'door_close', p: [r4(t.x), r4(t.y), r4(t.z)] });
   },
   doorAngle(c) {
     const f = World.ents.get(c.a), d = World.ents.get(c.b); if (!d || !d.body) return null;
@@ -691,8 +788,8 @@ const Auth = {
   // billboards: a painted image (data URL) stored on the prop, drawn on its face for everyone
   paintBoard(p, m) {
     const e = World.ents.get(m.e); if (!e || !e.d.board || typeof m.img !== 'string') return;
-    const t = now(); if (p.paintT && t - p.paintT < 1.5) return Net.notify(p.id, 'Wait a moment before painting again'); p.paintT = t;
-    if (!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(m.img) || m.img.length > 220000) return Net.notify(p.id, 'That picture is too big');
+    const t = now(); if (p.paintT && t - p.paintT < 1.5) return Srv.notify(p.id, 'Wait a moment before painting again'); p.paintT = t;
+    if (!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(m.img) || m.img.length > 220000) return Srv.notify(p.id, 'That picture is too big');
     World.patch(e.id, { img: m.img }); this.broadcast({ t: 'upd', e: e.id, patch: { img: m.img } });
   },
   // delete gun: props / NPCs (whole body) / map pieces / world decor (trees, rocks, containers)
@@ -700,15 +797,15 @@ const Auth = {
     const t = now(); if (p.dead || p.seat || (p.nextDel && t < p.nextDel)) return; p.nextDel = t + 0.15;
     if (m.env != null) {
       const id = m.env | 0, it = Env.items && Env.items[id]; if (!it) return;
-      if (!canEdit(p)) return Net.notify(p.id, 'You are not allowed to edit the map');
-      Rules.envGone = (Rules.envGone || []).concat(id); Net.sendRules();          // every peer hides it (Env.update)
-      Net.bcastAll({ t: 'fx', k: 'delfx', p: it.pos, s: 2 }); return;
+      if (!canEdit(p)) return Srv.notify(p.id, 'You are not allowed to edit the map');
+      Rules.envGone = (Rules.envGone || []).concat(id); Srv.sendRules();          // every peer hides it (Env.update)
+      Srv.bcastAll({ t: 'fx', k: 'delfx', p: it.pos, s: 2 }); return;
     }
     const e = World.ents.get(m.e); if (!e || e.d.k === 'nade') return;
-    if (e.d.k === 'map' && !canEdit(p)) return Net.notify(p.id, 'You are not allowed to edit the map');
+    if (e.d.k === 'map' && !canEdit(p)) return Srv.notify(p.id, 'You are not allowed to edit the map');
     const b = e.body && e.body.translation();
     this.removeEnts([e.id]);
-    if (b) Net.bcastAll({ t: 'fx', k: 'delfx', p: [r4(b.x), r4(b.y), r4(b.z)], s: 1 });
+    if (b) Srv.bcastAll({ t: 'fx', k: 'delfx', p: [r4(b.x), r4(b.y), r4(b.z)], s: 1 });
   },
   // ---- tool gun ---------------------------------------------------------------
   pose(e) { if (!e) return { p: new V3(), q: new QT() }; const t = e.body.translation(), r = e.body.rotation(); return { p: new V3(t.x, t.y, t.z), q: new QT(r.x, r.y, r.z, r.w) }; },
@@ -726,7 +823,7 @@ const Auth = {
         const B = m.b.e ? World.ents.get(m.b.e) : null; if (m.b.e && !B) return;
         const a = this.pose(A), b = this.pose(B);
         const c = Object.assign({ id: World.allocId(), t: 'weld', a: A.id, b: B ? B.id : 0, o: p.id }, weldFrames(a.p, a.q, b.p, b.q));
-        this.addCons(p, [c]); Net.notify(p.id, B && B.d.k !== 'map' ? 'Welded' : 'Welded to the world'); return;
+        this.addCons(p, [c]); Srv.notify(p.id, B && B.d.k !== 'map' ? 'Welded' : 'Welded to the world'); return;
       }
       case 'rope': {
         if (!A || A.d.k === 'map' || !m.b) return;
@@ -751,17 +848,17 @@ const Auth = {
           { id: World.allocId(), t: 'ball', a: A.id, b, pa: a3(loc(P2, pa)), pb: a3(loc(P2, pb)), o: p.id },
           { id: World.allocId(), t: 'motor', a: A.id, b, ax: a3(n.clone().applyQuaternion(pa.q.clone().invert())), pv: a3(loc(P1, pa)), spd: clamp(+o.spd || 4, -30, 30), key: String(o.key || 'KeyM').slice(0, 20), tog: o.tog ? 1 : 0, o: p.id },
         ]);
-        Net.notify(p.id, `Motor added. ${o.tog ? 'Press' : 'Hold'} ${keyLabel(o.key || 'KeyM')} to spin it.`); return;
+        Srv.notify(p.id, `Motor added. ${o.tog ? 'Press' : 'Hold'} ${keyLabel(o.key || 'KeyM')} to spin it.`); return;
       }
       case 'thruster': {
         if (!A || A.d.k === 'map') return;
-        const thr = (A.d.thr || []).slice(); if (thr.length >= 8) return Net.notify(p.id, 'Max 8 thrusters per object');
+        const thr = (A.d.thr || []).slice(); if (thr.length >= 8) return Srv.notify(p.id, 'Max 8 thrusters per object');
         const q = this.pose(A).q, n = Bv(m.a.n).normalize();
         const dLocal = n.clone().negate().applyQuaternion(q.clone().invert());
         const lp = Bv(m.a.lp).addScaledVector(n.clone().applyQuaternion(q.clone().invert()), 0.0);
         thr.push({ id: (thr.reduce((x, t) => Math.max(x, t.id), 0) + 1), p: a3(lp), d: a3(dLocal), f: clamp(+m.o.f || 12, 1, 80), key: String(m.o.key || 'KeyF').slice(0, 20), pad: String(m.o.pad || '').slice(0, 6), o: p.id });
         World.patch(A.id, { thr }); this.broadcast({ t: 'upd', e: A.id, patch: { thr } });
-        Net.notify(p.id, `Thruster added. Hold ${keyLabel(m.o.key)} to fire.`); return;
+        Srv.notify(p.id, `Thruster added. Hold ${keyLabel(m.o.key)} to fire.`); return;
       }
       case 'wheel': {
         if (!A || A.d.k === 'map') return;
@@ -787,13 +884,13 @@ const Auth = {
       }
       case 'remover': if (A && A.d.k !== 'map') this.removeEnts([A.id]); return;
       case 'heal': {
-        const g = A && A.d.g && World.groups.get(A.d.g); if (!g || g.t !== 'npc') return Net.notify(p.id, 'Aim at an NPC');
+        const g = A && A.d.g && World.groups.get(A.d.g); if (!g || g.t !== 'npc') return Srv.notify(p.id, 'Aim at an NPC');
         const fatal = (g.sev || []).some(j => j === 'neck' || j === 'waist');
         g.lh = PART_HP.slice(); g.bl = 0; g.hp = 100; g.stun = 0; g.state = 'down';
         if (!fatal && !g.alive && !g.corpse) g.alive = 1;
         this.broadcast({ t: 'grp', id: g.id, patch: { hp: 100, alive: g.alive, bl: 0 } });
-        Net.bcastAll({ t: 'fx', k: 'heal', g: g.id });
-        Net.notify(p.id, fatal ? 'Too late for this one' : g.alive ? `${g.n} patched up` : 'Patched up'); return;
+        Srv.bcastAll({ t: 'fx', k: 'heal', g: g.id });
+        Srv.notify(p.id, fatal ? 'Too late for this one' : g.alive ? `${g.n} patched up` : 'Patched up'); return;
       }
       case 'balloon': {   // a balloon straight above the knot, roped to the object (or the ground / a map piece)
         if (A && (A.d.k === 'nade' || A.d.k === 'rocket')) return;
@@ -812,7 +909,7 @@ const Auth = {
         const hov = { spd: clamp(+o.spd || 3, 0.2, 15), air: clamp(+o.air || 0, 0, 1), up: key(o.up || 'KeyU'), dn: key(o.dn || 'KeyJ') };
         const d = { id: World.allocId(), k: 'prop', sh: { t: 'ball', r }, m: 'metal', c: '#3a3f4b', den: 1, n: 'Hoverball', hov, p: a3(pos), q: a4(q), o: p.id };
         this.addCons(p, [Object.assign({ id: World.allocId(), t: 'weld', a: d.id, b: A.id, o: p.id }, weldFrames(pos, q, pa.p, pa.q))], [d]);
-        Net.notify(p.id, `Hoverball added. Hold ${keyLabel(hov.up)} / ${keyLabel(hov.dn)} to rise / sink.`); return;
+        Srv.notify(p.id, `Hoverball added. Hold ${keyLabel(hov.up)} / ${keyLabel(hov.dn)} to rise / sink.`); return;
       }
       case 'dynamite': {   // a stick standing on the surface, welded to what it's on (the world if that's the ground)
         if (A && (A.d.k === 'nade' || A.d.k === 'rocket')) return;
@@ -820,7 +917,7 @@ const Auth = {
         const o = m.o || {}, H = 0.34, n = Bv(m.a.n).normalize(), pos = Bv(m.a.pt).addScaledVector(n, H / 2 + 0.01), q = new QT().setFromUnitVectors(UP, n), pb = this.pose(A);
         const d = { id: World.allocId(), k: 'prop', sh: { t: 'cyl', r: 0.05, h: H }, m: 'plastic', c: '#c0392b', den: 1.2, xp: clamp(+o.pow || 1, 0.3, 2.5), dyn: { key: String(o.key || 'KeyX').slice(0, 20) }, n: 'Dynamite', p: a3(pos), q: a4(q), o: p.id };
         this.addCons(p, [Object.assign({ id: World.allocId(), t: 'weld', a: d.id, b: A ? A.id : 0, o: p.id }, weldFrames(pos, q, pb.p, pb.q))], [d]);
-        Net.notify(p.id, `Dynamite planted. Press ${keyLabel(d.dyn.key)} to set it off.`); return;
+        Srv.notify(p.id, `Dynamite planted. Press ${keyLabel(d.dyn.key)} to set it off.`); return;
       }
       case 'unconstrain': {
         if (!A) return; const ids = [...World.cons.values()].filter(c => (c.a === A.id || c.b === A.id) && !(A.d.g && c.a && World.ents.get(c.a) && World.ents.get(c.a).d.g === A.d.g)).map(c => c.id);
@@ -828,7 +925,7 @@ const Auth = {
       }
       case 'paint': {
         if (!A || !m.o || !MATDEFS[m.o.m]) return;
-        if (A.d.k === 'map' && !canEdit(p)) return Net.notify(p.id, 'You are not allowed to edit the map');
+        if (A.d.k === 'map' && !canEdit(p)) return Srv.notify(p.id, 'You are not allowed to edit the map');
         const patch = { m: m.o.m, c: /^#[0-9a-f]{6}$/i.test(m.o.c) ? m.o.c : null };
         World.patch(A.id, patch); this.broadcast({ t: 'upd', e: A.id, patch }); return;
       }
@@ -838,10 +935,10 @@ const Auth = {
   use(p, m) {
     if (p.seat) return this.exitSeat(p);
     const e = World.ents.get(m.e); if (!e || !e.d.seat || p.dead) return;
-    for (const q of Players.map.values()) if (q.seat === e.id) return Net.notify(p.id, 'Seat is taken');
+    for (const q of Players.map.values()) if (q.seat === e.id) return Srv.notify(p.id, 'Seat is taken');
     const t = e.body.translation(); if (p.pos.distanceTo(_v1.set(t.x, t.y, t.z)) > 7) return;
     p.seat = e.id; p.grab = null; this.cVer = -1;
-    Net.bcastAll({ t: 'seat', pid: p.id, e: e.id });
+    Srv.bcastAll({ t: 'seat', pid: p.id, e: e.id });
   },
   exitSeat(p) {
     const e = World.ents.get(p.seat); p.seat = 0;
@@ -866,8 +963,8 @@ const Auth = {
     }
     p.pos.copy(out); p.tpGrace = now() + 0.6;
     this.resetMotors(e ? e.id : 0);
-    Net.bcastAll({ t: 'seat', pid: p.id, e: 0 });
-    Net.sendTo(p.id, { t: 'tp', p: a3(out) });
+    Srv.bcastAll({ t: 'seat', pid: p.id, e: 0 });
+    Srv.sendTo(p.id, { t: 'tp', p: a3(out) });
   },
   contraption(seatId) {
     if (this.cVer !== World.consVer) { this.contraptions.clear(); this.cVer = World.consVer; }
@@ -885,7 +982,7 @@ const Auth = {
   stepVehicles(dt) {
     for (const p of Players.map.values()) {
       if (!p.seat) continue;
-      const se = World.ents.get(p.seat); if (!se || !se.body) { p.seat = 0; Net.bcastAll({ t: 'seat', pid: p.id, e: 0 }); continue; }
+      const se = World.ents.get(p.seat); if (!se || !se.body) { p.seat = 0; Srv.bcastAll({ t: 'seat', pid: p.id, e: 0 }); continue; }
       const c = this.contraption(p.seat);
       const thr = clamp(p.mv.y + (p.tr ? p.tr[1] - p.tr[0] : 0), -1, 1);
       if (se.d.pas) continue;                                                   // passenger seat
@@ -1038,8 +1135,8 @@ const Auth = {
     if (W.proj === 'prop') return this.launchProp(p, o, d);
     const n = W.pellets || 1, ends = []; let last = null;
     for (let i = 0; i < n; i++) { const r = this.hitscan(p, W, o, n > 1 ? jitter(d.clone(), W.spread) : d, rw); ends.push(a3(r.end)); if (r.h) last = r; }
-    if (W.id !== 'crowbar') Net.bcastExcept(p.id, { t: 'fx', k: 'shot', o: a3(o.clone().addScaledVector(d, 0.6)), e: n > 1 ? ends : ends[0], w: W.id, n: n === 1 && last ? a3(last.h.normal) : null });
-    else if (last) Net.bcastExcept(p.id, { t: 'fx', k: 'spark', e: a3(last.end), n: a3(last.h.normal) });
+    if (W.id !== 'crowbar') Srv.bcastExcept(p.id, { t: 'fx', k: 'shot', o: a3(o.clone().addScaledVector(d, 0.6)), e: n > 1 ? ends : ends[0], w: W.id, n: n === 1 && last ? a3(last.h.normal) : null });
+    else if (last) Srv.bcastExcept(p.id, { t: 'fx', k: 'spark', e: a3(last.end), n: a3(last.h.normal) });
     this.scare(last ? last.end : o.clone().addScaledVector(d, 30), 9); this.scare(o, 6);
   },
   // one hitscan ray: knock the prop, hurt the NPC / player, set off explosives, break breakables
@@ -1072,7 +1169,7 @@ const Auth = {
       if (e) this.propHit(e, p.id, W.dmg);
     } else if (typeof h.id === 'string') {
       const victim = Players.map.get(h.id.slice(2));
-      if (victim) { const head = h.point.y > (h.rewound || victim.pos).y + 1.42; this.damagePlayer(victim, W.dmg * (head ? 1.8 : 1), p, W.name, d.clone().multiplyScalar(W.push || 1.2), { p: h.point, head }); if (Rules.combat) Net.bcastAll({ t: 'fx', k: 'gore', p: a3(h.point), d: a3(d), s: 0.6, w: 'bullet' }); }
+      if (victim) { const head = h.point.y > (h.rewound || victim.pos).y + 1.42; this.damagePlayer(victim, W.dmg * (head ? 1.8 : 1), p, W.name, d.clone().multiplyScalar(W.push || 1.2), { p: h.point, head }); if (Rules.combat) Srv.bcastAll({ t: 'fx', k: 'gore', p: a3(h.point), d: a3(d), s: 0.6, w: 'bullet' }); }
     }
     return { h, end };
   },
@@ -1089,7 +1186,7 @@ const Auth = {
     if (!e.body || e.gone) return; e.gone = 1;
     const t = e.body.translation(), r = e.body.rotation(), c = new V3(t.x, t.y, t.z), q = new QT(r.x, r.y, r.z, r.w), lv = e.body.linvel(), kind = e.d.brk;
     this.removeEnts([e.id]);
-    Net.bcastAll({ t: 'fx', k: 'burst', p: a3(c), n: kind, c: e.d.c || '#cdeeff' });
+    Srv.bcastAll({ t: 'fx', k: 'burst', p: a3(c), n: kind, c: e.d.c || '#cdeeff' });
     if (kind === 'pop') return;
     const ents = [], rnd = (a, b) => a + Math.random() * (b - a);
     const piece = (sh, m, col, lp, spd) => {
@@ -1125,7 +1222,7 @@ const Auth = {
     const pos = o.clone().addScaledVector(d, 0.9), q = new QT().setFromUnitVectors(new V3(0, 0, -1), d);
     const r = this.spawnPrefab(single({ k: 'rocket', sh: { t: 'rocket' }, m: 'metal', c: '#55653f', vis: 'rocket', gs: 0, den: 2, q: a4(q) }), pos, 0, p.id, { noLift: true, vel: a3(d.clone().multiplyScalar(34)) });
     if (r.ents[0]) this.rockets.push({ id: r.ents[0], owner: p.id, t: 6 });
-    Net.bcastExcept(p.id, { t: 'fx', k: 'sfx', n: 'rocket_fire', p: a3(o) });
+    Srv.bcastExcept(p.id, { t: 'fx', k: 'sfx', n: 'rocket_fire', p: a3(o) });
   },
   launchProp(p, o, d) {
     const pf = ITEM_INDEX[pickOne(CANNON_AMMO)].pf();
@@ -1134,7 +1231,7 @@ const Auth = {
     const v = d.clone().multiplyScalar(30).addScaledVector(p.vel, 0.5);
     const r = this.spawnPrefab(pf, o.clone().addScaledVector(d, 1.4), p.yaw, p.id, { noLift: true, vel: a3(v), keepVel: true });
     this.corpses.push({ ents: r.ents, t: 30 });
-    Net.bcastExcept(p.id, { t: 'fx', k: 'sfx', n: 'propcannon', p: a3(o) });
+    Srv.bcastExcept(p.id, { t: 'fx', k: 'sfx', n: 'propcannon', p: a3(o) });
   },
   stepRockets(dt) {
     for (let i = this.rockets.length - 1; i >= 0; i--) {
@@ -1194,11 +1291,11 @@ const Auth = {
       if (p.dead) continue;
       const dv = new V3(p.pos.x - pos.x, p.pos.y + 1 - pos.y, p.pos.z - pos.z), dist = dv.length(); if (dist > R0) continue;
       const s = 1 - dist / R0; dv.normalize(); dv.y = Math.max(dv.y, 0.3);
-      if (!p.seat) Net.sendTo(p.id, { t: 'kb', v: a3(dv.multiplyScalar(14 * s * Math.min(sc, 1.2))) });
+      if (!p.seat) Srv.sendTo(p.id, { t: 'kb', v: a3(dv.multiplyScalar(14 * s * Math.min(sc, 1.2))) });
       this.damagePlayer(p, 115 * s * sc, att, wname);
     }
     this.scare(pos, 18);
-    const msg = { t: 'fx', k: 'boom', p: a3(pos), s: sc }; FX.boom(pos, sc); Net.bcast(msg);
+    Srv.bcastAll({ t: 'fx', k: 'boom', p: a3(pos), s: sc });   // every window draws it, the host's too
   },
   damageGroup(gid, dmg, stun, scaled) {
     const g = World.groups.get(gid); if (!g) return;
@@ -1211,25 +1308,25 @@ const Auth = {
   // floating damage number for the player who dealt it (pid), at world point p
   dmgNum(pid, p, dmg, tgt, head, kill) {
     if (!pid || !(dmg > 0)) return;
-    Net.sendTo(pid, { t: 'dn', p: [r4(p.x), r4(p.y), r4(p.z)], v: Math.max(1, Math.round(dmg)), g: tgt, h: head ? 1 : 0, k: kill ? 1 : 0 });
+    Srv.sendTo(pid, { t: 'dn', p: [r4(p.x), r4(p.y), r4(p.z)], v: Math.max(1, Math.round(dmg)), g: tgt, h: head ? 1 : 0, k: kill ? 1 : 0 });
   },
   damagePlayer(v, dmg, att, wname, push, at) {
     if (!Rules.combat || v.dead || dmg <= 0 || (v.protUntil && now() < v.protUntil)) return;
     const hp0 = v.hp;
     v.hp = Math.max(0, Math.round(v.hp - dmg));
     if (att && att !== v) this.dmgNum(att.id, at ? at.p : { x: v.pos.x, y: v.pos.y + 1.5, z: v.pos.z }, hp0 - v.hp || dmg, 'p' + v.id, at && at.head, v.hp <= 0);
-    if (push && !v.seat) Net.sendTo(v.id, { t: 'kb', v: a3(push) });
+    if (push && !v.seat) Srv.sendTo(v.id, { t: 'kb', v: a3(push) });
     const src = att && att !== v ? att.pos : push ? new V3(v.pos.x - push.x, v.pos.y, v.pos.z - push.z) : null;
-    Net.sendTo(v.id, src ? { t: 'hurt', hp: v.hp, f: a3(src) } : { t: 'hurt', hp: v.hp });
-    if (att && att !== v) Net.sendTo(att.id, { t: 'hm' });
+    Srv.sendTo(v.id, src ? { t: 'hurt', hp: v.hp, f: a3(src) } : { t: 'hurt', hp: v.hp });
+    if (att && att !== v) Srv.sendTo(att.id, { t: 'hm' });
     if (v.hp <= 0) this.kill(v, att, wname);
   },
   kill(v, att, wname) {
     v.dead = true; v.deadT = CFG.respawn; v.deaths++; v.grab = null;
     if (v.seat) this.exitSeat(v);
-    if (att && att !== v) { att.kills++; Prog.award(att.id, 'pkill'); }
+    if (att && att !== v) { att.kills++; Srv.award(att.id, 'pkill'); }
     if (Rules.mode === 'zombies' && ZS.st && ZS.st.phase === 'wave') v.deadT = 1e9;   // down until the wave is cleared
-    if (PH.live()) { v.deadT = 1e9; v.disg = null; Net.sendPlayers(); }   // out until the next round
+    if (PH.live()) { v.deadT = 1e9; v.disg = null; Srv.sendPlayers(); }   // out until the next round
     // leave a ragdoll corpse in the player's colors
     const pf = npcPrefab('ragdoll');
     pf.groups[0].n = v.name;
@@ -1238,8 +1335,8 @@ const Auth = {
     this.corpses.push({ ents: r.ents, t: 15 });
     for (const id of r.ents) { const e = World.ents.get(id); if (e && e.body) e.body.setLinvel({ x: v.vel.x * 0.5, y: 1, z: v.vel.z * 0.5 }, true); }
     const msg = { t: 'kill', v: v.id, a: att ? att.id : null, w: wname || '' };
-    Net.bcastAll(msg);
-    Net.sendPlayers();
+    Srv.bcastAll(msg);
+    Srv.sendPlayers();
   },
   // where player v was at time t (host clock), interpolated from step history; current position if we have nothing older
   histPos(v, t) {
@@ -1253,7 +1350,7 @@ const Auth = {
     const sp = this.pickSpawn();
     p.dead = false; p.hp = 100; p.pos.copy(sp); p.tpGrace = now() + 0.6; p.vel.set(0, 0, 0); p.hist = null;
     p.protUntil = now() + CFG.spawnProt;   // can't be hurt for a few seconds (ends early if they shoot)
-    Net.sendTo(p.id, { t: 'tp', p: a3(sp), respawn: 1, prot: CFG.spawnProt });
+    Srv.sendTo(p.id, { t: 'tp', p: a3(sp), respawn: 1, prot: CFG.spawnProt });
   },
   pickSpawn() {
     const sps = [...World.ents.values()].filter(e => e.d.sh.t === 'spawn');
@@ -1339,7 +1436,7 @@ const Auth = {
     const d = T.pos.clone().sub(o).normalize(); jitter(d, W.spread + 0.004 * T.d / 10);
     const h = Phys.cast(o, d, 150, null, c => { const id = Phys.colMap.get(c.handle); return !(typeof id === 'number' && g.parts.includes(id)); });
     const end = h ? h.point : o.clone().addScaledVector(d, 150);
-    Net.bcastAll({ t: 'fx', k: 'shot', o: a3(o), e: a3(end), w: g.gun === 'rifle' ? 'ak' : 'm1911', n: h ? a3(h.normal) : null });
+    Srv.bcastAll({ t: 'fx', k: 'shot', o: a3(o), e: a3(end), w: g.gun === 'rifle' ? 'ak' : 'm1911', n: h ? a3(h.normal) : null });
     this.scare(end, 8); this.scare(o, 12);
     if (!h) return;
     if (typeof h.id === 'number' && h.id > 0) {
@@ -1349,7 +1446,7 @@ const Auth = {
       else if (e) this.propHit(e, null, W.dmg);
     } else if (typeof h.id === 'string') {
       const v = Players.map.get(h.id.slice(2));
-      if (v) { this.damagePlayer(v, W.dmg * (h.point.y > v.pos.y + 1.42 ? 1.6 : 1), null, g.n, d.clone().multiplyScalar(1)); if (Rules.combat) Net.bcastAll({ t: 'fx', k: 'gore', p: a3(h.point), d: a3(d), s: 0.5, w: 'bullet' }); }
+      if (v) { this.damagePlayer(v, W.dmg * (h.point.y > v.pos.y + 1.42 ? 1.6 : 1), null, g.n, d.clone().multiplyScalar(1)); if (Rules.combat) Srv.bcastAll({ t: 'fx', k: 'gore', p: a3(h.point), d: a3(d), s: 0.5, w: 'bullet' }); }
     }
   },
   zombify(g) {
@@ -1360,7 +1457,7 @@ const Auth = {
     patch(2, { c: skin, vis: 'rd_head_zombie', hc: '#3b3226' }); patch(5, { c: skin }); patch(6, { c: skin, wpn: null });
     Object.assign(g, { alive: 1, hp: 70, brain: 'zombie', kind: 'zombie', fac: 'mutant', n: 'Zombie', bl: 0, lh: PART_HP.slice(), stun: 0.3, state: 'down', gun: null, _tgt: null });
     this.broadcast({ t: 'grp', id: g.id, patch: { alive: 1, hp: 70, brain: 'zombie', kind: 'zombie', fac: 'mutant', n: 'Zombie', bl: 0, gun: null } });
-    const t = World.ents.get(g.parts[1]).body.translation(); Net.bcastAll({ t: 'fx', k: 'sfx', n: 'z_groan', p: [r4(t.x), r4(t.y), r4(t.z)] });
+    const t = World.ents.get(g.parts[1]).body.translation(); Srv.bcastAll({ t: 'fx', k: 'sfx', n: 'z_groan', p: [r4(t.x), r4(t.y), r4(t.z)] });
   },
   // ---- get-up animation (keyframed, see GETUP) --------------------------------------------
   beginGetup(g, parts, tq, up, tilt) {
@@ -1429,7 +1526,7 @@ const Auth = {
     const e = World.ents.get(g.parts[2]) || World.ents.get(g.parts[1]); if (!e || !e.body) return;
     const t = e.body.translation(), z = g.brain === 'zombie' || g.kind === 'zombie', f = e.d.vis === 'rd_head_long';
     const n = z ? (kind === 'attack' ? 'z_attack' : 'z_pain') : kind === 'scream' ? (f ? 'pain_f' : 'scream') : kind === 'attack' ? null : (kind === 'death' ? 'death_' : 'pain_') + (f ? 'f' : 'm');
-    if (n) Net.bcastAll({ t: 'fx', k: 'sfx', n, p: [r4(t.x), r4(t.y), r4(t.z)] });
+    if (n) Srv.bcastAll({ t: 'fx', k: 'sfx', n, p: [r4(t.x), r4(t.y), r4(t.z)] });
   },
   // make nearby civilians run away from gunfire / explosions
   scare(pos, radius) {
@@ -1512,12 +1609,12 @@ const Auth = {
             yaw = Math.atan2(-(T.pos.x - pt.x), -(T.pos.z - pt.z));
             if (T.d < 1.25) { speed = 0; g.atk = (g.atk || 0) - dt; if (g.atk <= 0) { g.atk = 1.3; g.swing = 0.45; if (Math.random() < 0.5) this.npcSay(g, 'attack'); const dx = T.pos.x - pt.x, dz = T.pos.z - pt.z, L = Math.hypot(dx, dz) || 1; this.hurtPart(T.g, 1, 18, { kind: 'blunt', dir: new V3(dx / L, 0.2, dz / L), stun: 1.2, by: 'g:' + g.id, bite: 1 }); } }
             else speed = T.d < 16 ? 2.7 : 1.3;   // lunges at nearby prey, faster than a fleeing civilian
-            if ((g.groan = (g.groan || 3) - dt) <= 0) { g.groan = 4 + Math.random() * 6; Net.bcastAll({ t: 'fx', k: 'sfx', n: 'z_groan', p: [r4(pt.x), r4(pt.y), r4(pt.z)] }); }
+            if ((g.groan = (g.groan || 3) - dt) <= 0) { g.groan = 4 + Math.random() * 6; Srv.bcastAll({ t: 'fx', k: 'sfx', n: 'z_groan', p: [r4(pt.x), r4(pt.y), r4(pt.z)] }); }
           } else if (nearest && (nd < 35 || g.zs) && (!T || T.p)) {   // wave zombies hunt from any distance
             yaw = Math.atan2(-(nearest.pos.x - pt.x), -(nearest.pos.z - pt.z)); lookAt = nearest;
             if (nd < 1.3) { attack = true; speed = 0; g.atk = (g.atk || 0) - dt; if (g.atk <= 0) { g.atk = 1.3; g.swing = 0.45; if (Math.random() < 0.5) this.npcSay(g, 'attack'); const dx = nearest.pos.x - pt.x, dz = nearest.pos.z - pt.z, L = Math.hypot(dx, dz) || 1; this.damagePlayer(nearest, 12, null, 'Zombie', new V3(dx / L * 3, 1.5, dz / L * 3)); } }
             else speed = nd < 12 ? 2.0 : 1.2;
-            if ((g.groan = (g.groan || 3) - dt) <= 0) { g.groan = 4 + Math.random() * 6; Net.bcastAll({ t: 'fx', k: 'sfx', n: 'z_groan', p: [r4(pt.x), r4(pt.y), r4(pt.z)] }); }
+            if ((g.groan = (g.groan || 3) - dt) <= 0) { g.groan = 4 + Math.random() * 6; Srv.bcastAll({ t: 'fx', k: 'sfx', n: 'z_groan', p: [r4(pt.x), r4(pt.y), r4(pt.z)] }); }
           } else { if (g.wT <= 0) { g.wT = 4 + Math.random() * 5; g.wYaw = Math.random() * Math.PI * 2; } yaw = g.wYaw; speed = 0.45; }
           break;
         default: // wander
@@ -1674,7 +1771,7 @@ const Auth = {
     if (e && e.body && !hit.quiet) {   // wound + blood spray for everyone (host sends where on the part it hit)
       const t = e.body.translation(), r = e.body.rotation(), qi = new QT(r.x, r.y, r.z, r.w).invert();
       const pt = hit.point || new V3(t.x, t.y, t.z), n = hit.normal || (hit.dir ? hit.dir.clone().negate() : new V3(0, 1, 0));
-      Net.bcastAll({ t: 'fx', k: 'gore', e: e.id, lp: a3(pt.clone().sub(_v1.set(t.x, t.y, t.z)).applyQuaternion(qi)), ln: a3(n.clone().applyQuaternion(qi)), p: a3(pt), d: a3(hit.dir || n), s: r4(clamp(dmg / 30, 0.3, 2)), w: k });
+      Srv.bcastAll({ t: 'fx', k: 'gore', e: e.id, lp: a3(pt.clone().sub(_v1.set(t.x, t.y, t.z)).applyQuaternion(qi)), ln: a3(n.clone().applyQuaternion(qi)), p: a3(pt), d: a3(hit.dir || n), s: r4(clamp(dmg / 30, 0.3, 2)), w: k });
     }
     if (g.alive && (!g._painT || now() - g._painT > 0.7) && !hit.quiet) { g._painT = now(); this.npcSay(g, 'pain'); }
     if (g.lh[i] <= 0 && was > 0 && Rules.dismember !== false) this.sever(g, i, hit);
@@ -1706,7 +1803,7 @@ const Auth = {
     if (jn === 'neck' || jn === 'waist') { g.hp = 0; if (g.alive) g.alive = 0; }
     this.setBleed(g, (g.bl || 0) + 3);
     this.broadcast({ t: 'grp', id: g.id, patch: { sev: g.sev.slice(), alive: g.alive, hp: g.hp } });
-    Net.bcastAll({ t: 'fx', k: 'sever', g: g.id, j: jn });
+    Srv.bcastAll({ t: 'fx', k: 'sever', g: g.id, j: jn });
   },
   gib(g, i, hit) {
     const e = World.ents.get(g.parts[i]); if (!e || !e.body || !Settings) return;
@@ -1714,7 +1811,7 @@ const Auth = {
     this.sever(g, i, hit);                                                          // tear it off where it attaches
     for (const [jn, J] of Object.entries(NPC_JOINTS)) if (J[0] === i && !(g.sev || []).includes(jn)) this.sever(g, J[1], { dir });   // and let go of what hangs from it
     const vis = e.d.vis || '', col = i === 2 ? e.d.c : e.d.c;
-    Net.bcastAll({ t: 'fx', k: 'gib', p: [r4(t.x), r4(t.y), r4(t.z)], d: a3(dir), c: col, c2: i === 2 ? (e.d.hc || e.d.c) : null, h: i === 2 ? 1 : 0, o: i === 1 ? 1 : 0 });
+    Srv.bcastAll({ t: 'fx', k: 'gib', p: [r4(t.x), r4(t.y), r4(t.z)], d: a3(dir), c: col, c2: i === 2 ? (e.d.hc || e.d.c) : null, h: i === 2 ? 1 : 0, o: i === 1 ? 1 : 0 });
     const msg = { t: 'rem', ents: [e.id] }; applyRem(msg); this.broadcast(msg);
     if (i === 2 && g.alive) { g.alive = 0; g.hp = 0; this.broadcast({ t: 'grp', id: g.id, patch: { alive: 0, hp: 0 } }); }
     this.setBleed(g, (g.bl || 0) + 4);
@@ -1755,7 +1852,7 @@ const Auth = {
         e._impT = t;
         const i = g.parts.indexOf(e.id), tt = e.body.translation(), vd = new V3(pv.x - ov.x, pv.y - ov.y, pv.z - ov.z);
         if (vd.lengthSq() < 0.01) vd.set(0, -1, 0); vd.normalize();
-        if (dv > 10) Net.bcastAll({ t: 'fx', k: 'slam', p: [r4(tt.x), r4(tt.y), r4(tt.z)], d: a3(vd), s: r4(clamp((dv - 8) / 10, 0.3, 2)) });
+        if (dv > 10) Srv.bcastAll({ t: 'fx', k: 'slam', p: [r4(tt.x), r4(tt.y), r4(tt.z)], d: a3(vd), s: r4(clamp((dv - 8) / 10, 0.3, 2)) });
         this.hurtPart(g, i, (dv - 7.5) * 4.5, { kind: 'crush', point: new V3(tt.x, tt.y, tt.z), dir: vd, stun: 2, quiet: true });
       }
     }
