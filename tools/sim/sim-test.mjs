@@ -132,6 +132,117 @@ for (const level of [0, 2]) {
   log(`  ${msPerStep.toFixed(2)} ms per step in Node (${fresh.length} bodies)`);
 }
 
+// ---- sandbox session: the requests players send (tools, weapons, a car), ragdolls, save and load -----------
+// Every request goes through Auth.handle like a real one; each check looks at what it did to the world.
+{
+  log('\nsandbox session at 60 Hz: tools, weapons, ragdolls, a car, save and load');
+  const { CFG } = mods, V = THREE.Vector3, errors = [];
+  const me = startSession(0), base = me.pos.clone(), ox = base.x + 15, oz = base.z, gy = base.y + 0.5;
+  Players.add({ id: 'bob', name: 'Bob', color: '#45aaf2', tier: 'medium', idx: 1, joinOrder: 1, lvl: 1 });   // a remote player in the room
+  Players.setPos(Players.map.get('bob'), base.clone().add(new V(-4, 0, 4)));
+  const act = (what, fn) => { try { return fn(); } catch (e) { errors.push(`${what}: ${e.message}`); } };
+  const send = m => act(m.t + (m.m ? ':' + m.m : ''), () => Auth.handle('local', m));
+  const spawnGet = (item, x, y, z) => { const before = new Set(World.ents.keys()); send({ t: 'spawn', item, p: [x, y, z], yaw: 0 }); return [...World.ents.values()].filter(e => !before.has(e.id)); };
+  const newGroup = (item, x, y, z) => { const before = new Set(World.groups.keys()); send({ t: 'spawn', item, p: [x, y, z], yaw: 0 }); return [...World.groups.values()].find(g => !before.has(g.id)); };
+  const pos = e => { const t = e.body.translation(); return new V(t.x, t.y, t.z); };
+  const at = (e, lp = [0, 0, 0], n = [0, 1, 0]) => ({ e: e.id, lp, n, pt: pos(e).add(new V(...lp)).toArray() });
+  const input = o => act('input', () => Auth.onInput(me, Object.assign({ y: me.yaw, x: me.pitch, mv: [0, 0], k: [] }, o)));
+  const eye = () => new V(me.pos.x, me.pos.y + CFG.eye, me.pos.z);
+  const aimAt = p => { const d = p.clone().sub(eye()); me.yaw = Math.atan2(-d.x, -d.z); me.pitch = Math.atan2(d.y, Math.hypot(d.x, d.z)); return d.normalize(); };
+  const sane = () => [...World.ents.values()].every(e => { if (!e.body) return true; const t = e.body.translation(); return isFinite(t.x + t.y + t.z) && Math.abs(t.x) < 2000 && Math.abs(t.z) < 2000 && t.y > -50 && t.y < 2000; });
+  const between = (k, a, b) => [...World.cons.values()].find(c => c.t === k && ((c.a === a.id && c.b === b.id) || (c.a === b.id && c.b === a.id)));
+
+  // weld: two crates side by side, then shove one: they move as one
+  const [wa] = spawnGet('crate', ox, gy, oz), [wb] = spawnGet('crate', ox + 1, gy, oz); run(1);
+  send({ t: 'tool', m: 'weld', a: at(wa, [0.4, 0, 0], [1, 0, 0]), b: at(wb, [-0.4, 0, 0], [-1, 0, 0]), o: {} });
+  const weld = between('weld', wa, wb), w0 = pos(wa).distanceTo(pos(wb));
+  wa.body.applyImpulse({ x: 0, y: 6 * wa.body.mass(), z: 3 * wa.body.mass() }, true); run(2);
+  check('weld holds two crates together', !!(weld && weld.j) && Math.abs(pos(wa).distanceTo(pos(wb)) - w0) < 0.05, `apart by ${w0.toFixed(2)} m, then ${pos(wa).distanceTo(pos(wb)).toFixed(2)} m after a shove`);
+
+  // rope: two crates 2 m apart, rope 1.5x that distance (len is a multiplier, like the tool's slider); yanking one away is stopped by it
+  const [ra] = spawnGet('crate', ox, gy, oz + 5), [rb] = spawnGet('crate', ox + 2, gy, oz + 5); run(0.5);
+  send({ t: 'tool', m: 'rope', a: at(ra), b: at(rb), o: { len: 1.5, rigid: 1 } });
+  const rope = between('rope', ra, rb); rb.body.applyImpulse({ x: 12 * rb.body.mass(), y: 2 * rb.body.mass(), z: 0 }, true);
+  let ropeMax = 0; run(2, () => { ropeMax = Math.max(ropeMax, pos(ra).distanceTo(pos(rb))); });
+  check('rope holds at its length', !!(rope && rope.j) && ropeMax < rope.len + 0.5, `rope ${rope ? rope.len.toFixed(1) : '?'} m, crates got at most ${ropeMax.toFixed(2)} m apart`);
+
+  // physics gun: grab a crate, pull it to 3 m in front of you, freeze it, unfreeze it
+  const [pg] = spawnGet('crate', ox, gy, oz - 5); run(0.5);
+  const dir = aimAt(pos(pg)); send({ t: 'grab', e: pg.id, lp: [0, 0, 0], dist: 3 }); run(1.5);
+  const held = eye().addScaledVector(dir, 3).distanceTo(pos(pg));
+  send({ t: 'freeze' }); const frozen = !!pg.d.fz && pg.body.isFixed();
+  send({ t: 'unfreeze', e: pg.id }); const thawed = !pg.d.fz && pg.body.isDynamic();
+  check('physics gun holds, freezes and unfreezes', held < 0.5 && frozen && thawed, `held ${held.toFixed(2)} m from the aim point; frozen ${frozen}, unfrozen ${thawed}`);
+  me.yaw = 0; me.pitch = 0; run(1);
+
+  // thruster: on the side of a crate; holding its key pushes it
+  const [th] = spawnGet('crate', ox + 5, gy, oz - 5); run(0.5); const th0 = pos(th);
+  send({ t: 'tool', m: 'thruster', a: at(th, [0, 0, 0.4], [0, 0, 1]), o: { f: 12, key: 'KeyF' } });
+  input({ k: ['KeyF'] }); run(1.5); input({ k: [] }); run(0.5);
+  check('thruster pushes while its key is held', pos(th).distanceTo(th0) > 1, `moved ${pos(th).distanceTo(th0).toFixed(1)} m`);
+
+  // dynamite: planted on a crate, goes off on its key and throws what's next to it
+  const [dc] = spawnGet('crate', ox + 9, gy, oz), [dn] = spawnGet('crate', ox + 10.2, gy, oz); run(0.5);
+  const beforeDyn = new Set(World.ents.keys());
+  send({ t: 'tool', m: 'dynamite', a: at(dc, [0, 0.4, 0]), o: { pow: 1, key: 'KeyX' } });
+  const dyn = [...World.ents.values()].find(e => !beforeDyn.has(e.id)); run(0.3);
+  let thrown = 0; input({ k: ['KeyX'] }); run(1, () => { thrown = Math.max(thrown, World.ents.has(dn.id) ? speedOf(dn.body) : 0); }); input({ k: [] });
+  check('dynamite goes off on its key', !!dyn && !World.ents.has(dyn.id) && thrown > 2, `charge ${dyn ? (World.ents.has(dyn.id) ? 'still there' : 'gone') : 'not planted'}, neighbour thrown at ${thrown.toFixed(1)} m/s`);
+
+  // grenade: thrown, explodes after its fuse
+  const nadeDir = aimAt(new V(ox + 6, base.y, oz + 10)); send({ t: 'nade', o: eye().toArray(), d: nadeDir.toArray() });
+  const nades0 = Auth.nades.length; run(3.2);
+  check('grenade explodes after its fuse', nades0 === 1 && Auth.nades.length === 0, `${nades0} thrown, ${Auth.nades.length} left after 3.2 s`);
+  me.yaw = 0; me.pitch = 0;
+
+  // pistol: shoot an NPC until it dies; it goes limp and stays in one piece
+  const victim = newGroup('npc', ox, gy, oz + 12); run(2);
+  let shots = 0;
+  while (victim && victim.alive && shots < 40) {
+    const torso = World.ents.get(victim.parts[1]); if (!torso) break;
+    const d = aimAt(pos(torso)); send({ t: 'fire', w: 'pistol', o: eye().toArray(), d: d.toArray(), i: 0.1 }); shots++; run(0.25);
+  }
+  run(2);
+  const limp = victim && victim.parts.map(id => World.ents.get(id)).filter(Boolean);
+  check('pistol shots kill an NPC, which ragdolls', !!victim && !victim.alive && limp.length >= 10 && limp.every(e => e.body && e.body.isDynamic()), `${shots} shots; ${limp ? limp.length : 0} parts, all dynamic: ${!!limp && limp.every(e => e.body && e.body.isDynamic())}`);
+  me.yaw = 0; me.pitch = 0;
+
+  // knockdown: a hit with stun drops an NPC; it gets back up
+  const faller = newGroup('npc', ox - 8, gy, oz + 12); run(2);
+  act('knockdown', () => Auth.damageGroup(faller.id, 5, 2)); let wentDown = false;
+  run(10, () => { if (faller.state === 'down') wentDown = true; });
+  const head = World.ents.get(faller.parts[0]);
+  check('a knocked-down NPC gets back up', wentDown && !!faller.alive && !!head && pos(head).y > 0.8, `went down: ${wentDown}, alive: ${!!faller.alive}, height ${head ? pos(head).y.toFixed(2) : '?'}`);
+
+  // car: get in, drive forward, steer, get out
+  const carEnts = spawnGet('car', base.x - 14, base.y + 1.5, base.z); run(2);
+  const chassis = carEnts.find(e => e.d.veh), seat = carEnts.find(e => e.d.seat && !e.d.pas);
+  Players.setPos(me, pos(seat).add(new V(1.8, 0, 0))); send({ t: 'use', e: seat.id }); const seated = me.seat === seat.id;
+  const fwd = () => new V(0, 0, -1).applyQuaternion(chassis.body.rotation()), yawOf = () => { const f = fwd(); return Math.atan2(f.x, f.z); };
+  const c0 = pos(chassis), f0 = fwd(); input({ mv: [0, 1] }); run(3);
+  const forward = pos(chassis).sub(c0).dot(f0), y0 = yawOf(); input({ mv: [1, 1] }); run(2); let turned = Math.abs(yawOf() - y0); if (turned > Math.PI) turned = 2 * Math.PI - turned;
+  input({ mv: [0, 0] }); run(2); send({ t: 'use' });
+  check('car: get in, drive, steer, get out', seated && forward > 5 && turned > 0.3 && me.seat === 0 && bodyUp(chassis.body) > 0.8, `seated ${seated}, drove ${forward.toFixed(1)} m, turned ${(turned * 57.3).toFixed(0)}°, upright ${bodyUp(chassis.body).toFixed(2)}`);
+  Players.setPos(me, base); me.yaw = 0; me.pitch = 0;
+
+  // painter: wood to metal changes its mass; delete gun removes a prop and a tree
+  const [pc] = spawnGet('crate', ox - 4, gy, oz - 5); run(0.5); const m0 = pc.body.mass();
+  send({ t: 'tool', m: 'paint', a: at(pc), o: { m: 'metal', c: '#ff3030' } }); const m1 = pc.body.mass();
+  send({ t: 'del', e: pc.id }); const propGone = !World.ents.has(pc.id); run(0.2);   // the delete gun has a short cooldown
+  const treeId = +Object.keys(Env.items)[0]; send({ t: 'del', env: treeId }); act('env', () => Env.update()); const treeGone = !Env.items[treeId];
+  check('painter and delete gun', pc.d.m === 'metal' && m1 > m0 * 2 && propGone && treeGone, `mass ${m0.toFixed(1)} -> ${m1.toFixed(1)} kg, prop deleted ${propGone}, tree deleted ${treeGone}`);
+
+  // save and load: the same world comes back, welds still hold, nothing blows up
+  run(1); const saved = World.serialize(), n = [saved.ents.length, saved.cons.length, saved.groups.length];
+  act('loadWorld', () => Auth.loadWorld(saved, me));
+  const back = [World.ents.size, World.cons.size, World.groups.size], weld2 = World.cons.get(weld.id);
+  let after = 0; run(3, t => { if (t > 0.5) for (const e of World.ents.values()) if (e.body && e.body.isDynamic() && !e.body.isSleeping()) after = Math.max(after, speedOf(e.body)); });
+  const wa2 = World.ents.get(wa.id), wb2 = World.ents.get(wb.id);
+  check('save and load', back.join() === n.join() && !!(weld2 && weld2.j) && Math.abs(pos(wa2).distanceTo(pos(wb2)) - w0) < 0.05 && after < 30,
+    `${n.join('/')} ents/constraints/groups saved, ${back.join('/')} after loading; weld ${weld2 && weld2.j ? 'holds' : 'lost'}; fastest body ${after.toFixed(1)} m/s`);
+  check('every body stays in the world, no errors', sane() && errors.length === 0, errors.length ? errors.join('; ') : `${World.ents.size} entities, positions all finite`);
+}
+
 // ---- coupling report ------------------------------------------------------------------------------------
 const list = [...touches.values()].sort((a, b) => a.caller.localeCompare(b.caller) || b.n - a.n);
 const byCaller = new Map(); for (const t of list) { if (!byCaller.has(t.caller)) byCaller.set(t.caller, []); byCaller.get(t.caller).push(t); }
