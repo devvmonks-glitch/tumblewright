@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <!-- auto-update config: stamped by tools/release/release.mjs (version, update server, public signing key) -->
-<meta name="tw-version" content="1.9.5">
+<meta name="tw-version" content="1.9.6">
 <meta name="tw-update-url" content="https://tumblewright.vercel.app/">
 <meta name="tw-update-key" content="MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEY+Cnn8Lm7Qg8qyzAHUGYObpBjSgdckeo7PetlABb0TomToEhaMbLW/zaRHOAbvsMn1TRCb4I/cPFv1ghZ6CgWw==">
-<meta name="tw-notes" content="The crowbar has a proper swing. Guns kick and bloom, so spraying takes control. Levels now go to 100 with new ranks, colours and badges.">
+<meta name="tw-notes" content="Hosting on older laptops is much smoother: physics adapts to the machine. Cheaper shadows and ambient occlusion, and smoother movement for players on bumpy connections.">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Tumblewright — Multiplayer Physics Sandbox</title>
 <meta name="description" content="Tumblewright: a multiplayer 3D physics sandbox. Build, weld, drive and blow things up together in your browser.">
@@ -1269,6 +1269,8 @@ const R = {
       g.updateGtaoMaterial({ radius: 0.55, distanceExponent: 1.4, thickness: 1.2, scale: 1.0, samples: this.tier === 'ultra' ? 16 : 8 });
       g.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 4, rings: 2, samples: this.tier === 'ultra' ? 16 : 8 });
       // see-through effects (tracers, beams, smoke, holograms) must not cast AO, or they render as dark smears
+      // AO is soft and low-frequency: compute it (and the normal pass it needs) at half resolution, a quarter of the pixels
+      const gs = g.setSize.bind(g); g.setSize = (w2, h2) => gs(Math.max(1, Math.round(w2 / 2)), Math.max(1, Math.round(h2 / 2)));
       const ov = g.overrideVisibility.bind(g);
       g.overrideVisibility = () => { ov(); this.scene.traverse(o => { const m = o.material; if (m && !Array.isArray(m) && m.transparent && !m.depthWrite) o.visible = false; }); };
       c.addPass(g);
@@ -1343,7 +1345,13 @@ const R = {
   },
   render(dt) {
     const sc = this.scene, cam = this.camera;
-    if (this.csm) { cam.updateMatrixWorld(); this.csm.update(); }
+    if (this.csm) {
+      cam.updateMatrixWorld(); this.csm.update();
+      // far cascades cover a lot of ground at low detail: redraw them every 2nd / 4th frame (the near two every frame).
+      // A skipped cascade keeps its old shadow matrix too, so its shadows stay put; they just update a few ms later.
+      const f = this.frameN = (this.frameN || 0) + 1;
+      this.csm.lights.forEach((l, i) => { l.shadow.autoUpdate = false; l.shadow.needsUpdate = i < 2 || (i === 2 ? f % 2 === 0 : (f + i) % 4 === 0); });
+    }
     else if (this.sun.castShadow) {
       this.sun.target.position.copy(this.focus); this.sun.position.copy(this.focus).addScaledVector(SUN_DIR, -80);
     } else { this.sun.position.copy(SUN_DIR).multiplyScalar(-80); this.sun.target.position.set(0, 0, 0); }
@@ -3164,7 +3172,9 @@ function rayCapsule(o, d, x, y0, z, y1, r) {   // the capsule is a cylinder plus
   return best;
 }
 const Rules = { combat: false, editPerm: 'all', propLimit: CFG.propLimit, allowNoclip: true, aimAssist: true, dismember: true, env: 'plains', envGone: [], mode: 'sandbox', bots: 3, carMph: 0, npcHp: 100 };   // npcHp: NPC health (100 = normal); damage to NPCs is scaled by 100 / npcHp
-const npcDmgK = () => 100 / clamp(Rules.npcHp || 100, 10, 2000);   // carMph 0 = each vehicle's own top speed
+const npcDmgK = () => 100 / clamp(Rules.npcHp || 100, 10, 2000);
+// a blend tuned as "fraction f per 60 Hz step", made rate-independent (the host may step at 30 Hz on slow machines)
+const perStep = (f, dt) => 1 - Math.pow(1 - f, dt * 60);   // carMph 0 = each vehicle's own top speed
 const MPH = 0.44704;   // m/s per mph
 // NPC firearms: damage per hit, seconds between shots, shots per burst, pause after a burst, spread
 const NPC_GUNS = { pistol: { dmg: 13, rate: 0.45, burst: 1, pause: 0.65, spread: 0.03 }, rifle: { dmg: 10, rate: 0.11, burst: 4, pause: 0.95, spread: 0.035 } };
@@ -4015,7 +4025,7 @@ const Auth = {
       const pi = JOINT_PART[k], t2 = g.lh ? tone * clamp(g.lh[pi] / PART_HP[pi] * 1.7, 0.04, 1) : tone;
       const ra = ea.body.rotation(), rb = eb.body.rotation(), qa = _sq1.set(ra.x, ra.y, ra.z, ra.w);
       const qr = _sq2.copy(qa).invert().multiply(_sq3.set(rb.x, rb.y, rb.z, rb.w)), ang = -2 * Math.atan2(qr.x, qr.w);
-      const w = clamp(((P[k] || 0) - ang) * 14, -12, 12), ax = _sv1.set(-1, 0, 0).applyQuaternion(qa), wa = ea.body.angvel(), wb = eb.body.angvel(), f = 0.6 * t2;
+      const w = clamp(((P[k] || 0) - ang) * 14, -12, 12), ax = _sv1.set(-1, 0, 0).applyQuaternion(qa), wa = ea.body.angvel(), wb = eb.body.angvel(), f = perStep(0.6 * t2, Phys.world.timestep);
       eb.body.setAngvel({ x: wb.x + (wa.x + ax.x * w - wb.x) * f, y: wb.y + (wa.y + ax.y * w - wb.y) * f, z: wb.z + (wa.z + ax.z * w - wb.z) * f }, true);
     }
   },
@@ -4266,7 +4276,8 @@ const Auth = {
         let tx = ax.x * kUp, tz = ax.z * kUp;
         if (b === head) { const hr = b.rotation(), hu = _v4.set(0, 1, 0).applyQuaternion(_q2.set(hr.x, hr.y, hr.z, hr.w)), hax = _v4.crossVectors(hu, UP); tx = hax.x * 6 * rec; tz = hax.z * 6 * rec; }
         const ty = yawErr * 2.4 * rec;
-        b.setAngvel({ x: av.x + (tx - av.x) * 0.3, y: av.y + (ty - av.y) * 0.3, z: av.z + (tz - av.z) * 0.3 }, true);
+        const ab = perStep(0.3, dt);
+        b.setAngvel({ x: av.x + (tx - av.x) * ab, y: av.y + (ty - av.y) * ab, z: av.z + (tz - av.z) * ab }, true);
       }
       // ---- support + propulsion ----
       const excl = c => { const id = Phys.colMap.get(c.handle); return !(typeof id === 'number' && g.parts.includes(id)); };
@@ -4281,7 +4292,7 @@ const Auth = {
         let mass = 0; for (const e of parts) mass += e.body.mass();
         const lift = (9.81 + (want - hgt) * 60 - pv.y * 8) * mass * dt * (g.state === 'getup' ? 0.45 + 0.75 * rec : 1);
         // steer horizontally first — setting the velocity after the lift impulse would cancel the lift
-        const dx = -Math.sin(moveYaw) * speed, dz = -Math.cos(moveYaw) * speed, k = (g.stag > 0 ? 0.2 : 0.12) * rec;
+        const dx = -Math.sin(moveYaw) * speed, dz = -Math.cos(moveYaw) * speed, k = perStep((g.stag > 0 ? 0.2 : 0.12) * rec, dt);
         pelvis.setLinvel({ x: pv.x + (dx - pv.x) * k, y: pv.y, z: pv.z + (dz - pv.z) * k }, true);
         pelvis.applyImpulse({ x: 0, y: Math.max(0, lift * 0.55), z: 0 }, true);
         torso.applyImpulse({ x: 0, y: Math.max(0, lift * 0.45), z: 0 }, true);
@@ -4464,7 +4475,7 @@ const Auth = {
     }
     // impact injuries (slammed with the physics gun, thrown, hit by a car, long falls): real contact forces from the
     // physics step. A physics gun waving a body around in the air makes no contacts, so it doesn't count.
-    const dtS = CFG.dt;
+    const dtS = Phys.world.timestep;
     for (const [h1, h2, F] of Phys.impacts) {
       const i1 = Phys.colMap.get(h1), i2 = Phys.colMap.get(h2);
       for (const [a, b] of [[i1, i2], [i2, i1]]) {
@@ -4552,7 +4563,15 @@ const Net = {
   activeThr: new Set(),
   auth() { return this.isHost; },
   hostTime() { return now() - this.t0; },
-  renderTime() { return this.offset == null ? 0 : now() + this.offset - this.interp; },
+  // the host time remote objects are drawn at. It follows (local time + clock offset - interp delay) but never jumps:
+  // it runs up to 15% fast or slow to catch up, and only snaps after a big change (joining, a long stall)
+  renderTime() { return this.offset == null ? 0 : this.rt ?? now() + this.offset - this.interp; },
+  tickClock(dt) {
+    if (this.offset == null) { this.rt = null; return; }
+    const target = now() + this.offset - this.interp;
+    if (this.rt == null || Math.abs(target - this.rt) > 0.25) this.rt = target;
+    else this.rt += dt * (1 + clamp((target - this.rt) * 4, -0.15, 0.15));
+  },
   // Cloudflare TURN credentials from the site's /api/turn: players whose routers block direct connections go
   // through the relay instead of failing to join. Fetched ahead of time (see UI.init) and cached for a few hours.
   // ---- diagnostics: a join timeline + per-connection details, copied from the pause menu / Settings > Network ----
@@ -4615,7 +4634,7 @@ const Net = {
     this.diag = []; this.diagT0 = now(); this.errT = 0;
     this.log('start', { asHost, room: code, via: L.map(l => l.kind).join('+'), relayServers: relay.length, ua: navigator.userAgent.replace(/^Mozilla\/5\.0 /, '').slice(0, 90) });
     this.probeIce(relay); this.code = code; this.isHost = asHost; this.hostId = asHost ? this.me : null; this.online = true; this.ready = asHost;
-    this.peers.clear(); this.pending = []; this.banned.clear(); this.offset = null; this.joinCounter = 0; this.hostConfirmed = true;
+    this.peers.clear(); this.pending = []; this.banned.clear(); this.offset = this.rt = null; this.joinCounter = 0; this.hostConfirmed = true;
     const turn = relay.slice();
     if (Settings.turnUrl) turn.push({ urls: Settings.turnUrl.split(',').map(s => s.trim()).filter(Boolean), username: Settings.turnUser || undefined, credential: Settings.turnPass || undefined });
     const relays = (Settings.relays || '').split(',').map(x => x.trim()).filter(Boolean);
@@ -4771,7 +4790,7 @@ const Net = {
     World.load(s.world);
     for (const e of World.ents.values()) e.buf.length = 0;
     this.applyPlayers(s.players || []);
-    this.offset = null;
+    this.offset = this.rt = null;
     const first = !this.ready; this.ready = true;
     if (first) Game.enterPlay(s.you && s.you.spawn ? new V3().fromArray(s.you.spawn) : null);
     else if (s.migrated) UI.chat({ sys: 1, text: 'New host. World resynced.' });
@@ -4909,6 +4928,7 @@ const Net = {
     const s = this.stats; s.t += dt;
     if (s.t >= 1) { s.inRate = s.inB / s.t; s.outRate = s.outB / s.t; s.snapRate = s.snaps / s.t; s.inB = s.outB = s.snaps = 0; s.t = 0; }
     if (!this.online || !this.ready) return;
+    if (!this.isHost) this.tickClock(dt);
     if (this.isHost) {
       this.snapT -= dt; this.keyT -= dt;
       if (this.snapT <= 0) {
@@ -4919,7 +4939,12 @@ const Net = {
       }
     } else {
       this.inT -= dt;
-      if (this.inT <= 0) { this.inT += 1 / CFG.inputRate; if (this.inT < 0) this.inT = 0; const inp = Game.buildInput(); if (inp) this.send('in', inp, this.hostId); }
+      if (this.inT <= 0) {
+        this.inT += 1 / CFG.inputRate; if (this.inT < 0) this.inT = 0;
+        // standing still sends nothing new: skip repeats, but keep a 4/s heartbeat (rotation deltas are always sent, they are used up)
+        const inp = Game.buildInput(), s = inp && JSON.stringify(inp);
+        if (inp && (inp.rd || s !== this.lastIn || now() - this.lastInT > 0.25)) { this.lastIn = s; this.lastInT = now(); this.send('in', inp, this.hostId); }
+      }
     }
     this.pingT -= dt;
     if (this.pingT <= 0) {
@@ -6491,7 +6516,7 @@ const UI = {
         ns.textContent = `NETWORK ${Net.online ? (Net.isHost ? '(host)' : '(client)') : '(offline)'}\n` +
           `ping        ${Net.isHost ? '—' : ping + ' ms'}\n` + `in          ${(s.inRate / 1024).toFixed(1)} KB/s\n` + `out         ${(s.outRate / 1024).toFixed(1)} KB/s\n` +
           `snapshots   ${Net.isHost ? CFG.snapRate + '/s sent' : s.snapRate.toFixed(0) + '/s'}\n` + `interp      ${Math.round(Net.interp * 1000)} ms\n` + `jitter      ${(s.jitter * 1000).toFixed(1)} ms\n` +
-          `bodies      ${bodies}${Net.isHost ? ' (' + awake + ' awake)' : ''}\n` + `last snap   ${s.bodies} bodies\n` + `peers       ${Net.peers.size}\n` + `render      ${Math.round(R.drs.scale * 100)}% · ${R.renderer.info.render.calls} draws`;
+          `bodies      ${bodies}${Net.isHost ? ' (' + awake + ' awake)' : ''}\n` + `last snap   ${s.bodies} bodies\n` + (Net.isHost ? `physics     ${Math.round(1 / Game.stepDt)} Hz, ${PHYS_LEVELS[Game.physLvl].it} iters, ${Math.round((Game.physLoad || 0) * 100)}% of frame time\n` : '') + `peers       ${Net.peers.size}\n` + `render      ${Math.round(R.drs.scale * 100)}% · ${R.renderer.info.render.calls} draws`;
       }
       if (this.open === 'settings') { const rs = $('#rsVal'); if (rs) rs.textContent = Math.round(R.drs.scale * 100) + '%'; }
     }
@@ -7581,6 +7606,8 @@ const SWING_KEYS = [
   [0.46, [0, 0, 0, 0, 0, 0], ''],
 ];
 const SWING_HIT = 0.12, SWING_REST = [0, 0, 0, 0, 0, 0];
+// host physics quality levels, cheapest last (cost = rough relative CPU per second of simulation)
+const PHYS_LEVELS = [{ dt: 1 / 60, it: 6, cost: 1 }, { dt: 1 / 60, it: 4, cost: 0.8 }, { dt: 1 / 30, it: 4, cost: 0.42 }];
 const _swOut = [0, 0, 0, 0, 0, 0];
 function swingPose(t) {
   if (t >= SWING_KEYS[SWING_KEYS.length - 1][0]) return SWING_REST;
@@ -9390,18 +9417,38 @@ const Game = {
     Input.poll();
     if (this.state === 'playing' && render) this.handleInput(dt);
     this.acc += dt; let n = 0;
-    while (this.acc >= CFG.dt && n < 6) { this.fixedStep(CFG.dt); this.acc -= CFG.dt; n++; }
-    if (n === 6) this.acc = 0;
+    const sdt = this.stepDt, maxN = sdt > 1 / 45 ? 2 : 3, tp = performance.now();
+    while (this.acc >= sdt && n < maxN) { this.fixedStep(sdt); this.acc -= sdt; n++; }
+    if (n === maxN) this.acc = Math.min(this.acc, sdt);   // can't keep up this frame: drop the backlog rather than spiral into ever longer frames
+    this.governPhysics(performance.now() - tp, dt);
     Net.update(dt);
     if (this.state === 'playing' && Net.online) { this.autoT -= dt; if (this.autoT <= 0) { this.autoT = 20; this.autosave(); } }
     if (render) {
       Env.update();
-      this.updateVisuals(dt, this.acc / CFG.dt);
+      this.updateVisuals(dt, this.acc / this.stepDt);
       if (this.state === 'playing') UI.update(dt); else Nav.update(dt);
       R.render(dt);
       R.drsTick(frameMs);
     }
     Input.endFrame();
+  },
+  // ---- physics governor (host) ---------------------------------------------------------------
+  // The host simulates everything, so on a slow CPU physics eats the frame and the host lags while clients are fine.
+  // Every few seconds: if physics took over 30% of the time, step down (fewer solver iterations, then 30 steps/s
+  // instead of 60); with plenty of headroom, step back up. Clients always run level 0 (they only follow snapshots).
+  stepDt: 1 / 60, physLvl: 0, govMs: 0, govT: 0, govHold: 0,
+  setPhysLevel(l) {
+    const L = PHYS_LEVELS[l]; this.physLvl = l; this.stepDt = L.dt; this.govHold = 4;
+    if (Phys.world) { Phys.world.timestep = L.dt; Phys.world.integrationParameters.numSolverIterations = L.it; }
+  },
+  governPhysics(ms, dt) {
+    if (!Net.isHost || this.state !== 'playing') { if (this.physLvl) this.setPhysLevel(0); this.govMs = this.govT = 0; return; }
+    this.govMs += ms; this.govT += dt; this.govHold -= dt;
+    if (this.govT < 2) return;
+    const load = this.govMs / (this.govT * 1000); this.govMs = this.govT = 0; this.physLoad = load;
+    if (this.govHold > 0) return;
+    if (load > 0.3 && this.physLvl < PHYS_LEVELS.length - 1) this.setPhysLevel(this.physLvl + 1);
+    else if (this.physLvl > 0 && load * PHYS_LEVELS[this.physLvl - 1].cost / PHYS_LEVELS[this.physLvl].cost < 0.2) this.setPhysLevel(this.physLvl - 1);
   },
   frame() { requestAnimationFrame(() => this.frame()); this.lastRaf = performance.now(); if (!document.hidden) this.tick(true); },
 };
