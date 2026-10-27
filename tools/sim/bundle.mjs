@@ -40,12 +40,12 @@ export function staticCoupling() {
   return out;
 }
 
-export function buildSimBundle() {
-  const parts = readdirSync(SRC).filter(f => /^\d\d_.*\.(html|js)$/.test(f)).sort();
+export function buildSimBundle(src = SRC) {   // src: another copy of src/ (e.g. an older commit) to compare against
+  const parts = readdirSync(src).filter(f => /^\d\d_.*\.(html|js)$/.test(f)).sort();
   // line ranges of each part inside the concatenated page
   const ranges = []; let html = '', line = 1;
   for (const f of parts) {
-    const t = readFileSync(join(SRC, f), 'utf8').replace(/\r\n/g, '\n');
+    const t = readFileSync(join(src, f), 'utf8').replace(/\r\n/g, '\n');
     ranges.push({ f, start: line }); html += t; line += t.split('\n').length - 1;
   }
   const open = '<script id="tw-main" type="text/tw-module">', i0 = html.indexOf(open);

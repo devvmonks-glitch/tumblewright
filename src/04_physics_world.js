@@ -131,6 +131,8 @@ const VIEW_NONE = Object.freeze({
   playerAdded(p) { }, playerLook(p) { }, playerShow(p) { }, playerRemoved(p) { },
   sound(name, pos, vol) { },   // pos null = at the listener (your own character)
   localFellOut() { },
+  // the map's look (Env lays it out): key = rebuild when it changes, begin = a builder for the decor or null
+  envKey() { return ''; }, envBegin(Th) { return null; }, envRemoveItem(it) { }, envTick(dt) { },
 });
 const View = Object.assign({}, VIEW_NONE);
 class Ent {

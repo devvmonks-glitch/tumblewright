@@ -360,7 +360,7 @@ const MAPS = {
 };
 const ROAD_Z = 46;
 const Env = {
-  key: '', group: null, cols: [], items: {}, colItem: new Map(), goneN: 0, zones: [], colMat: new Map(), waters: [], sandAt: null,
+  key: '', cols: [], items: {}, colItem: new Map(), goneN: 0, zones: [], colMat: new Map(), waters: [], sandAt: null,
   // water surface height at (x, z), or null when there's no water there
   waterAt(x, z) { for (const w of this.waters) if (x > w.x0 && x < w.x1 && z > w.z0 && z < w.z1 && w.dep(x, z) > 0) return w.y; return null; },
   // debug (set window.TW_ZCHECK before loading a map): coplanar, overlapping faces of different materials that the camera
@@ -383,18 +383,8 @@ const Env = {
     }
     return out;
   },
-  // per frame: water animation + dark rooms (lights fade out while the camera is inside a dark zone)
-  tick(dt) {
-    Water.step(dt);
-    for (const m of this.mirrors || []) m.visible = m.position.distanceTo(R.camera.position) < 22;
-    const c = R.camera.position; let want = 0;
-    for (const z of this.zones) if (c.x > z[0] && c.x < z[1] && c.y > z[2] && c.y < z[3] && c.z > z[4] && c.z < z[5]) want = 1;
-    const cur = R.dark || 0; if (cur === want) return;
-    let k = cur + (want - cur) * (1 - Math.exp(-5 * dt)); if (Math.abs(k - want) < 0.004) k = want;
-    R.dark = k; R.applyLights();
-  },
   update() {
-    const name = THEMES[Rules.env] ? Rules.env : 'plains', k = name + '|' + R.path;
+    const name = THEMES[Rules.env] ? Rules.env : 'plains', k = name + '|' + View.envKey();   // the view's key: rebuild when its look changes (render path)
     if (k !== this.key) return this.apply(name);
     const gone = Rules.envGone || [];                                  // deleted world objects (delete gun)
     if (gone.length < this.goneN) return this.apply(name);
@@ -402,36 +392,21 @@ const Env = {
   },
   removeItem(id) {
     const it = this.items[id]; if (!it) return;
-    const z = new THREE.Matrix4().makeScale(0, 0, 0);
-    for (const m of it.meshes) { m.setMatrixAt(it.idx, z); m.instanceMatrix.needsUpdate = true; }
+    View.envRemoveItem(it);
     if (it.col) { this.colItem.delete(it.col.handle); Phys.colMap.delete(it.col.handle); Phys.world.removeCollider(it.col, false); Phys.qDirty = true; this.cols = this.cols.filter(c => c !== it.col); }
     delete this.items[id];
   },
-  // after this.inst(): remember which instance of which meshes each item is
+  // after the view instanced them: remember which instance of which meshes each item is (meshes = [] when nothing is drawn)
   reg(meshes, ids) { ids.forEach(([id, col, pos], i) => { this.items[id] = { meshes: meshes || [], idx: i, col, pos }; }); },
+  // Lays the map out: every placement, random draw and collider happens here, in the same order with or without a view.
+  // Each visual piece goes to the view's builder V (world coordinates, mirroring already applied); V is null headless.
   apply(name) {
-    const Th = THEMES[name]; this.key = name + '|' + R.path;
-    this.items = {}; this.colItem = new Map(); this.zones = []; this.mirrors = []; this.colMat = new Map(); this.waters = []; this.sandAt = null; if (R.dark) { R.dark = 0; R.applyLights(); } const gone = new Set(Rules.envGone || []); this.goneN = (Rules.envGone || []).length; let nid = 0;
-    if (this.group) { R.scene.remove(this.group); this.group.traverse(o => { if (o.isInstancedMesh) o.dispose(); }); this.group = null; }
+    const Th = THEMES[name]; this.key = name + '|' + View.envKey();
+    this.items = {}; this.colItem = new Map(); this.zones = []; this.colMat = new Map(); this.waters = []; this.sandAt = null; const gone = new Set(Rules.envGone || []); this.goneN = (Rules.envGone || []).length; let nid = 0;
     for (const c of this.cols) { Phys.colMap.delete(c.handle); Phys.world.removeCollider(c, false); } if (this.cols.length) Phys.qDirty = true; this.cols = [];
-    // sky, fog, light
-    const sk = R.sky.material.uniforms, ts = R.toonSky.material.uniforms;
-    if (Th.ground) {
-      sk.zen.value.set(Th.zen); sk.hor.value.set(Th.hor); sk.gnd.value.set(Th.gnd); sk.sunAmt.value = Th.sunAmt;
-      ts.top.value.set(Th.zen); ts.mid.value.set(Th.hor); ts.bot.value.set(Th.gnd);
-      R.scene.fog = new THREE.Fog(Th.fog[0], Th.fog[1], Th.fog[2]);
-      R.themeLight = { sun: Th.sun, hemi: Th.hemi };
-    } else {
-      sk.zen.value.setRGB(0.10, 0.27, 0.68); sk.hor.value.setRGB(0.56, 0.70, 0.86); sk.gnd.value.setRGB(0.30, 0.31, 0.29); sk.sunAmt.value = 1;
-      ts.top.value.set('#5fb4ff'); ts.mid.value.set('#cfeaff'); ts.bot.value.set('#e9e4dc');
-      R.scene.fog = null; R.themeLight = null;
-    }
-    R.applyLights(); R.rebakeEnv();
-    const gt = Th.ground && Th.ground !== 'grid' ? 'ground_' + Th.ground : 'ground';
-    if (View.groundMesh) { View.groundMesh.material = Mats.get(gt); View.groundMesh.userData.mt = gt; }   // no ground mesh headless
+    const V = View.envBegin(Th);   // sky, fog, light and the ground's look, then a builder for the decor
     if (!Th.ground) return;
     // ---- decor ----
-    const g = this.group = new THREE.Group(); R.scene.add(g);
     let seed = 0; for (const ch of name) seed = seed * 31 + ch.charCodeAt(0) >>> 0;
     const rnd = () => { seed = seed + 0x6D2B79F5 >>> 0; let t = seed; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; };
     const clearOf = (x, z, r) => Math.hypot(x, z) > r && !(Th.road && Math.abs(z - ROAD_Z) < 8) && Math.abs(x) < 330 && Math.abs(z) < 330;
@@ -439,40 +414,25 @@ const Env = {
     const C = RAPIER.ColliderDesc, col = (d, x, y, z, yaw, mt) => { d.setTranslation(x, y, z); if (yaw) { const q = new QT().setFromAxisAngle(UP, yaw); d.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }); } const c = Phys.world.createCollider(d, Phys.ground); Phys.colMap.set(c.handle, 0); this.cols.push(c); if (mt) this.colMat.set(c.handle, mt); return c; };
     const item = (x, y, z, c) => { const id = nid++; if (c) this.colItem.set(c.handle, id); return [id, c, [r4(x), r4(y), r4(z)]]; };
     if (Th.build) {   // hand-built map: static boxes / ramps / water, no forest
-      const F = Th.flip ? -1 : 1;
-      const put = (m, x, y, z, yaw, mt, c) => { x *= F; z *= F; yaw = (yaw || 0) + (F < 0 ? Math.PI : 0); if (yaw) m.rotation.y = yaw; m.position.set(x, y, z); m.castShadow = m.receiveShadow = true; m.userData.mt = mt; m.userData.mc = c; g.add(m); };
-      // static pieces are merged into one mesh per material (a building is hundreds of boxes)
-      const vis = {}, _m4 = new THREE.Matrix4(), _q = new QT(), _one = new V3(1, 1, 1);
-      const addVis = (geo, mt, c, x, y, z, yaw) => {
-        const q = (geo.index ? geo.toNonIndexed() : geo.clone()).applyMatrix4(_m4.compose(new V3(x * F, y, z * F), _q.setFromAxisAngle(UP, (yaw || 0) + (F < 0 ? Math.PI : 0)), _one));
-        const k = mt + '|' + (c || ''); (vis[k] || (vis[k] = { mt, c, gs: [] })).gs.push(q);
-      };
+      const F = Th.flip ? -1 : 1, fy = yaw => (yaw || 0) + (F < 0 ? Math.PI : 0);
       // fl: 1 = no collider (decoration), 2 = no visual (invisible collider)
-      const dbg = window.TW_ZCHECK ? (this.dbgBoxes = []) : null;   // debug: every visible box (world AABB) for the z-fighting scan
+      const dbg = typeof window !== 'undefined' && window.TW_ZCHECK ? (this.dbgBoxes = []) : null;   // debug: every visible box (world AABB) for the z-fighting scan
       const b = (x, y, z, w, h, d, mt, c, yaw, fl) => {
         if (dbg && !(fl & 2)) { const q = Math.abs(Math.sin((yaw || 0))) > 0.7, hw = (q ? d : w) / 2, hd = (q ? w : d) / 2; dbg.push({ mn: [x * F - hw, y, z * F - hd], mx: [x * F + hw, y + h, z * F + hd], k: mt + '|' + (c || '') }); }
-        if (!(fl & 2)) addVis(Geo.worldBox(w, h, d), mt, c, x, y + h / 2, z, yaw); if (!(fl & 1)) col(C.cuboid(w / 2, h / 2, d / 2), x * F, y + h / 2, z * F, (yaw || 0) + (F < 0 ? Math.PI : 0), mt);
+        if (V && !(fl & 2)) V.box(w, h, d, mt, c, x * F, y + h / 2, z * F, fy(yaw)); if (!(fl & 1)) col(C.cuboid(w / 2, h / 2, d / 2), x * F, y + h / 2, z * F, fy(yaw), mt);
       };
-      const r = (x, y, z, w, h, d, mt, c, yaw, fl) => { if (!(fl & 2)) addVis(Geo.wedge(w, h, d), mt, c, x, y + h / 2, z, yaw); if (!(fl & 1)) for (const cd of Phys.colliderDescs({ sh: { t: 'ramp', s: [w, h, d] } })) col(cd, x * F, y + h / 2, z * F, (yaw || 0) + (F < 0 ? Math.PI : 0), mt); };
+      const r = (x, y, z, w, h, d, mt, c, yaw, fl) => { if (V && !(fl & 2)) V.ramp(w, h, d, mt, c, x * F, y + h / 2, z * F, fy(yaw)); if (!(fl & 1)) for (const cd of Phys.colliderDescs({ sh: { t: 'ramp', s: [w, h, d] } })) col(cd, x * F, y + h / 2, z * F, fy(yaw), mt); };
       const water = (x, y, z, w, d) => {
         const dep = (wx, wz) => y - (X.ground ? X.ground(wx, wz) : -9);
-        g.add(Water.mesh(x * F, y, z * F, w, d, dep)); this.waters.push({ x0: x * F - w / 2, x1: x * F + w / 2, z0: z * F - d / 2, z1: z * F + d / 2, y, dep });
+        if (V) V.water(x * F, y, z * F, w, d, dep); this.waters.push({ x0: x * F - w / 2, x1: x * F + w / 2, z0: z * F - d / 2, z1: z * F + d / 2, y, dep });
       };
-      const batch = {}, treeM = [];
+      const treeM = [];
       const X = {
         rnd,
-        // building box: sides tiled with a facade texture per window bay, flat roof; merged into one mesh per texture
+        // building box: sides tiled with a facade texture per window bay, flat roof (drawn by the view)
         facade: (x, y, z, w, h, d, tex, bayW, bayH, solid, yaw) => {
-          x *= F; z *= F; yaw = (yaw || 0) + (F < 0 ? Math.PI : 0);
-          const B = batch[tex] || (batch[tex] = { p: [], u: [], n: [] }), R0 = batch.roof || (batch.roof = { p: [], u: [], n: [] });
-          const cs = Math.cos(yaw), sn = Math.sin(yaw), T = (lx, ly, lz) => [x + lx * cs + lz * sn, y + ly, z - lx * sn + lz * cs];
-          const quad = (Bt, a, b2, c, d2, nrm, uw, vh) => { Bt.p.push(...a, ...b2, ...c, ...a, ...c, ...d2); Bt.u.push(0, 0, uw, 0, uw, vh, 0, 0, uw, vh, 0, vh); for (let i = 0; i < 6; i++) Bt.n.push(...nrm); };
-          const hw = w / 2, hd = d / 2, rot = (nx, nz) => [nx * cs + nz * sn, 0, -nx * sn + nz * cs];
-          quad(B, T(-hw, 0, hd), T(hw, 0, hd), T(hw, h, hd), T(-hw, h, hd), rot(0, 1), Math.max(1, Math.round(w / bayW)), Math.max(1, Math.round(h / bayH)));
-          quad(B, T(hw, 0, -hd), T(-hw, 0, -hd), T(-hw, h, -hd), T(hw, h, -hd), rot(0, -1), Math.max(1, Math.round(w / bayW)), Math.max(1, Math.round(h / bayH)));
-          quad(B, T(hw, 0, hd), T(hw, 0, -hd), T(hw, h, -hd), T(hw, h, hd), rot(1, 0), Math.max(1, Math.round(d / bayW)), Math.max(1, Math.round(h / bayH)));
-          quad(B, T(-hw, 0, -hd), T(-hw, 0, hd), T(-hw, h, hd), T(-hw, h, -hd), rot(-1, 0), Math.max(1, Math.round(d / bayW)), Math.max(1, Math.round(h / bayH)));
-          quad(R0, T(-hw, h, hd), T(hw, h, hd), T(hw, h, -hd), T(-hw, h, -hd), [0, 1, 0], w / 4, d / 4);
+          x *= F; z *= F; yaw = fy(yaw);
+          if (V) V.facade(x, y, z, w, h, d, tex, bayW, bayH, yaw);
           if (solid) col(C.cuboid(w / 2, h / 2, d / 2), x, y + h / 2, z, yaw, 'ground_plaster');
         },
         // heightfield terrain (w × d m, cell size c) + a sand layer blended in by sandFn (0..1)
@@ -480,8 +440,8 @@ const Env = {
           const q = v => Math.round(v * 1000) / 1000;   // grid points exactly on boundaries (x = -14.000002 is -14)
           const nx = Math.round(w / c), nz = Math.round(d / c), H = (x, z) => hf(F * q(x), F * q(z)), S = (x, z) => sandFn(F * q(x), F * q(z));
           X.ground = H; this.groundAt = H;
-          const geo = new THREE.PlaneGeometry(w, d, nx, nz).rotateX(-Math.PI / 2), P = geo.attributes.position, uv = geo.attributes.uv, cols = new Float32Array(P.count * 4);
-          for (let i = 0; i < P.count; i++) { const px = P.getX(i), pz = P.getZ(i); P.setY(i, H(px, pz)); uv.setXY(i, px / 4, pz / 4); cols.set([1, 1, 1, S(px, pz)], i * 4); }
+          const geo = new THREE.PlaneGeometry(w, d, nx, nz).rotateX(-Math.PI / 2), P = geo.attributes.position;
+          for (let i = 0; i < P.count; i++) P.setY(i, H(P.getX(i), P.getZ(i)));
           if (hole) {   // cut the holed cells out and collide with the triangles themselves
             const idx = geo.index.array, keep = [];
             for (let t = 0; t < idx.length; t += 3) { let cx = 0, cz = 0; for (let k = 0; k < 3; k++) { cx += P.getX(idx[t + k]); cz += P.getZ(idx[t + k]); } if (!hole(F * cx / 3, F * cz / 3)) keep.push(idx[t], idx[t + 1], idx[t + 2]); }
@@ -494,57 +454,26 @@ const Env = {
             col(C.heightfield(nz, nx, hs, { x: w, y: 1, z: d }), 0, 0, 0, 0, 'terrain');
           }
           this.sandAt = S;
-          geo.computeVertexNormals();
-          const grass = new THREE.Mesh(geo, Mats.get('ground_grass')); grass.receiveShadow = true; grass.userData.mt = 'ground_grass'; g.add(grass);
-          const sg = geo.clone(); sg.setAttribute('color', new THREE.BufferAttribute(cols, 4));
-          const sandMat = () => csmMat(new THREE.MeshStandardMaterial({ map: Tex.make('sand', true), vertexColors: true, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, roughness: 0.95, metalness: 0 }));
-          const sand = new THREE.Mesh(sg, sandMat()); sand.userData.remat = sandMat;
-          sand.material.userData.outlineParameters = { visible: false }; sand.receiveShadow = true; sand.renderOrder = 1; g.add(sand);
+          if (V) V.terrain(geo, S);
         },
         // a mirror (reflects the scene on Medium+, a dull silver panel on Low); only rendered when you're near it
-        mirror: (x, y, z, w, h) => {
-          const geo = new THREE.PlaneGeometry(w, h);
-          const m = R.path === 'pbr' ? new Reflector(geo, { textureWidth: 1024, textureHeight: Math.round(1024 * h / w), color: 0xc4ccd0, clipBias: 0.003 })
-            : new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: '#a9b6bb' }));
-          m.position.set(x * F, y + h / 2, z * F); m.rotation.y = Math.PI / 2 + (F < 0 ? Math.PI : 0); m.userData.mirror = 1; g.add(m); this.mirrors.push(m);
-        },
-        cyl: (x, y, z, rad, h, c) => { const m = matMesh(Geo.get(`cy${rad},${h},m`, () => new THREE.CylinderGeometry(rad * 0.8, rad, h, 16)), 'concrete', c, true); m.position.set(x * F, y + h / 2, z * F); m.castShadow = true; g.add(m); },
+        mirror: (x, y, z, w, h) => { if (V) V.mirror(x * F, y, z * F, w, h, Math.PI / 2 + (F < 0 ? Math.PI : 0)); },
+        cyl: (x, y, z, rad, h, c) => { if (V) V.cyl(x * F, y, z * F, rad, h, c); },
         tree: (x, z, s) => treeM.push(M(x * F, 0, z * F, rnd() * 6.28, s)),
         // extruded outline (points [x, z]) from y0 to y1, looks only (collide with boxes / posts)
-        prism: (pts, y0, y1, mt, c) => {
-          const sh = new THREE.Shape(pts.map(([x, z]) => new THREE.Vector2(x * F, z * F)));
-          const geo = new THREE.ExtrudeGeometry(sh, { depth: y1 - y0, bevelEnabled: false, curveSegments: 6 }).rotateX(Math.PI / 2);
-          const uv = geo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) / 2, uv.getY(i) / 2);   // 1 texture = 2 m like the boxes
-          const m = matMesh(geo, mt, c, true); m.position.y = y1; g.add(m);
-        },
+        prism: (pts, y0, y1, mt, c) => { if (V) V.prism(pts.map(([x, z]) => [x * F, z * F]), y0, y1, mt, c); },
         post: (x, y, z, rad, h) => col(C.cylinder(h / 2, rad), x * F, y + h / 2, z * F, 0, 'concrete'),
         // big lettering on a far hill, facing the middle of the map
-        sign: (text, x, y, z, w, h) => {
-          const cv = document.createElement('canvas'); cv.width = 2048; cv.height = 300; const c2 = cv.getContext('2d');
-          c2.font = 'bold 250px Arial, sans-serif'; c2.textAlign = 'center'; c2.textBaseline = 'middle'; c2.fillStyle = '#f4f4f0'; c2.fillText(text, 1024, 160, 2000);
-          const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace;
-          const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: t, transparent: true, alphaTest: 0.4, fog: true, side: THREE.DoubleSide }));
-          m.material.userData.outlineParameters = { visible: false }; m.position.set(x * F, y, z * F); m.lookAt(0, y, 0); g.add(m);
-        },
+        sign: (text, x, y, z, w, h) => { if (V) V.sign(text, x * F, y, z * F, w, h); },
         // a dark room: lights fade out while the camera is inside this box
         zone: (x0, x1, y0, y1, z0, z1) => this.zones.push([Math.min(x0 * F, x1 * F), Math.max(x0 * F, x1 * F), y0, y1, Math.min(z0 * F, z1 * F), Math.max(z0 * F, z1 * F)]),
       };
       MAPS[Th.build](b, r, water, X);
-      for (const k in vis) {
-        const { mt, c, gs } = vis[k]; let n = 0, o = 0; for (const q of gs) n += q.attributes.position.count;
-        const P = new Float32Array(n * 3), N = new Float32Array(n * 3), U = new Float32Array(n * 2);
-        for (const q of gs) { const A = q.attributes; P.set(A.position.array, o * 3); N.set(A.normal.array, o * 3); U.set(A.uv.array, o * 2); o += A.position.count; q.dispose(); }
-        const geo = new THREE.BufferGeometry();
-        geo.setAttribute('position', new THREE.BufferAttribute(P, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(N, 3)); geo.setAttribute('uv', new THREE.BufferAttribute(U, 2));
-        const m = matMesh(geo, mt, c, true); if (mt === 'glass' || mt === 'neon') m.castShadow = false; g.add(m);
+      if (V) {
+        V.finish();
+        if (treeM.length) V.inst(Th.tree || 'pine', treeM, 'fabric', Th.treeCol || '#2f4a33');
+        if (Th.mount) V.mountains(Th, rnd);
       }
-      for (const k in batch) {
-        const Bt = batch[k], geo = new THREE.BufferGeometry();
-        geo.setAttribute('position', new THREE.Float32BufferAttribute(Bt.p, 3)); geo.setAttribute('normal', new THREE.Float32BufferAttribute(Bt.n, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(Bt.u, 2));
-        const mt = 'ground_' + k, m = new THREE.Mesh(geo, Mats.get(mt)); m.castShadow = m.receiveShadow = true; m.userData.mt = mt; g.add(m);
-      }
-      if (treeM.length) this.inst(Th.tree || 'pine', treeM, 'fabric', Th.treeCol || '#2f4a33');
-      if (Th.mount) g.add(this.mountains(Th, rnd));
       return;
     }
     // trees: a few near the middle, most of them as a forest further out
@@ -556,7 +485,7 @@ const Env = {
       if (gone.has(nid)) { nid++; continue; }
       trees.push(mt); treeIds.push(item(x, 2 * sc, z, col(C.cylinder(2.2 * sc, 0.3 * sc), x, 2.2 * sc, z, 0, 'wood')));
     }
-    this.reg(this.inst(Th.tree, trees, 'fabric', Th.treeCol), treeIds);
+    this.reg(V ? V.inst(Th.tree, trees, 'fabric', Th.treeCol) : [], treeIds);
     // rocks and boulders
     const rocks = [], rockIds = [];
     for (let i = 0; i < 80; i++) {
@@ -566,7 +495,7 @@ const Env = {
       if (gone.has(nid)) { nid++; continue; }
       rocks.push(mt); rockIds.push(item(x, 0.4 * sc, z, col(C.ball(0.72 * sc), x, 0.1 * sc, z, 0, 'concrete')));
     }
-    this.reg(this.inst('rock', rocks, 'concrete', Th.rockCol), rockIds);
+    this.reg(V ? V.inst('rock', rocks, 'concrete', Th.rockCol) : [], rockIds);
     // shipping container stacks along the road
     if (Th.boxes) {
       const colors = ['#a8452f', '#2f6aa0', '#3f7a4a', '#c28a2c', '#6d6f72'], byColor = {}, byColorIds = {};
@@ -578,60 +507,9 @@ const Env = {
           (byColor[c] || (byColor[c] = [])).push(mt); (byColorIds[c] || (byColorIds[c] = [])).push(item(x, y, z, col(C.cuboid(3.0, 1.3, 1.22), x, y, z, yaw, 'metal')));
         }
       }
-      for (const c in byColor) this.reg(this.inst('container', byColor[c], 'metal', c), byColorIds[c]);
+      for (const c in byColor) this.reg(V ? V.inst('container', byColor[c], 'metal', c) : [], byColorIds[c]);
     }
-    // distant mountain range: one continuous ring-shaped heightfield around the map (no colliders)
-    g.add(this.mountains(Th, rnd));
-    // road
-    if (Th.road) {
-      const geo = new THREE.PlaneGeometry(1400, 9).rotateX(-Math.PI / 2), uv = geo.attributes.uv;
-      for (let i = 0; i < uv.count; i++) uv.setX(i, uv.getX(i) * 1400 / 9);
-      const road = new THREE.Mesh(geo, Mats.get('ground_road')); road.userData.mt = 'ground_road'; road.position.set(0, 0.02, ROAD_Z); road.receiveShadow = true; g.add(road);
-    }
-  },
-  // one InstancedMesh per mesh of a model (per material slot), using the tier's model set
-  // a low-poly ring of ridges and peaks; snow caps where the theme has them, pre-hazed toward the fog colour
-  mountains(Th, rnd) {
-    const NA = 150, radii = [320, 345, 372, 400, 432, 468, 510, 560, 640, 720], NR = radii.length;
-    const ph = [0, 1, 2, 3, 4, 5].map(() => rnd() * 6.28);
-    const pos = new Float32Array(NA * NR * 3), cols = new Float32Array(NA * NR * 3);
-    const base = new THREE.Color(Th.mount), cap = Th.cap ? new THREE.Color(Th.cap) : null, fog = new THREE.Color(Th.fog[0]), c = new THREE.Color();
-    const sm = (e0, e1, x) => { const t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); };
-    for (let j = 0; j < NR; j++) for (let i = 0; i < NA; i++) {
-      const a = (i + (j ? (rnd() - 0.5) * 0.6 : 0)) / NA * Math.PI * 2, r = radii[j] + (j && j < NR - 1 ? (rnd() - 0.5) * 18 : 0);
-      // ridge line around the ring (a few octaves), sharpened into peaks
-      let n = 0.5 + 0.22 * Math.sin(a * 3 + ph[0]) + 0.16 * Math.sin(a * 7 + ph[1]) + 0.1 * Math.sin(a * 13 + ph[2]) + 0.06 * Math.sin(a * 23 + ph[3]);
-      n = clamp(n, 0.05, 1); n = n * n * (1.3 + 0.25 * Math.sin(a * 5 + ph[4]));
-      const t = (r - 320) / 400, prof = sm(0, 0.35, t) * (1 - 0.3 * sm(0.55, 1, t));
-      const h = j === 0 ? -3 : Math.max(0, Th.mountH * prof * (0.35 + n) + (rnd() - 0.5) * 9 * prof);
-      const k = (j * NA + i) * 3; pos[k] = Math.cos(a) * r; pos[k + 1] = h; pos[k + 2] = Math.sin(a) * r;
-      c.copy(base).multiplyScalar(0.8 + 0.3 * rnd());
-      if (cap) c.lerp(cap, sm(Th.mountH * 0.5, Th.mountH * 0.62, h + (rnd() - 0.5) * 8));
-      c.lerp(fog, (Th.haze ?? 1) * (0.35 + 0.25 * sm(380, 700, r))); cols.set([c.r, c.g, c.b], k);
-    }
-    const idx = [];
-    for (let j = 0; j < NR - 1; j++) for (let i = 0; i < NA; i++) {
-      const i2 = (i + 1) % NA, a0 = j * NA + i, a1 = j * NA + i2, b0 = (j + 1) * NA + i, b1 = (j + 1) * NA + i2;
-      if ((i + j) & 1) idx.push(a0, a1, b0, a1, b1, b0); else idx.push(a0, b1, b0, a0, a1, b1);   // wound to face up / inward
-    }
-    let geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.BufferAttribute(cols, 3)); geo.setIndex(idx);
-    geo = geo.toNonIndexed(); geo.computeVertexNormals();   // faceted: every triangle gets its own normal
-    const m = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, fog: false }));
-    m.frustumCulled = false; m.userData.nw = true;
-    return m;
-  },
-  inst(name, list, mainType, mainColor) {
-    const src = (R.path === 'ps1' && Models.srcPs1[name]) || Models.src[name], out = []; if (!src || !list.length) return out;
-    src.updateMatrixWorld(true);
-    const inv = new THREE.Matrix4().copy(src.matrixWorld).invert(), tmp = new THREE.Matrix4();
-    src.traverse(o => {
-      if (!o.isMesh) return;
-      const sl = o.userData.slot, [t, c] = sl === 'main' ? [mainType, mainColor] : (SLOT_MATS[sl] || ['plastic', null]);
-      const local = new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld), im = new THREE.InstancedMesh(o.geometry, Mats.get(t, c), list.length);
-      list.forEach((m, i) => im.setMatrixAt(i, tmp.multiplyMatrices(m, local)));
-      im.castShadow = im.receiveShadow = true; im.frustumCulled = false; im.userData.mt = t; im.userData.mc = c;
-      this.group.add(im); out.push(im);
-    });
-    return out;
+    // distant mountain range and the road: looks only
+    if (V) { V.mountains(Th, rnd); if (Th.road) V.road(); }
   },
 };

@@ -1510,7 +1510,7 @@ const Game = {
     Vehicles.updateVisuals(dt);
     Gore.update(dt);
     Tools.updateBeams();
-    FX.update(dt); Bots.update(dt); Env.tick(dt); Audio.update(dt);
+    FX.update(dt); Bots.update(dt); View.envTick(dt); Audio.update(dt);
     this.updateCamera(dt);
     DmgNum.update(dt);
     PlayerView.updatePlates();
