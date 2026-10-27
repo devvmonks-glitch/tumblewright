@@ -151,12 +151,12 @@ const PH = {
   // a prop asks to become entity eid
   disguise(p, eid) {
     if (!this.live() || p.team !== 'prop' || p.dead) return;
-    const e = World.ents.get(eid); if (!e || !e.mesh || e.d.k === 'part' || e.d.veh || e.d.sh.t === 'spawn') return;
-    if (e.mesh.position.distanceTo(p.pos) > 9) return;
-    const box = new THREE.Box3().setFromObject(e.mesh), s = box.getSize(new V3());
+    const e = World.ents.get(eid); if (!e || !e.body || e.d.k === 'part' || e.d.veh || e.d.sh.t === 'spawn') return;
+    const t = e.body.translation(); if (p.pos.distanceTo(_v1.set(t.x, t.y, t.z)) > 9) return;
+    const box = Phys.bounds(e, new THREE.Box3()), s = box.getSize(new V3());   // its physical size (the simulation has no meshes)
     if (Math.max(s.x, s.y, s.z) > 3.2 || Math.max(s.x, s.y, s.z) < 0.15) return Net.notify(p.id, 'Too big or too small to hide as.');
     const d = {}; for (const k of ['sh', 'm', 'c', 'c2', 'vis', 'hc']) if (e.d[k] !== undefined) d[k] = e.d[k];
-    p.disg = { d, s: [r4(s.x), r4(s.y), r4(s.z)], b: r4(box.min.y - e.mesh.position.y) };
+    p.disg = { d, s: [r4(s.x), r4(s.y), r4(s.z)], b: r4(box.min.y - t.y) };
     Net.sendPlayers();
   },
   // host hit test size for a disguised player: a capsule roughly the object's size

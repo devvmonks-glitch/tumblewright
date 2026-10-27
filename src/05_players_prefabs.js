@@ -1,6 +1,6 @@
 
 /* ============================================================================
-   6. PLAYERS (avatars, nameplates, character controller / prediction)
+   6. PLAYERS (state, bodies, character controller / prediction; avatars and nameplates: 09_view.js)
    ========================================================================== */
 class Player {
   constructor(o) {
@@ -26,20 +26,18 @@ const Players = {
   },
   add(o) {
     let p = this.map.get(o.id);
-    if (!p) { p = new Player(o); this.map.set(o.id, p); this.makeBody(p); this.makeAvatar(p); this.makePlate(p); }
-    else { p.name = o.name ?? p.name; p.color = o.color ?? p.color; p.tier = o.tier ?? p.tier; if (o.idx != null) p.idx = o.idx; if (o.joinOrder != null) p.joinOrder = o.joinOrder; this.refreshLook(p); }
+    if (!p) { p = new Player(o); this.map.set(o.id, p); this.makeBody(p); View.playerAdded(p); }
+    else { p.name = o.name ?? p.name; p.color = o.color ?? p.color; p.tier = o.tier ?? p.tier; if (o.idx != null) p.idx = o.idx; if (o.joinOrder != null) p.joinOrder = o.joinOrder; View.playerLook(p); }
     if (o.canEdit != null) p.canEdit = o.canEdit; if (o.muted != null) p.muted = o.muted; if (o.lvl != null) p.lvl = o.lvl; if ('team' in o) p.team = o.team; if ('disg' in o) p.disg = o.disg;
     if (o.kills != null) p.kills = o.kills; if (o.deaths != null) p.deaths = o.deaths;
     if (o.isLocal) { p.isLocal = true; this.local = p; }
-    if (p.avatar) p.avatar.visible = !p.isLocal;
+    View.playerShow(p);
     return p;
   },
   remove(id) {
     const p = this.map.get(id); if (!p) return;
     if (p.body) { Phys.colMap.delete(p.col.handle); Phys.world.removeRigidBody(p.body); Phys.qDirty = true; }
-    if (p.avatar) R.scene.remove(p.avatar);
-    if (p.disgMesh) R.scene.remove(p.disgMesh);
-    if (p.plate) p.plate.remove();
+    View.playerRemoved(p);
     this.map.delete(id);
     if (this.local === p) this.local = null;
   },
@@ -49,60 +47,6 @@ const Players = {
     p.body = Phys.world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(p.pos.x, p.pos.y + CFG.capHalf + CFG.capR, p.pos.z));
     p.col = Phys.world.createCollider(RAPIER.ColliderDesc.capsule(CFG.capHalf, CFG.capR).setFriction(0.0), p.body);
     Phys.colMap.set(p.col.handle, 'p:' + p.id);
-  },
-  makeAvatar(p) {
-    if (Models.has('avatar')) {
-      const g = Models.instance('avatar', 'plastic', p.color);
-      const blob = new THREE.Mesh(Geo.get('av_blob', () => new THREE.CircleGeometry(0.42, 24).rotateX(-Math.PI / 2)), Players.blobMat || (Players.blobMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3, depthWrite: false })));
-      Players.blobMat.userData.outlineParameters = { visible: false }; blob.position.y = 0.03; blob.name = 'blob'; blob.renderOrder = 1;
-      g.add(blob);
-      p.avatar = g; g.visible = !p.isLocal; R.scene.add(g);
-      return;
-    }
-    const g = new THREE.Group();
-    const torso = matMesh(Geo.get('av_t', () => new THREE.CapsuleGeometry(0.27, 0.5, 6, 16)), 'plastic', p.color); torso.position.y = 1.08;
-    const head = matMesh(Geo.get('av_h', () => new THREE.SphereGeometry(0.21, 24, 16)), 'plastic', p.color); head.position.y = 1.62;
-    const visor = matMesh(Geo.get('av_v', () => new RoundedBoxGeometry(0.3, 0.13, 0.12, 2, 0.04)), 'metal', '#1b1f27'); visor.position.set(0, 1.64, -0.15);
-    const pack = matMesh(Geo.get('av_p', () => new RoundedBoxGeometry(0.34, 0.4, 0.16, 2, 0.04)), 'plastic', '#2a2c31'); pack.position.set(0, 1.12, 0.26);
-    const legL = matMesh(Geo.get('av_l', () => new THREE.CapsuleGeometry(0.09, 0.42, 4, 10).translate(0, -0.3, 0)), 'plastic', '#2a2c31'); legL.position.set(-0.12, 0.66, 0);
-    const legR = legL.clone(); legR.position.x = 0.12;
-    const gun = matMesh(Geo.get('av_g', () => new RoundedBoxGeometry(0.1, 0.12, 0.42, 2, 0.02)), 'metal', '#5b6270'); gun.position.set(0.26, 1.18, -0.3);
-    head.name = 'head'; legL.name = 'legL'; legR.name = 'legR'; gun.name = 'gun'; torso.name = 'torso';
-    // soft blob shadow so players stay grounded on the Low (no shadow-map) tier
-    const blob = new THREE.Mesh(Geo.get('av_blob', () => new THREE.CircleGeometry(0.42, 24).rotateX(-Math.PI / 2)), Players.blobMat || (Players.blobMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3, depthWrite: false })));
-    Players.blobMat.userData.outlineParameters = { visible: false }; blob.position.y = 0.03; blob.name = 'blob'; blob.renderOrder = 1;
-    g.add(torso, head, visor, pack, legL, legR, gun, blob);
-    p.avatar = g; g.visible = !p.isLocal; R.scene.add(g);
-  },
-  refreshLook(p) {
-    if (!p.avatar) return;
-    for (const n of ['torso', 'head', 'legL', 'legR']) { const m = p.avatar.getObjectByName(n); if (m && (n !== 'head' || !m.parent || m.parent.name !== 'torso')) Models.recolor(m, 'plastic', n.startsWith('leg') && !Models.has('avatar') ? '#2a2c31' : p.color); }
-    this.updatePlate(p, true);
-  },
-  makePlate(p) {
-    const el = h('div', { class: 'nameplate' }); el.innerHTML = '<div class="nm"></div><div class="hb"><i></i></div>';
-    $('#nameplates').append(el); p.plate = el; this.updatePlate(p, true);
-  },
-  updatePlate(p, full) {
-    if (!p.plate) return;
-    if (full || p._plateKey !== p.name + p.tier + p.color + (Net.hostId === p.id) + p.muted + p.lvl) {
-      p._plateKey = p.name + p.tier + p.color + (Net.hostId === p.id) + p.muted + p.lvl;
-      p.plate.querySelector('.nm').innerHTML = `<span class="lv${lvTier(p.lvl || 1)}">${p.lvl || 1}</span>${Net.hostId === p.id ? '👑' : ''}<span style="color:${esc(p.color)}">${esc(p.name)}</span>${tierBadge(p.tier)}${p.muted ? '🔇' : ''}`;
-    }
-    const hb = p.plate.querySelector('.hb i'); hb.style.width = p.hp + '%'; hb.style.background = p.hp > 50 ? '#4ade80' : p.hp > 25 ? '#fbbf24' : '#ef4444';
-  },
-  // Prop Hunt disguise: swap the body for the object's model (built from the same data as the real prop)
-  disguise(p) {
-    const D = !p.dead && Rules.mode === 'prophunt' ? p.disg : null, key = D ? JSON.stringify(D.d) : '';
-    if (p._dk !== key) {
-      p._dk = key;
-      if (p.disgMesh) { R.scene.remove(p.disgMesh); p.disgMesh = null; }
-      if (D) { try { p.disgMesh = buildVisual(D.d); p.disgMesh.traverse(o => { if (o.isMesh) o.castShadow = o.receiveShadow = true; }); R.scene.add(p.disgMesh); } catch (e) { p.disgMesh = null; } }
-    }
-    if (!p.disgMesh) return false;
-    p.avatar.visible = false;
-    p.disgMesh.position.set(p.renderPos.x, p.renderPos.y - D.b, p.renderPos.z); p.disgMesh.rotation.set(0, p.renderYaw, 0);
-    return true;
   },
   // spawn protection: the host knows the deadline, everyone else gets a snapshot flag
   isProt(p) { return Net.isHost ? !!(p.protUntil && now() < p.protUntil) : !!p.prot; },
@@ -125,7 +69,7 @@ const Players = {
     const acc = p.grounded ? 14 : 3.5, k = 1 - Math.exp(-acc * dt);
     p.vel.x += (wx - p.vel.x) * k; p.vel.z += (wz - p.vel.z) * k;
     p.vel.y -= CFG.gravity * dt;
-    if (p.grounded && inp.jump) { p.vel.y = CFG.jump; p.grounded = false; Audio.play('cloth', 0.7); }
+    if (p.grounded && inp.jump) { p.vel.y = CFG.jump; p.grounded = false; View.sound('cloth', null, 0.7); }
     if (p.kb) { p.vel.add(p.kb); p.kb = null; }
     const des = { x: p.vel.x * dt, y: p.vel.y * dt, z: p.vel.z * dt }, vy0 = p.vel.y;
     Phys.sync(); this.cc.computeColliderMovement(p.col, des, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS);
@@ -136,12 +80,12 @@ const Players = {
     if (p.grounded && !wasGrounded && vy0 < -2.5) {   // landed on a trampoline: bounce (hold jump to gain height)
       const h = Phys.cast(_v1.set(p.pos.x, p.pos.y + 0.1, p.pos.z), _v2.set(0, -1, 0), 0.4, p.body);
       const e = h && typeof h.id === 'number' ? World.ents.get(h.id) : null;
-      if (e && e.d.bnc) { p.vel.y = Math.min(24, -vy0 * 0.88 + (inp.jump ? 3.2 : 0)); p.grounded = false; Audio.at('boing', p.pos); }
+      if (e && e.d.bnc) { p.vel.y = Math.min(24, -vy0 * 0.88 + (inp.jump ? 3.2 : 0)); p.grounded = false; View.sound('boing', p.pos); }
     }
     if (p.grounded && p.vel.y < 0) p.vel.y = wasGrounded ? -0.5 : 0;
     if (des.y > 0 && mv.y < des.y * 0.5) p.vel.y = Math.min(p.vel.y, 0);
     p.body.setNextKinematicTranslation({ x: p.pos.x, y: p.pos.y + CFG.capHalf + CFG.capR, z: p.pos.z });
-    if (p.pos.y < CFG.killY) Game.localFellOut();
+    if (p.pos.y < CFG.killY) View.localFellOut();
   },
   setPos(p, v) { p.pos.copy(v); p.prevPos.copy(v); p.renderPos.copy(v); p.vel.set(0, 0, 0); if (p.body) p.body.setTranslation({ x: v.x, y: v.y + CFG.capHalf + CFG.capR, z: v.z }, true); },
   // remote players: kinematic capsule follows reported/interpolated position
@@ -149,60 +93,6 @@ const Players = {
     if (!p.body) return;
     p.col.setEnabled(!p.dead && !p.seat && !p.noclip);
     p.body.setNextKinematicTranslation({ x: pos.x, y: pos.y + CFG.capHalf + CFG.capR, z: pos.z });
-  },
-  updateAvatar(p, dt) {
-    const a = p.avatar; if (!a) return;
-    if (this.disguise(p)) return;
-    const se = p.seat ? World.ents.get(p.seat) : null, seated = !!(se && se.mesh);
-    a.visible = (!p.isLocal || seated) && !p.dead;   // your own body shows in the third-person vehicle camera
-    if (!a.visible) { if (p.plate && !p.isLocal) p.plate.style.display = 'none'; return; }
-    a.getObjectByName('blob').visible = R.path === 'ps1' && !seated;
-    const head = a.getObjectByName('head'); head.rotation.x = p.pitch * 0.6;
-    const gun = a.getObjectByName('gun'); gun.visible = !seated;
-    if (seated) {   // sitting on the seat (hips on the cushion), turned and tilted with the vehicle, legs forward
-      const sp = SIT_POSE[se.d.vis] || SIT_POSE[se.d.sh && se.d.sh.t] || SIT_POSE.seat;
-      a.quaternion.copy(se.mesh.quaternion); if (sp[1]) a.quaternion.multiply(_q3.setFromAxisAngle(UP, sp[1]));
-      a.position.copy(_v1.set(0, sp[0] + 0.08 - 0.72, 0.03).applyQuaternion(a.quaternion).add(se.mesh.position));
-      a.getObjectByName('legL').rotation.x = 1.4; a.getObjectByName('legR').rotation.x = 1.4;
-      return;
-    }
-    a.position.copy(p.renderPos); if (p.crouch) a.position.y -= 0.3;
-    a.rotation.set(0, p.renderYaw, 0);
-    const spd = Math.hypot(p.vel.x, p.vel.z);
-    p.walkPhase += dt * spd * 2.2;
-    const sw = Math.sin(p.walkPhase) * Math.min(1, spd / 4) * 0.6;
-    a.getObjectByName('legL').rotation.x = sw; a.getObjectByName('legR').rotation.x = -sw;
-    gun.rotation.x = p.pitch;
-    const wcol = { physgun: '#4dd0e1', toolgun: '#fed330', pistol: '#5b6270', rifle: '#3d4a32', grenade: '#3d4a32', crowbar: '#c0392b' }[p.weapon] || '#5b6270';
-    if (gun.userData.w !== p.weapon) {
-      gun.userData.w = p.weapon;
-      const W = WEAPON_MODEL[p.weapon], mk = 'wp_' + ((W && W.model) || p.weapon);
-      if (W && Models.has(mk) && Models.has('avatar')) {
-        // swap in the held weapon's model (its first-person hand is hidden; the avatar has its own hands)
-        if (gun.userData.wm) gun.remove(gun.userData.wm);
-        else gun.traverse(o => { if (o.isMesh) o.visible = false; });
-        const wm = Models.instance(mk, W.t, W.c), hand = wm.getObjectByName(mk + '_hand');
-        if (hand) hand.visible = false;
-        wm.position.set(0, 0.03, -0.12); gun.add(wm); gun.userData.wm = wm;
-      } else Models.recolor(gun, 'metal', wcol);
-    }
-  },
-  updatePlates() {
-    const cam = R.camera, W = innerWidth, H = innerHeight;
-    for (const p of this.map.values()) {
-      if (!p.plate) continue;
-      if (p.isLocal || p.dead || (Rules.mode === 'prophunt' && p.team === 'prop' && (this.local || {}).team !== 'prop')) { p.plate.style.display = 'none'; continue; }
-      _v1.copy(p.renderPos); _v1.y += 2.05;
-      const dist = _v1.distanceTo(cam.position);
-      _v1.project(cam);
-      if (_v1.z > 1 || dist > 180) { p.plate.style.display = 'none'; continue; }
-      p.plate.style.display = '';
-      const sc = clamp(1.2 - dist / 120, 0.6, 1);
-      p.plate.style.transform = `translate(${(_v1.x * 0.5 + 0.5) * W}px,${(-_v1.y * 0.5 + 0.5) * H}px) translate(-50%,-100%) scale(${sc})`;
-      p.plate.style.left = '0'; p.plate.style.top = '0';
-      const pr = this.isProt(p); if (p._pr !== pr) { p._pr = pr; p.plate.classList.toggle('prot', pr); }
-      this.updatePlate(p);
-    }
   },
 };
 

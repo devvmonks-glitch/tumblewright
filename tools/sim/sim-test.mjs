@@ -1,5 +1,5 @@
 // Headless simulation test: runs the game's host simulation in Node with no page and no renderer.
-//   cd tools/sim && npm install && node sim-test.mjs [--strict] [--json]
+//   cd tools/sim && npm install && node sim-test.mjs [--strict] [--json] [--browser-view]
 // 1. builds the game module from src/ (bundle.mjs) and loads it against a stand-in browser (env.mjs)
 // 2. plays a scripted solo session (props, NPCs, a car) at 60 Hz and at the governor's 30 Hz level, and checks the physics
 // 3. lists every call the simulation makes into presentation code (renderer, UI, audio, effects, DOM). That list is the
@@ -12,6 +12,8 @@ import { buildSimBundle, staticCoupling, PRESENTATION } from './bundle.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url)), OUT = join(HERE, '.out');
 const STRICT = process.argv.includes('--strict'), JSON_OUT = process.argv.includes('--json');
+// by default the View hooks stay no-ops, the way the host worker will run; --browser-view keeps the mesh code (09_view.js)
+const BROWSER_VIEW = process.argv.includes('--browser-view');
 
 mkdirSync(OUT, { recursive: true });
 const { code, where } = buildSimBundle();
@@ -73,12 +75,13 @@ let ok = true;
 const check = (name, pass, detail) => { results.push({ name, pass, detail }); if (!pass) ok = false; log(`  ${pass ? 'ok  ' : 'FAIL'} ${name}${detail ? '  (' + detail + ')' : ''}`); };
 
 const mods = await import(pathToFileURL(bundlePath).href);
-const { Phys, World, Players, Auth, Net, Game, Rules, Env, THREE, R } = mods;
+const { Phys, World, Players, Auth, Net, Game, Rules, Env, THREE, R, View, VIEW_NONE } = mods;
 R.scene = new THREE.Scene(); R.camera = new THREE.PerspectiveCamera(70, 16 / 9, 0.1, 2000);   // shared code still adds meshes to these
 instrument(mods);
+if (!BROWSER_VIEW) Object.assign(View, VIEW_NONE);   // nothing is drawn: entities get no meshes, players no avatars
 
 let clock = 1; setClock(clock);
-await Phys.init(); Players.init(); World.initStatic();
+await Phys.init(); Players.init(); View.init();
 
 function startSession(level) {
   Game.resetForPlay(); Net.startOffline();

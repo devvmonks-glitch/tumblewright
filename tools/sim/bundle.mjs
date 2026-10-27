@@ -11,14 +11,14 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..'), SRC = jo
 
 // modules that belong to the page: the simulation should not call them (Editor / Admin / Prog are listed because the
 // host-side parts that live in them have to move out)
-export const PRESENTATION = ['R', 'UI', 'Audio', 'FX', 'Gore', 'DmgNum', 'Tools', 'Editor', 'Admin', 'Prog', 'Input', 'Hotbar', 'Thumbs', 'Nav', 'Models', 'Mats', 'Tex', 'Geo', 'Bots', 'Social', 'Online', 'DiscordAct', 'BoardTex', 'HOLO'];
+export const PRESENTATION = ['R', 'UI', 'Audio', 'FX', 'Gore', 'DmgNum', 'Tools', 'Editor', 'Admin', 'Prog', 'Input', 'Hotbar', 'Thumbs', 'Nav', 'Models', 'Mats', 'Tex', 'Geo', 'Bots', 'Social', 'Online', 'DiscordAct', 'BoardTex', 'HOLO', 'MeshView', 'PlayerView'];
 // top-level functions that only build visuals / DOM; the harness wraps them to see who calls them
 export const PRESENTATION_FNS = ['buildVisual', 'matMesh', 'csmMat', 'ptsMat', 'addVehicleWheels', 'addNpcWeapon', 'rocketFlame', 'buildThruster', 'boardTexture', 'boardFace', 'drawBotFace', 'h', 'downloadJSON', 'pickJSON'];
 
 // ---- static check: which top-level names does simulation code use that are declared on the presentation side? -----
 // Catches data reads (tables, constants) and code paths the scripted run never reaches.
 export const SIM_DECLS = ['Phys', 'Ent', 'World', 'Players', 'Player', 'Vehicles', 'Auth', 'Rules', 'ZS', 'PH', 'Env', 'MAPS', 'THEMES', 'Save'];
-export const PRESENTATION_FILES = ['03_renderer.js', '08_social.js', '09_ui.js', '10_game.js'];   // everything declared in these is presentation
+export const PRESENTATION_FILES = ['03_renderer.js', '08_social.js', '09_ui.js', '09_view.js', '10_game.js'];   // everything declared in these is presentation
 export function staticCoupling() {
   const parts = readdirSync(SRC).filter(f => /^\d\d_.*\.js$/.test(f)).sort(), decls = [], owner = new Map();
   for (const f of parts) {
@@ -61,7 +61,9 @@ export function buildSimBundle() {
   // presentation objects become reassignable (in this copy only) so the harness can put a recording proxy in their place
   const pres = PRESENTATION.filter(n => objs.includes(n));
   for (const n of pres) code = code.replace(new RegExp(`^const ${n} = \\{`, 'm'), `let ${n} = {`);
-  code += `\n// ---- added by tools/sim/bundle.mjs ----\nexport { ${[...new Set([...objs, 'THREE', 'RAPIER'])].join(', ')} };\n` +
+  // export every top-level name, so the harness can reach anything (View, VIEW_NONE, tables, ...)
+  const names = [...code.matchAll(/^(?:const|let|class|function|async function) ([A-Za-z_$][\w$]*)/gm)].map(m => m[1]);
+  code += `\n// ---- added by tools/sim/bundle.mjs ----\nexport { ${[...new Set([...names, 'THREE', 'RAPIER'])].join(', ')} };\n` +
     `export function __instrument(wrap) { ${fns.map(n => `${n} = wrap('${n}', ${n});`).join(' ')} }\n` +
     `export function __proxyObjects(make) { ${pres.map(n => `${n} = make('${n}', ${n});`).join(' ')} }\n`;
   // top-level declarations by line, so a stack frame can be named after the module it is in

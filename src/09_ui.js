@@ -324,7 +324,7 @@ const UI = {
     const d = Game.detected;
     $('#lobbyTier').innerHTML = `Graphics ${tierBadge(k)}${d && d.tier === k ? ' <span>auto</span>' : ''}`;
     if (this.open === 'settings') this.buildSettings();
-    for (const p of Players.map.values()) Players.updatePlate(p, true);
+    for (const p of Players.map.values()) PlayerView.updatePlate(p, true);
   },
   // ---- generic menus -----------------------------------------------------------
   menus: ['spawn', 'pause', 'settings', 'admin', 'saveload', 'help', 'radial', 'hostleft', 'paint', 'cleanup', 'addons', 'inventory', 'owner', 'servers', 'friends'],
@@ -1093,7 +1093,7 @@ const UI = {
       s.append(row('Shadows' + (pbr ? '' : ' <span class="muted">(n/a on Low)</span>'), check('shadows', () => R.applyTier(R.tier, false))));
       s.append(row('Ambient occlusion (GTAO)', check('ao', () => R.setupComposer())));
       s.append(row('Bloom', check('bloom', () => R.setupComposer())));
-      s.append(row('Pixel font', check('pixelFont', () => { document.body.classList.toggle('pixel', !!Settings.pixelFont); for (const p of Players.map.values()) Players.updatePlate(p, true); })));
+      s.append(row('Pixel font', check('pixelFont', () => { document.body.classList.toggle('pixel', !!Settings.pixelFont); for (const p of Players.map.values()) PlayerView.updatePlate(p, true); })));
       s.append(row('Reflection probes <span class="muted">(Ultra)</span>', check('reflections')));
       s.append(row('Dynamic resolution', check('drs')));
       const tf = h('select', { onchange: () => { Settings.targetFps = +tf.value; saveSettings(); } });

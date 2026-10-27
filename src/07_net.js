@@ -308,7 +308,7 @@ const Net = {
       for (const id of [...Players.map.keys()]) if (!ids.has(id) && id !== this.me) Players.remove(id);
       for (const e of list) { const p = Players.add(Object.assign({}, e, { isLocal: e.id === this.me })); p.canEdit = !!e.canEdit; p.muted = !!e.muted; }
     }
-    for (const p of Players.map.values()) Players.updatePlate(p, true);
+    for (const p of Players.map.values()) PlayerView.updatePlate(p, true);
     UI.refreshRoom(); UI.refreshScoreboard();
   },
   hostChat(p, text) {

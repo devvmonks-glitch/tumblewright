@@ -72,7 +72,7 @@ const Tools = {
     else if (this.weapon === 'deleter') { if (Input.hit('fire') && this.cool <= 0) { this.cool = W.rate; this.fireDelete(); } }
     else if ((W.auto ? Input.down('fire') : Input.hit('fire')) && this.cool <= 0) this.fireGun(W);
     this.marker.visible = !!this.first && this.weapon === 'toolgun';
-    if (this.first) World.anchorWorld(this.first.e, this.first.lp, this.marker.position);
+    if (this.first) View.anchorWorld(this.first.e, this.first.lp, this.marker.position);
   },
   updPhysgun(dt) {
     this.rotating = false;
@@ -210,7 +210,7 @@ const Tools = {
       let end = null;
       if (p.isLocal && this.grab && this.weapon === 'physgun') {
         const o = new V3(), d = new V3(); this.aim(o, d); end = o.addScaledVector(d, this.grab.dist);
-        const e = World.ents.get(this.grab.e); const gp = e ? World.anchorWorld(e.id, this.grab.lp, new V3()) : end;
+        const e = World.ents.get(this.grab.e); const gp = e ? View.anchorWorld(e.id, this.grab.lp, new V3()) : end;
         Beam.draw(this.muzzle(), end, gp, 0x6fe3ff);
       } else if (!p.isLocal && p.beamEnd && !p.dead && p !== lp) {
         const start = Players.eyePos(p, new V3()); start.y -= 0.35;

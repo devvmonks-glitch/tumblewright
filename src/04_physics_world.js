@@ -2,6 +2,7 @@
 /* ============================================================================
    4. PHYSICS (Rapier world, fixed 60 Hz step, colliders)
    ========================================================================== */
+const _bv = new V3(), _bt = new V3(), _bq = new QT();
 const Phys = {
   world: null, ground: null, colMap: new Map(), ray: null,
   async init() {
@@ -87,6 +88,21 @@ const Phys = {
     const id = this.colMap.get(hit.collider.handle);
     return { id: id === undefined ? null : id, handle: hit.collider.handle, point: new V3(o.x + dir.x * hit.timeOfImpact, o.y + dir.y * hit.timeOfImpact, o.z + dir.z * hit.timeOfImpact), normal: new V3(hit.normal.x, hit.normal.y, hit.normal.z), dist: hit.timeOfImpact };
   },
+  // world-space box around an entity's colliders: its physical size, for code that can't look at a mesh
+  bounds(e, out) {
+    out.makeEmpty();
+    for (const c of e.cols) {
+      const S = c.shape, t = c.translation(), r = c.rotation(), q = _bq.set(r.x, r.y, r.z, r.w), pts = [];
+      if (S.halfExtents) { const h = S.halfExtents; for (let i = 0; i < 8; i++) pts.push([i & 1 ? h.x : -h.x, i & 2 ? h.y : -h.y, i & 4 ? h.z : -h.z]); }
+      else if (S.vertices) { for (let i = 0; i < S.vertices.length; i += 3) pts.push([S.vertices[i], S.vertices[i + 1], S.vertices[i + 2]]); }
+      else if (S.radius != null) {   // ball, capsule, cylinder, cone: upright along Y
+        const rr = S.radius, hh = (S.halfHeight || 0) + (S.halfHeight == null || S.type === RAPIER.ShapeType.Capsule ? rr : 0);
+        for (let i = 0; i < 8; i++) pts.push([i & 1 ? rr : -rr, i & 2 ? hh : -hh, i & 4 ? rr : -rr]);
+      }
+      for (const p of pts) out.expandByPoint(_bv.set(p[0], p[1], p[2]).applyQuaternion(q).add(_bt.set(t.x, t.y, t.z)));
+    }
+    return out;
+  },
   // contact force events from NPC parts (see makeBody) = real impacts, used by the host for slam / crush injuries
   impacts: [],
   step() {
@@ -105,6 +121,18 @@ const Phys = {
 // { id, k:'prop'|'map'|'part'|'nade', sh:{t,...}, m:material, c:color|null, o:owner, p:[3], q:[4], fz:0/1,
 //   seat?:1, thr?:[{id,p,d,f,key}], light?:{c,i,r}, g?:groupId, den?:density, n?:label }
 const GROUP_RUNTIME = ['lv', 'stun', 'wT', 'wYaw', 'walk', 'ph', 'state', 'gu', 'flee', 'fx', 'fz', 'atk', 'swing', 'groan', 'limp'];
+// ---- view hooks -------------------------------------------------------------
+// The simulation owns bodies, descriptors and poses; anything you can see or hear is made by the view. World and
+// Players call these hooks; the browser fills them in (09_view.js: MeshView), headless runs keep the no-ops.
+const VIEW_NONE = Object.freeze({
+  init() { }, groundMesh: null,
+  entAdded(e) { }, entRemoved(e) { }, entPatched(e, patch) { }, rebuildEnts() { },
+  conAdded(c) { }, conRemoved(c) { },
+  playerAdded(p) { }, playerLook(p) { }, playerShow(p) { }, playerRemoved(p) { },
+  sound(name, pos, vol) { },   // pos null = at the listener (your own character)
+  localFellOut() { },
+});
+const View = Object.assign({}, VIEW_NONE);
 class Ent {
   constructor(d) {
     this.d = d; this.id = d.id; this.body = null; this.cols = []; this.mesh = null;
@@ -113,21 +141,14 @@ class Ent {
   }
 }
 const World = {
-  ents: new Map(), cons: new Map(), groups: new Map(), rockets: new Set(), vehicles: new Set(), nextId: 1, consVer: 0, groundMesh: null,
-  initStatic() {
-    const gm = this.groundMesh = new THREE.Mesh(new THREE.PlaneGeometry(1400, 1400, 175, 175).rotateX(-Math.PI / 2), Mats.get('ground'));
-    const uv = gm.geometry.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * 350, uv.getY(i) * 350);
-    gm.userData.mt = 'ground'; gm.receiveShadow = true; R.scene.add(gm);
-  },
+  ents: new Map(), cons: new Map(), groups: new Map(), rockets: new Set(), vehicles: new Set(), nextId: 1, consVer: 0,
   allocId() { for (let i = 0; i < 65000; i++) { const id = this.nextId++; if (this.nextId > 65000) this.nextId = 1; if (!this.ents.has(id) && !this.cons.has(id) && !this.groups.has(id)) return id; } return 0; },
   create(d) {
     if (this.ents.has(d.id)) this.remove(d.id);
     if (d.id >= this.nextId) this.nextId = d.id + 1;
     const e = new Ent(d);
     Phys.makeBody(e);
-    e.mesh = buildVisual(d); e.mesh.position.fromArray(d.p); e.mesh.quaternion.fromArray(d.q);
-    if (e.mesh.userData.editOnly) e.mesh.visible = Editor.active;
-    R.scene.add(e.mesh);
+    View.entAdded(e);
     this.ents.set(d.id, e);
     if (d.k === 'rocket') this.rockets.add(d.id);
     if (d.veh) this.vehicles.add(d.id);
@@ -138,16 +159,15 @@ const World = {
     for (const c of [...this.cons.values()]) if (c.a === id || c.b === id) this.removeCon(c.id);
     Vehicles.drop(id);
     Phys.removeBody(e);
-    if (e.mesh) { R.scene.remove(e.mesh); }
     this.ents.delete(id); this.rockets.delete(id); this.vehicles.delete(id);
-    if (Tools.onEntRemoved) Tools.onEntRemoved(id);
+    View.entRemoved(e);
   },
   addCon(c) {
     if (this.cons.has(c.id)) this.removeCon(c.id);
     if (c.id >= this.nextId) this.nextId = c.id + 1;
     this.cons.set(c.id, c);
     if (Net.auth()) this.makeJoint(c);
-    if (c.t === 'rope' || c.t === 'spring') this.makeRopeVis(c);
+    View.conAdded(c);
     this.consVer++;
   },
   makeJoint(c) {
@@ -176,36 +196,8 @@ const World = {
   removeCon(id) {
     const c = this.cons.get(id); if (!c) return;
     if (c.j) { try { if (Phys.world.impulseJoints.contains(c.j.handle)) Phys.world.removeImpulseJoint(c.j, true); } catch (e) { } c.j = null; }
-    if (c.vis) { R.scene.remove(c.vis); c.vis = null; }
+    View.conRemoved(c);
     this.cons.delete(id); this.consVer++;
-  },
-  makeRopeVis(c) {
-    const g = new THREE.Group(), N = 12;
-    const geo = Geo.get('ropeseg', () => new THREE.CylinderGeometry(1, 1, 1, 6, 1, true));
-    for (let i = 0; i < N; i++) { const m = matMesh(geo, c.t === 'spring' ? 'metal' : 'rubber', c.t === 'spring' ? '#fed330' : '#3a3026'); m.castShadow = false; g.add(m); }
-    g.userData.pts = Array.from({ length: N + 1 }, () => new V3());
-    c.vis = g; R.scene.add(g);
-  },
-  anchorWorld(id, local, out) {
-    if (!id) return out.fromArray(local);
-    const e = this.ents.get(id); if (!e || !e.mesh) return out.fromArray(local);
-    return out.fromArray(local).applyQuaternion(e.mesh.quaternion).add(e.mesh.position);
-  },
-  updateRopeVis() {
-    const pA = _v1, pB = _v2, mid = _v3;
-    for (const c of this.cons.values()) {
-      if (!c.vis) continue;
-      this.anchorWorld(c.a, c.pa, pA); this.anchorWorld(c.b, c.pb, pB);
-      const dist = pA.distanceTo(pB), slack = c.t === 'rope' ? Math.max(0, c.len - dist) : 0;
-      mid.addVectors(pA, pB).multiplyScalar(0.5); mid.y -= slack * 0.6;
-      const pts = c.vis.userData.pts, N = pts.length - 1, rad = c.t === 'spring' ? 0.035 : 0.022;
-      for (let i = 0; i <= N; i++) { const t = i / N, a = (1 - t) * (1 - t), b = 2 * (1 - t) * t, cc = t * t; pts[i].set(a * pA.x + b * mid.x + cc * pB.x, a * pA.y + b * mid.y + cc * pB.y, a * pA.z + b * mid.z + cc * pB.z); }
-      for (let i = 0; i < N; i++) {
-        const m = c.vis.children[i], p0 = pts[i], p1 = pts[i + 1];
-        _v4.subVectors(p1, p0); const L = _v4.length() || 0.0001;
-        m.position.addVectors(p0, p1).multiplyScalar(0.5); m.quaternion.setFromUnitVectors(UP, _v4.divideScalar(L)); m.scale.set(rad, L, rad);
-      }
-    }
   },
   // Replace an entity's descriptor fields (painter, thrusters, freeze, map edits)
   patch(id, patch) {
@@ -216,15 +208,8 @@ const World = {
     const structural = 'sh' in patch || (e.d.k === 'map' && ('p' in patch || 'q' in patch)) || 'm' in patch;
     if (structural) this.rebuildBody(e);
     else if ('fz' in patch && auth && e.body) e.body.setBodyType(e.d.fz ? RAPIER.RigidBodyType.Fixed : RAPIER.RigidBodyType.Dynamic, true);
-    // visual
-    const pos = e.mesh.position.clone(), quat = e.mesh.quaternion.clone();
-    R.scene.remove(e.mesh);
-    e.mesh = buildVisual(e.d);
-    if (e.d.k === 'map' || 'p' in patch) { e.mesh.position.fromArray(e.d.p); e.mesh.quaternion.fromArray(e.d.q); e.curP.fromArray(e.d.p); e.prevP.copy(e.curP); e.curQ.fromArray(e.d.q); e.prevQ.copy(e.curQ); }
-    else { e.mesh.position.copy(pos); e.mesh.quaternion.copy(quat); }
-    if (e.mesh.userData.editOnly) e.mesh.visible = Editor.active;
-    R.scene.add(e.mesh);
-    if (Editor.sel === id) Editor.reattach();
+    if (e.d.k === 'map' || 'p' in patch) { e.curP.fromArray(e.d.p); e.prevP.copy(e.curP); e.curQ.fromArray(e.d.q); e.prevQ.copy(e.curQ); }
+    View.entPatched(e, patch);
   },
   rebuildBody(e) {
     Vehicles.drop(e.id);
@@ -235,16 +220,6 @@ const World = {
     Phys.removeBody(e); Phys.makeBody(e);
     if (lv) { e.body.setLinvel(lv, true); e.body.setAngvel(av, true); }
     if (Net.auth()) for (const c of linked) this.makeJoint(c);
-  },
-  // swap every entity's visual (e.g. PS1 low-poly models <-> normal models on a tier change)
-  rebuildVisuals() {
-    for (const e of this.ents.values()) {
-      if (!e.mesh) continue;
-      const m = buildVisual(e.d); m.position.copy(e.mesh.position); m.quaternion.copy(e.mesh.quaternion); m.visible = e.mesh.visible;
-      R.scene.remove(e.mesh); R.scene.add(m); e.mesh = m; e._wounds = []; e._stumps = [];
-    }
-    for (const g of this.groups.values()) g._sevVis = 0;   // stumps get re-added by the gore pass
-    if (Editor.sel) Editor.reattach();
   },
   clear() {
     for (const id of [...this.cons.keys()]) this.removeCon(id);
@@ -270,11 +245,10 @@ const World = {
   // ---- snapshots of descriptors with live pose -----------------------------
   liveDesc(e) {
     const d = Object.assign({}, e.d);
-    if (e.body && e.d.k !== 'map') {
-      if (Net.auth()) {
-        const t = e.body.translation(), r = e.body.rotation(); d.p = [r4(t.x), r4(t.y), r4(t.z)]; d.q = [r4(r.x), r4(r.y), r4(r.z), r4(r.w)];
-        if (e.body.isDynamic()) { const lv = e.body.linvel(), av = e.body.angvel(); d.v = [r4(lv.x), r4(lv.y), r4(lv.z)]; d.w = [r4(av.x), r4(av.y), r4(av.z)]; }
-      } else { d.p = a3(e.mesh.position); d.q = a4(e.mesh.quaternion); delete d.v; delete d.w; }
+    if (e.body && e.d.k !== 'map') {   // on clients the kinematic body follows the snapshots
+      const t = e.body.translation(), r = e.body.rotation(); d.p = [r4(t.x), r4(t.y), r4(t.z)]; d.q = [r4(r.x), r4(r.y), r4(r.z), r4(r.w)];
+      if (Net.auth() && e.body.isDynamic()) { const lv = e.body.linvel(), av = e.body.angvel(); d.v = [r4(lv.x), r4(lv.y), r4(lv.z)]; d.w = [r4(av.x), r4(av.y), r4(av.z)]; }
+      else { delete d.v; delete d.w; }
     }
     return d;
   },

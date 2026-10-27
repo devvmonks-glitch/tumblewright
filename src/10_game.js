@@ -1015,7 +1015,7 @@ const Game = {
       Prog.load(); UI.init(); Input.init($('#c')); Social.init();
       lt.textContent = 'Starting renderer…'; R.init();
       lt.textContent = 'Loading physics engine…'; await Phys.init();
-      Players.init(); World.initStatic(); Tools.init(); Editor.init(); FX.init(); Gore.init();
+      Players.init(); View.init(); Tools.init(); Editor.init(); FX.init(); Gore.init();
       let tier = Settings.tier, first = false;
       if (!TIERS[tier]) {
         lt.textContent = 'Benchmarking your GPU…';
@@ -1453,7 +1453,7 @@ const Game = {
     const me = Players.local;
     if (me && this.state === 'playing') {
       const en = !me.seat && !me.dead && !me.noclip; if (me._colOn !== en) { me.col.setEnabled(en); me._colOn = en; }   // noclip passes through everything
-      if (me.seat) { const se = World.ents.get(me.seat); if (se && se.mesh) { me.prevPos.copy(me.pos); me.pos.copy(se.mesh.position); me.pos.y += 0.3; } }
+      if (me.seat) { const se = World.ents.get(me.seat); if (se && se.body) { const t = se.body.translation(); me.prevPos.copy(me.pos); me.pos.set(t.x, t.y + 0.3, t.z); } }
       Players.simLocal(me, dt, this.moveInp);
     }
     if (Net.isHost) {
@@ -1504,16 +1504,16 @@ const Game = {
         if (!host && p.buf.length > 1) { const a = p.buf[p.buf.length - 2], b = p.buf[p.buf.length - 1]; p.vel.subVectors(b.p, a.p).divideScalar(Math.max(0.02, b.t - a.t)); }
       } else p.renderYaw = p.yaw;
       if (p.seat) { const se = World.ents.get(p.seat); if (se && se.mesh) { p.renderPos.copy(se.mesh.position).add(_v1.set(0, -0.62, 0.05).applyQuaternion(se.mesh.quaternion)); } }
-      Players.updateAvatar(p, dt);
+      PlayerView.updateAvatar(p, dt);
     }
-    World.updateRopeVis();
+    View.updateRopes();
     Vehicles.updateVisuals(dt);
     Gore.update(dt);
     Tools.updateBeams();
     FX.update(dt); Bots.update(dt); Env.tick(dt); Audio.update(dt);
     this.updateCamera(dt);
     DmgNum.update(dt);
-    Players.updatePlates();
+    PlayerView.updatePlates();
   },
   updateCamera(dt) {
     const cam = R.camera, me = Players.local;
@@ -1693,7 +1693,7 @@ const Game = {
 };
 
 // debug handle for testing from the console
-window.TW = { Thumbs, WEAPON_MODEL, Social, PH, ZS, Prog, DiscordAct, Online, Owner, Hotbar, Audio, Models, Game, Net, World, Players, R, Auth, Tools, Editor, UI, Rules, Settings, Phys, Input, Admin, Save, FX, Mats, Vehicles, VEH, Gore, Env };
+window.TW = { Thumbs, WEAPON_MODEL, View, PlayerView, Social, PH, ZS, Prog, DiscordAct, Online, Owner, Hotbar, Audio, Models, Game, Net, World, Players, R, Auth, Tools, Editor, UI, Rules, Settings, Phys, Input, Admin, Save, FX, Mats, Vehicles, VEH, Gore, Env };
 Game.boot();
 </script>
 

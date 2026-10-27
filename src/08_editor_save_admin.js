@@ -64,7 +64,7 @@ const Editor = {
   },
   castPlacement() {
     const meshes = []; for (const e of World.ents.values()) if (e.mesh && (e.d.k === 'map' || e.d.k === 'prop')) meshes.push(e.mesh);
-    meshes.push(World.groundMesh);
+    meshes.push(View.groundMesh);
     const hits = this.ray.intersectObjects(meshes, true);
     for (const h of hits) {
       let o = h.object; while (o && o.parent && o.parent !== R.scene) o = o.parent;

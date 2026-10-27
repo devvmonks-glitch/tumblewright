@@ -140,8 +140,8 @@ const R = {
     this.applyLights();
     Mats.rebuildAll();
     if (prevPath !== T.path && (prevPath === 'ps1' || T.path === 'ps1') && Object.keys(Models.srcPs1).length) {
-      World.rebuildVisuals();
-      for (const p of Players.map.values()) { if (p.avatar) R.scene.remove(p.avatar); Players.makeAvatar(p); }
+      View.rebuildEnts();
+      for (const p of Players.map.values()) { if (p.avatar) R.scene.remove(p.avatar); PlayerView.makeAvatar(p); }
       if (Game.viewmodel) Game.buildViewmodel();
     }
     this.setupComposer();

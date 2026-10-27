@@ -428,7 +428,7 @@ const Env = {
     }
     R.applyLights(); R.rebakeEnv();
     const gt = Th.ground && Th.ground !== 'grid' ? 'ground_' + Th.ground : 'ground';
-    World.groundMesh.material = Mats.get(gt); World.groundMesh.userData.mt = gt;
+    if (View.groundMesh) { View.groundMesh.material = Mats.get(gt); View.groundMesh.userData.mt = gt; }   // no ground mesh headless
     if (!Th.ground) return;
     // ---- decor ----
     const g = this.group = new THREE.Group(); R.scene.add(g);
