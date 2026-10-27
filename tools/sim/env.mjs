@@ -1,4 +1,4 @@
-// A stand-in browser for running the game module in Node. Nothing renders: every page / DOM access returns a "ghost"
+// A stand-in browser for running the game module in Node (installPage). Nothing renders: every page / DOM access returns a "ghost"
 // (callable, any property, sets ignored) and is reported to onTouch(), so the harness can list what the simulation still
 // reaches for. The clock is driven by the harness (setClock) so timers in game logic follow simulated time.
 export const sim = { clock: 0, onTouch: null };
@@ -36,8 +36,11 @@ const document = {
 };
 
 const G = globalThis;
-Object.defineProperty(G, 'localStorage', { value: localStorage, configurable: true, writable: true });
+// the test's clock, always (game timers follow simulated time)
 Object.defineProperty(G, 'performance', { value: { now: () => sim.clock * 1000, mark() { }, measure() { } }, configurable: true, writable: true });
+// the fake page (ghost DOM that records touches); the worker mode runs with the game's own stand-in instead
+export function installPage() {
+Object.defineProperty(G, 'localStorage', { value: localStorage, configurable: true, writable: true });
 Object.assign(G, {
   window: G, self: G, document,
   location: { search: '', hash: '', hostname: 'localhost', href: 'http://localhost/', origin: 'http://localhost', protocol: 'http:' },
@@ -50,6 +53,7 @@ Object.assign(G, {
   Image: function () { return ghost('Image'); },
   CustomEvent: class { constructor(t, o) { this.type = t; this.detail = o && o.detail; } },
 });
+}
 
 export function setClock(t) { sim.clock = t; }
 // the same "random" numbers every run, so results don't depend on luck (mulberry32)

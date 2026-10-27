@@ -7,16 +7,29 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { sim, setClock, ghost } from './env.mjs';
-import { buildSimBundle, staticCoupling, PRESENTATION, BOUNDARY } from './bundle.mjs';
+import { isMainThread, Worker } from 'node:worker_threads';
+import { sim, setClock, ghost, installPage } from './env.mjs';
+import { buildSimBundle, staticCoupling, workerShimSource, PRESENTATION, BOUNDARY } from './bundle.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url)), OUT = join(HERE, '.out');
 const STRICT = process.argv.includes('--strict'), JSON_OUT = process.argv.includes('--json');
 // by default the View hooks stay no-ops, the way the host worker will run; --browser-view keeps the mesh code (09_view.js)
 const BROWSER_VIEW = process.argv.includes('--browser-view');
+// --worker: run this whole test again inside a real worker thread, with only what a browser worker has plus the game's own
+// page stand-in (11_loader.html) and the worker's Srv: any leftover page access fails there
+const IN_WORKER = process.argv.includes('--in-worker');
+if (process.argv.includes('--worker') && isMainThread) {
+  const w = new Worker(new URL(import.meta.url), { argv: process.argv.slice(2).filter(a => a !== '--worker').concat('--in-worker') });
+  w.on('error', e => { console.error(e); process.exit(1); }); w.on('exit', c => process.exit(c));
+  await new Promise(() => { });   // the worker reports and decides the exit code
+}
+if (IN_WORKER) {
+  Object.assign(globalThis, { self: globalThis, location: { search: '', hash: '', hostname: 'localhost', href: 'http://localhost/', origin: 'http://localhost', protocol: 'http:' }, addEventListener() { }, removeEventListener() { }, postMessage() { } });   // a browser worker's globals
+  (0, eval)(workerShimSource());
+} else installPage();
 
 mkdirSync(OUT, { recursive: true });
-const { code, where } = buildSimBundle();
+const { code, where } = buildSimBundle(undefined, { worker: IN_WORKER });
 const bundlePath = join(OUT, 'sim.mjs'); writeFileSync(bundlePath, code);
 
 // ---- recording presentation calls ------------------------------------------------------------------
@@ -75,10 +88,16 @@ let ok = true;
 const check = (name, pass, detail) => { results.push({ name, pass, detail }); if (!pass) ok = false; log(`  ${pass ? 'ok  ' : 'FAIL'} ${name}${detail ? '  (' + detail + ')' : ''}`); };
 
 const mods = await import(pathToFileURL(bundlePath).href);
-const { Phys, World, Players, Auth, Net, Sim, Rules, Env, THREE, R, View, VIEW_NONE } = mods;
+const { Phys, World, Players, Auth, Net, Sim, Rules, Env, THREE, R, View, VIEW_NONE, Srv, WorkerSrv, SimWorker } = mods;
 R.scene = new THREE.Scene(); R.camera = new THREE.PerspectiveCamera(70, 16 / 9, 0.1, 2000);   // shared code still adds meshes to these
-instrument(mods);
-if (!BROWSER_VIEW) Object.assign(View, VIEW_NONE);   // nothing is drawn: entities get no meshes, players no avatars
+const outs = new Map();   // worker mode: what the simulation posted to the window, by message type
+if (IN_WORKER) {
+  Object.assign(View, VIEW_NONE); Object.assign(Srv, WorkerSrv);   // exactly what SimWorker.boot() sets up
+  SimWorker.post = m => { const k = m.t === 'out' ? m.m.t : m.t; outs.set(k, (outs.get(k) || 0) + 1); };
+} else {
+  instrument(mods);
+  if (!BROWSER_VIEW) Object.assign(View, VIEW_NONE);   // nothing is drawn: entities get no meshes, players no avatars
+}
 
 let clock = 1; setClock(clock);
 await Phys.init(); Players.init(); View.init();
@@ -243,8 +262,15 @@ for (const level of [0, 2]) {
   check('every body stays in the world, no errors', sane() && errors.length === 0, errors.length ? errors.join('; ') : `${World.ents.size} entities, positions all finite`);
 }
 
+// ---- worker mode: no coupling report (nothing was instrumented: a page access would have failed outright) ----
+if (IN_WORKER) {
+  log(`\nInside a worker thread, with the game's own page stand-in. Posted to the window: ${[...outs].map(([k, n]) => `${k} ×${n}`).join(', ')}`);
+  log(`\n${ok ? 'PHYSICS OK in a worker' : 'PHYSICS FAILED in a worker'}`);
+  process.exit(ok ? 0 : 1);
+}
+
 // ---- coupling report ------------------------------------------------------------------------------------
-const list = [...touches.values()].sort((a, b) => a.caller.localeCompare(b.caller) || b.n - a.n);
+const list =[...touches.values()].sort((a, b) => a.caller.localeCompare(b.caller) || b.n - a.n);
 const byCaller = new Map(); for (const t of list) { if (!byCaller.has(t.caller)) byCaller.set(t.caller, []); byCaller.get(t.caller).push(t); }
 const stat = staticCoupling(), clean = list.length === 0 && stat.length === 0;
 writeFileSync(join(OUT, 'coupling.json'), JSON.stringify({ results, touches: list, static: stat, failures: Object.fromEntries(failures) }, null, 2));

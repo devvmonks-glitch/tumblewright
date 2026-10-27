@@ -1656,6 +1656,6 @@ const Game = {
 
 // debug handle for testing from the console
 window.TW = { Thumbs, WEAPON_MODEL, View, PlayerView, Srv, Sim, Social, PH, ZS, Prog, DiscordAct, Online, Owner, Hotbar, Audio, Models, Game, Net, World, Players, R, Auth, Tools, Editor, UI, Rules, Settings, Phys, Input, Admin, Save, FX, Mats, Vehicles, VEH, Gore, Env };
-Game.boot();
+if (globalThis.TW_WORKER) SimWorker.boot(); else Game.boot();   // inside the host's simulation worker: no page, just the world
 </script>
 

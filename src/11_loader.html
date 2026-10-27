@@ -52,6 +52,43 @@
     var s = document.createElement('script'); s.type = 'importmap'; s.textContent = DISCORD ? im.textContent.split('https://cdn.jsdelivr.net/').join('/') : im.textContent; if (NONCE) s.nonce = NONCE; document.head.appendChild(s);
     var m = document.createElement('script'); m.type = 'module'; m.textContent = main.textContent; if (NONCE) m.nonce = NONCE; document.body.appendChild(m);
   }
+  // ---- the host's simulation worker --------------------------------------------------------
+  // The game module runs a second time inside a worker (SimWorker, 06_worker.js) to simulate the world off this page's
+  // thread. A worker can't use an import map, so the library imports are written out in full (through Discord's proxy
+  // inside an Activity), and the stand-in below gives the module's load-time code the few page globals it reads.
+  // The simulation itself never touches the page (tools/sim checks that).
+  // <worker-shim>
+  function workerShim() {
+    var G = self, mem = {}, nop = function () { };
+    G.TW_WORKER = true; G.window = G;
+    G.localStorage = { getItem: function (k) { return Object.prototype.hasOwnProperty.call(mem, k) ? mem[k] : null; }, setItem: function (k, v) { mem[k] = String(v); }, removeItem: function (k) { delete mem[k]; }, clear: function () { mem = {}; }, key: function (i) { return Object.keys(mem)[i] || null; }, get length() { return Object.keys(mem).length; } };
+    var el = function () { return { style: {}, classList: { add: nop, remove: nop, toggle: nop, contains: function () { return false; } }, append: nop, appendChild: nop, addEventListener: nop, setAttribute: nop, getContext: function () { return null; } }; };
+    G.document = { querySelector: function () { return null; }, querySelectorAll: function () { return []; }, getElementById: function () { return null; }, createElement: el, addEventListener: nop, removeEventListener: nop, hidden: false, visibilityState: 'visible', hasFocus: function () { return true; }, body: el(), head: el() };
+    G.history = { replaceState: nop, pushState: nop };
+    G.innerWidth = 1280; G.innerHeight = 720; G.devicePixelRatio = 1;
+    G.matchMedia = function () { return { matches: false, addEventListener: nop, removeEventListener: nop }; };
+    G.requestAnimationFrame = function (f) { return setTimeout(function () { f(performance.now()); }, 16); }; G.cancelAnimationFrame = function (i) { clearTimeout(i); };
+  }
+  // </worker-shim>
+  window.TWWorker = {
+    // the worker's source: the stand-in, then the game module with its library imports written out
+    source: function () {
+      var im = JSON.parse(document.getElementById('tw-importmap').textContent).imports, main = document.getElementById('tw-main').textContent;
+      var cdn = 'https://cdn.jsdelivr.net/', keys = Object.keys(im).sort(function (a, b) { return b.length - a.length; });
+      var full = function (u) { return DISCORD ? u.split(cdn).join(location.origin + '/') : u; };
+      // the three.js add-ons (post-processing, gizmos, model loader, mirrors) are drawing code, and they import 'three' by its
+      // bare name, which needs an import map: the worker leaves them out (any use there would fail loudly)
+      var code = main.replace(/^import\s*\{([^}]*)\}\s*from\s*(['"])three\/addons\/[^'"]+\2;?/gm, function (all, names) {
+        return 'const ' + names.split(',').map(function (n) { n = n.trim().split(/\s+as\s+/).pop(); return n + ' = undefined'; }).join(', ') + ';';
+      });
+      code = code.replace(/(\bfrom\s*|\bimport\s*\(\s*)(['"])([^'"]+)\2/g, function (all, pre, q, spec) {
+        for (var i = 0; i < keys.length; i++) { var k = keys[i]; if (spec === k || (k.slice(-1) === '/' && spec.indexOf(k) === 0)) return pre + q + full(im[k] + spec.slice(k.length)) + q; }
+        return all;
+      });
+      return '(' + workerShim + ')();\n' + code;
+    },
+  };
+
   // ---- replace this document with a downloaded newer version --------------------------------
   function swap(rec) {
     lsSet(PENDING, rec.version);   // cleared by the game once it has started (see U.bootOk)

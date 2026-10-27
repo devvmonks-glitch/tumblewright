@@ -6,11 +6,12 @@ import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execSync } from 'node:child_process';
-import { ghost, setClock } from './env.mjs';
+import { ghost, setClock, installPage } from './env.mjs';
 import { buildSimBundle } from './bundle.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url)), ROOT = join(HERE, '..', '..'), OUT = join(HERE, '.out');
 const ref = process.argv[2] || 'HEAD';
+installPage();   // the older code builds visuals inline: give it the fake page
 mkdirSync(OUT, { recursive: true });
 const refDir = join(OUT, 'ref-src'); rmSync(refDir, { recursive: true, force: true }); mkdirSync(refDir, { recursive: true });
 execSync(`git archive ${ref} src | tar -x -C "${refDir.replace(/\\/g, '/')}"`, { cwd: ROOT, stdio: 'inherit', shell: 'bash' });
