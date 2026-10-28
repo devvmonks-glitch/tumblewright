@@ -1296,6 +1296,40 @@ def sniper():
     finish('wp_sniper', n, hand_node('wp_sniper', (0, -0.075, 0.06), 0.3))
 
 
+def smg():
+    n = Node('wp_smg_mesh')
+    n.add(xf(bm_rbox(0.046, 0.06, 0.3, 0.01), (0, 0.005, -0.08)), 'main')                           # receiver
+    n.add(xf(bm_rbox(0.052, 0.05, 0.14, 0.012), (0, -0.002, -0.27)), 'trim')                        # handguard
+    for i in range(4):
+        for x in (-0.026, 0.026):
+            n.add(xf(bm_box(0.003, 0.022, 0.018), (x, -0.002, -0.22 - i * 0.032)), 'darkmetal')   # grip ribs
+    n.add(cyl_z(0.0105, 0.1, -0.38, 0.012), 'darkmetal')                                           # barrel
+    n.add(cyl_z(0.016, 0.05, -0.42, 0.012), 'darkmetal')                                           # compensator
+    for x in (-0.016, 0.016):
+        n.add(xf(bm_box(0.004, 0.016, 0.01), (x, 0.012, -0.425)), 'trim')                          # comp ports
+    n.add(xf(bm_rbox(0.03, 0.09, 0.044, 0.008), (0, -0.065, -0.125), (-0.1, 0, 0)), 'trim')         # magazine
+    n.add(xf(bm_rbox(0.03, 0.08, 0.044, 0.008), (0, -0.145, -0.145), (-0.32, 0, 0)), 'trim')        # (curved lower half)
+    n.add(xf(bm_rbox(0.032, 0.012, 0.05, 0.004), (0, -0.183, -0.162), (-0.32, 0, 0)), 'darkmetal')  # base plate
+    n.add(xf(bm_rbox(0.034, 0.095, 0.042, 0.012), (0, -0.07, 0.04), (0.3, 0, 0)), 'trim')          # pistol grip
+    n.add(bm_tube((0, -0.025, -0.01), (0, -0.05, -0.035), 0.004, 6), 'darkmetal')                 # trigger guard
+    n.add(bm_tube((0, -0.05, -0.035), (0, -0.052, 0.015), 0.004, 6), 'darkmetal')
+    n.add(xf(bm_rbox(0.006, 0.02, 0.008, 0.002), (0, -0.03, -0.012), (0.3, 0, 0)), 'metal')        # trigger
+    n.add(xf(bm_box(0.004, 0.024, 0.07), (0.024, 0.012, -0.05)), 'trim')                            # ejection port
+    n.add(bm_tube((-0.024, 0.02, -0.17), (-0.046, 0.022, -0.17), 0.004, 6), 'metal')               # charging handle
+    n.add(xf(bm_sphere(0.007, 8, 6), (-0.048, 0.022, -0.17)), 'metal')
+    for x in (-0.017, 0.017):                                                                      # collapsed wire stock (low: clear of the sights)
+        n.add(bm_tube((x, -0.01, 0.07), (x, -0.06, 0.2), 0.0055, 8), 'darkmetal')
+    n.add(bm_tube((-0.017, -0.06, 0.2), (0.017, -0.06, 0.2), 0.0055, 8), 'darkmetal')
+    n.add(xf(bm_rbox(0.044, 0.07, 0.016, 0.006), (0, -0.068, 0.21)), 'rubber')                     # butt pad
+    # iron sights: rear aperture and hooded front post, both on the sight line (y 0.05)
+    n.add(xf(bm_box(0.03, 0.012, 0.022), (0, 0.04, 0.04)), 'darkmetal')
+    n.add(xf(ring_z(0.009, 0.0026, 0.0, 16, 6), (0, 0.05, 0.04)), 'darkmetal')
+    n.add(xf(bm_box(0.02, 0.012, 0.02), (0, 0.037, -0.27)), 'darkmetal')
+    n.add(xf(ring_z(0.011, 0.0024, 0.0, 16, 6), (0, 0.052, -0.27)), 'darkmetal')
+    n.add(xf(bm_box(0.003, 0.014, 0.004), (0, 0.047, -0.27)), 'accent')
+    finish('wp_smg', n, hand_node('wp_smg', (0, -0.07, 0.045), 0.3))
+
+
 def rocket_launcher():
     n = Node('wp_rocket_mesh')
     n.add(cyl_z(0.058, 0.78, -0.15, 0.06, seg=24), 'main')                                          # launch tube
@@ -1332,7 +1366,7 @@ def prop_cannon():
 for fn in (crate, metal_crate, barrel, xbarrel, cone, concrete_block, seat, wheel, car, kart, pickup, monster, buggy, sled, avatar, ragdoll, pine, pine_snow, rock, palm, container,
            physgun, toolgun, pistol, rifle, grenade, crowbar,
            propane, balloon, trampoline, melon, pin, chair, table, couch, fridge, vending, tv, bookshelf, dumpster, pallet, barrier, rocket,
-           shotgun, sniper, rocket_launcher, prop_cannon):
+           shotgun, sniper, smg, rocket_launcher, prop_cannon):
     fn()
 
 bpy.ops.export_scene.gltf(filepath=OUT, export_format='GLB', export_apply=True, export_yup=True,

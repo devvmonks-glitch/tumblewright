@@ -35,6 +35,8 @@ const BANKS = {
   m1911_far: { v: [{ shots: 'fa:1911/A_34P.wav', n: 3, dur: 1.7 }], fade: 0.6 },
   rifle: { v: [{ shots: 'fa:AR-15/D_32P.wav', n: 3, dur: 1.0 }], fade: 0.4 },
   rifle_far: { v: [{ shots: 'fa:AR-15/D_24P.wav', n: 3, dur: 1.7 }], fade: 0.6 },
+  smg: { v: [{ shots: 'fa:PPSh/P_30P.wav', n: 4, dur: 0.8 }], fade: 0.35 },
+  smg_far: { v: [{ shots: 'fa:PPSh/P_16P.wav', n: 3, dur: 1.4 }], fade: 0.55 },
   ak: { v: [{ shots: 'fa:AK-47/C_27P.wav', n: 2, dur: 1.0 }, { shots: 'fa:AK-47/C_29P.wav', n: 3, dur: 1.0 }], fade: 0.4 },
   ak_far: { v: [{ shots: 'fa:AK-47/C_31P.wav', n: 2, dur: 1.7 }, { shots: 'fa:AK-47/C_28P.wav', n: 3, dur: 1.7 }], fade: 0.6 },
   shotgun: { v: [{ shots: 'fa:Nova/O_21P.wav', n: 3, dur: 1.6 }], fade: 0.5 },

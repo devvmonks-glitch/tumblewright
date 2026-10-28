@@ -328,14 +328,16 @@ const PlayerView = {
       a.getObjectByName('legL').rotation.x = 1.4; a.getObjectByName('legR').rotation.x = 1.4;
       return;
     }
-    a.position.copy(p.renderPos); if (p.crouch) a.position.y -= 0.3;
-    a.rotation.set(0, p.renderYaw, 0);
+    // sliding: lean back, legs out in front (eased in and out)
+    p._slk = lerp(p._slk || 0, p.slide ? 1 : 0, 1 - Math.exp(-14 * dt)); const sk = p._slk;
+    a.position.copy(p.renderPos); if (p.crouch) a.position.y -= 0.3 * (1 - sk); a.position.y -= 0.42 * sk;
+    a.rotation.set(0, p.renderYaw, 0); if (sk > 0.01) a.rotateX(0.75 * sk);
     const spd = Math.hypot(p.vel.x, p.vel.z);
-    p.walkPhase += dt * spd * 2.2;
-    const sw = Math.sin(p.walkPhase) * Math.min(1, spd / 4) * 0.6;
-    a.getObjectByName('legL').rotation.x = sw; a.getObjectByName('legR').rotation.x = -sw;
+    p.walkPhase += dt * spd * 2.2 * (1 - sk);
+    const sw = Math.sin(p.walkPhase) * Math.min(1, spd / 4) * 0.6 * (1 - sk);
+    a.getObjectByName('legL').rotation.x = sw + 1.15 * sk; a.getObjectByName('legR').rotation.x = -sw + 0.95 * sk;
     gun.rotation.x = p.pitch;
-    const wcol = { physgun: '#4dd0e1', toolgun: '#fed330', pistol: '#5b6270', rifle: '#3d4a32', grenade: '#3d4a32', crowbar: '#c0392b' }[p.weapon] || '#5b6270';
+    const wcol = { physgun: '#4dd0e1', toolgun: '#fed330', pistol: '#5b6270', rifle: '#3d4a32', smg: '#2e3238', grenade: '#3d4a32', crowbar: '#c0392b' }[p.weapon] || '#5b6270';
     if (gun.userData.w !== p.weapon) {
       gun.userData.w = p.weapon;
       const W = WEAPON_MODEL[p.weapon], mk = 'wp_' + ((W && W.model) || p.weapon);

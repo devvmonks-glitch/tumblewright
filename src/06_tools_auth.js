@@ -8,13 +8,17 @@ const WEAPONS = [
   { id: 'pistol', name: 'Pistol', icon: '🔫', desc: 'Semi-automatic. Knocks props around.', rate: 0.22, dmg: 22, imp: 1.2, dv: 8, spread: 0.004, range: 300, vp: 0.03, bloom: 0.6 },
   { id: 'shotgun', name: 'Shotgun', icon: '💥', desc: 'Pump action, 8 pellets. Devastating up close.', rate: 0.85, dmg: 11, imp: 0.9, dv: 2, spread: 0.055, pellets: 8, range: 120, push: 2, vp: 0.06 },
   { id: 'rifle', name: 'Rifle', icon: '🎯', desc: 'Automatic rifle.', rate: 0.09, dmg: 13, imp: 0.7, dv: 5, spread: 0.011, auto: true, range: 300, vp: 0.017, bloom: 0.3 },
-  { id: 'sniper', name: 'Sniper Rifle', icon: '🔭', desc: 'Hold alt-fire to scope in. Inaccurate from the hip.', rate: 1.2, dmg: 95, imp: 4, dv: 16, spread: 0, hipSpread: 0.03, zoom: 1, range: 800, push: 3, vp: 0.07 },
+  // smg: fast and light. ads: aim-down-sights zoom (alt-fire), mag / rl: magazine and reload time (s), fall: [full damage to (m), lowest at (m), lowest share]
+  { id: 'smg', name: 'SMG', icon: '💨', desc: 'Very fast fire, light hits. Aim (alt-fire) and fire short bursts to stay on target; weaker at range. 32 rounds, R reloads.', rate: 0.065, dmg: 9, imp: 0.5, dv: 4, spread: 0.008, hipSpread: 0.024, auto: true, range: 220, vp: 0.011, bloom: 0.14, bloomMax: 2.6, ads: 1.3, mag: 32, rl: 1.9, fall: [12, 38, 0.5] },
+  { id: 'sniper', name: 'Sniper Rifle', icon: '🔭', desc: 'Alt-fire scopes in. Inaccurate from the hip.', rate: 1.2, dmg: 95, imp: 4, dv: 16, spread: 0, hipSpread: 0.03, zoom: 1, range: 800, push: 3, vp: 0.07 },
   { id: 'rocket', name: 'Rocket Launcher', icon: '🚀', desc: 'Rockets explode on impact. Rocket-jump if you dare.', rate: 1.0, proj: 'rocket', vp: 0.045 },
   { id: 'grenade', name: 'Grenade', icon: '💣', desc: 'Throw it. It explodes after 2.5 s. One every 2.5 s.', rate: 2.5 },
   { id: 'crowbar', name: 'Crowbar', icon: '🪓', desc: 'Melee. Great for smashing ragdolls.', rate: 0.42, dmg: 34, imp: 3, dv: 10, range: 2.4, push: 4, vp: 0.012 },
   { id: 'propcannon', name: 'Prop Cannon', icon: '📦', desc: 'Fires random props. They vanish after 30 s.', rate: 0.35, proj: 'prop', vp: 0.03 },
   { id: 'deleter', name: 'Delete Gun', icon: '🗑️', desc: 'Deletes whatever you shoot: props, NPCs, map pieces, trees, rocks and containers. Map and world objects need edit permission.', rate: 0.2 },
 ];
+// damage at a distance (weapons with falloff lose damage past fall[0] metres, down to fall[2] of it at fall[1])
+function wDmg(W, dist) { const f = W.fall; return f ? W.dmg * lerp(1, f[2], clamp((dist - f[0]) / (f[1] - f[0]), 0, 1)) : W.dmg; }
 // random cone spread around a direction
 function jitter(v, s) { v.x += (Math.random() - 0.5) * s * 2; v.y += (Math.random() - 0.5) * s * 2; v.z += (Math.random() - 0.5) * s * 2; return v.normalize(); }
 const CANNON_AMMO = ['crate_s', 'crate_s', 'barrel', 'melon', 'melon', 'bowling', 'tire', 'cone', 'beachball', 'cube', 'pin'];
@@ -36,6 +40,7 @@ const TOOL_MODES = [
 ];
 const Tools = {
   weapon: 'physgun', mode: 'weld', grab: null, first: null, cool: 0, rot: [0, 0], rotating: false, clipboard: null, marker: null, beam: null, kick: 0, bloom: 0, swingAt: 0,
+  ammo: {}, reloadT: 0, reloadW: null,   // magazine weapons: rounds left per weapon, reload time left
   opt: Object.assign({ ropeLen: 1.0, ropeRigid: 1.0, thrForce: 12, thrKey: 'KeyF', thrPad: 'Pad7', wheelR: 0.4, paintMat: 'metal', paintCol: '#ff5a5f', motSpd: 4, motKey: 'KeyM', motTog: false,
     blLift: 10, blLen: 2, hovSpd: 3, hovAir: 0.3, hovUp: 'KeyU', hovDn: 'KeyJ', dynPow: 1, dynKey: 'KeyX' }, store.get('toolopt', {})),
   saveOpt() { store.set('toolopt', this.opt); },
@@ -45,7 +50,7 @@ const Tools = {
     R.scene.add(this.marker);
     this.beam = new Beam(0x6fe3ff, 0.05);
   },
-  setWeapon(id) { if (!W_BY_ID[id] || this.weapon === id) return; this.release(); this.weapon = id; this.first = null; Game.drawT = 0; Game.buildViewmodel(); UI.refreshTool(); Audio.play('draw'); },
+  setWeapon(id) { if (!W_BY_ID[id] || this.weapon === id) return; this.release(); this.reloadT = 0; this.weapon = id; this.first = null; Game.drawT = 0; Game.buildViewmodel(); UI.refreshTool(); Audio.play('draw'); },
   cycleWeapon(dir) { const i = W_BY_ID[this.weapon].idx; this.setWeapon(WEAPONS[(i + dir + WEAPONS.length) % WEAPONS.length].id); },
   setMode(id) { this.mode = id; this.first = null; UI.refreshTool(); },
   cycleMode(dir) { const i = TOOL_MODES.findIndex(m => m.id === this.mode); this.setMode(TOOL_MODES[(i + dir + TOOL_MODES.length) % TOOL_MODES.length].id); Audio.play('switch'); },
@@ -63,14 +68,21 @@ const Tools = {
     const p = Players.local;
     this.cool -= dt; this.kick = Math.max(0, this.kick - dt * 6);
     if (this.cool < -0.06) this.bloom = Math.max(0, this.bloom - dt * 3);   // settles shortly after you stop firing
-    if (!p || p.dead || p.seat) { this.release(); this.swingAt = 0; return; }
+    if (this.reloadT > 0 && (this.reloadT -= dt) <= 0) { this.reloadT = 0; const RW = W_BY_ID[this.reloadW]; if (RW) this.ammo[RW.id] = RW.mag; Audio.play('switch', 0.6); }
+    if (!p || p.dead || p.seat) { this.release(); this.swingAt = 0; this.reloadT = 0; return; }
     if (this.swingAt > 0 && (this.swingAt -= dt) <= 0) { this.swingAt = 0; if (this.weapon === 'crowbar') this.fireGun(W_BY_ID.crowbar, true); }   // the crowbar lands mid-swing
     const W = W_BY_ID[this.weapon];
     if (this.weapon === 'physgun') this.updPhysgun(dt);
     else if (this.weapon === 'toolgun') this.updToolgun(dt);
     else if (this.weapon === 'grenade') { if (Input.hit('fire') && this.cool <= 0) { this.cool = W.rate; const o = new V3(), d = new V3(); this.aim(o, d); Net.toHost({ t: 'nade', o: a3(o), d: a3(d) }); this.kick = 1; Audio.play('pin', 0.8); Audio.play('throw', 1, { delay: 0.12 }); } }
     else if (this.weapon === 'deleter') { if (Input.hit('fire') && this.cool <= 0) { this.cool = W.rate; this.fireDelete(); } }
-    else if ((W.auto ? Input.down('fire') : Input.hit('fire')) && this.cool <= 0) this.fireGun(W);
+    else if (W.mag && Input.hit('reload')) this.reload(W);
+    else if ((W.auto ? Input.down('fire') : Input.hit('fire')) && this.cool <= 0) {
+      if (!W.mag) this.fireGun(W);
+      else if (this.reloadT) { /* still reloading */ }
+      else if (this.rounds(W) > 0) { this.ammo[W.id] = this.rounds(W) - 1; this.fireGun(W); if (!this.ammo[W.id]) this.reload(W); }
+      else if (Input.hit('fire')) { Audio.play('tick', 0.8); this.reload(W); }   // empty: click, then reload
+    }
     this.marker.visible = !!this.first && this.weapon === 'toolgun';
     if (this.first) View.anchorWorld(this.first.e, this.first.lp, this.marker.position);
   },
@@ -176,6 +188,14 @@ const Tools = {
     if (typeof h.id === 'number' && h.id > 0) Net.toHost({ t: 'del', e: h.id });
     else if (h.id === 0 && Env.colItem && Env.colItem.has(h.handle)) Net.toHost({ t: 'del', env: Env.colItem.get(h.handle) });
   },
+  rounds(W) { return this.ammo[W.id] ?? W.mag; },
+  reload(W) {
+    if (this.reloadT || this.rounds(W) >= W.mag) return;
+    this.reloadT = W.rl; this.reloadW = W.id; Game.punch[0] -= 0.01;
+    Net.toHost({ t: 'reload', w: W.id });
+    Audio.play('cloth', 0.5); Audio.play('tick', 0.7, { delay: 0.25 }); Audio.play('bolt', 0.8, { delay: W.rl * 0.62, rate: 1.25 });
+  },
+  reloadK() { const W = W_BY_ID[this.reloadW]; return this.reloadT && W ? 1 - this.reloadT / W.rl : 0; },   // reload progress 0..1 (0 when not reloading)
   muzzle() { const vm = Game.viewmodel; const m = vm && vm.getObjectByName('muzzle'); return m ? m.getWorldPosition(new V3()) : R.camera.position.clone(); },
   fireGun(W, landed) {
     if (W.id === 'crowbar' && !landed) { this.cool = W.rate; this.swingAt = SWING_HIT; Game.swingT = 0; Audio.play('swing'); return; }   // wind up first, hit when the bar arrives
@@ -186,8 +206,8 @@ const Tools = {
     const mzo = Game.viewmodel && Game.viewmodel.getObjectByName('muzzle');
     if (W.id !== 'crowbar') FX.muzzle(mzo && Game.viewmodel.visible ? mzo : this.muzzle(), W.proj ? 'puff' : W.pellets || W.zoom ? 'big' : 'small');
     // bloom: the first shot is on target, keep firing and the spread opens up (shown by the crosshair)
-    const spread = (W.zoom && !Game.zoomed ? W.hipSpread : W.spread) * (1 + this.bloom);
-    if (W.bloom) this.bloom = Math.min(1.8, this.bloom + W.bloom);
+    const spread = (W.hipSpread != null && !Game.zoomed ? W.hipSpread : W.spread) * (1 + this.bloom);
+    if (W.bloom) this.bloom = Math.min(W.bloomMax || 1.8, this.bloom + W.bloom);
     if (spread && !W.pellets) jitter(d, spread);
     if (W.proj === 'rocket') Audio.play('rocket_fire'); else if (W.proj) Audio.play('propcannon'); else if (W.id !== 'crowbar') Audio.gun(W.id, R.camera.position, true);
     if (W.zoom) Game.shake = Math.max(Game.shake, 0.12);
@@ -470,6 +490,7 @@ const Auth = {
       case 'spawn': return this.spawnItem(p, m);
       case 'dupe': return this.spawnDupe(p, m);
       case 'fire': return this.fire(p, m);
+      case 'reload': { const W = W_BY_ID[m.w]; if (W && W.mag && !p.dead) { p.rlT = now() + W.rl * 0.75; (p.ammo || (p.ammo = {}))[W.id] = W.mag; } return; }   // no shots until it's (nearly) done
       case 'nade': return this.throwNade(p, m);
       case 'use': return this.use(p, m);
       case 'undo': return this.undo(p);
@@ -501,6 +522,7 @@ const Auth = {
     }
     p.yaw = +m.y || 0; p.pitch = clamp(+m.x || 0, -1.55, 1.55); p.crouch = !!m.c;
     p.noclip = !!m.n && Rules.allowNoclip && (!Rules.combat || canEdit(p));
+    p.slide = !!m.sl && p.crouch && !p.noclip && !p.seat && !p.dead;   // the client predicts its slide; we only take the flag (lower hitbox, others see it)
     p.mv = { x: clamp(m.mv ? +m.mv[0] : 0, -1, 1), y: clamp(m.mv ? +m.mv[1] : 0, -1, 1) };
     p.held = new Set(Array.isArray(m.k) ? m.k.slice(0, 40) : []);
     if (W_BY_ID[m.w]) p.weapon = m.w; p.firing = !!m.f;
@@ -646,7 +668,7 @@ const Auth = {
       if (!p.grab) continue;
       const e = World.ents.get(p.grab.e); if (e && e.d.k === 'part') { this.wakePart(e); const hg = World.groups.get(e.d.g); if (hg) hg._heldT = now(); }
       if (!e || !e.body || !e.body.isDynamic() || p.dead || p.seat) { p.grab = null; p.beamEnd = null; continue; }
-      const eye = _v1.set(p.pos.x, p.pos.y + (p.crouch ? CFG.eye - 0.5 : CFG.eye), p.pos.z);
+      const eye = _v1.set(p.pos.x, p.pos.y + Players.eyeH(p), p.pos.z);
       const cp = Math.cos(p.pitch), dir = _v2.set(-Math.sin(p.yaw) * cp, Math.sin(p.pitch), -Math.cos(p.yaw) * cp);
       const target = eye.addScaledVector(dir, p.grab.dist);
       const t = e.body.translation(), r = e.body.rotation(); const q = _q1.set(r.x, r.y, r.z, r.w);
@@ -1144,6 +1166,7 @@ const Auth = {
     // rate limit as a small token bucket: shots that arrive bunched up by the network still count, the average can't beat W.rate
     const t = now(); p.fireTok = Math.min(2, (p.fireTok ?? 2) + (t - (p.fireT ?? t)) / W.rate); p.fireT = t;
     if (p.fireTok < 0.9) return; p.fireTok -= 1;
+    if (W.mag) { const a = p.ammo || (p.ammo = {}), n = a[W.id] ?? W.mag; if (n <= 0 || t < (p.rlT || 0)) return; a[W.id] = n - 1; }   // magazine: empty or reloading = no shot
     const o = new V3().fromArray(m.o), d = new V3().fromArray(m.d).normalize();
     if (!isFinite(o.x + o.y + o.z + d.x + d.y + d.z) || o.distanceTo(p.pos) > 7) return;   // the shooter's own view runs ahead of our copy of them
     p.protUntil = 0;   // shooting ends spawn protection
@@ -1165,7 +1188,7 @@ const Auth = {
     for (const v of Players.map.values()) {
       if (v === p || v.dead || v.seat || v.noclip) continue;
       const vp = this.histPos(v, now() - rw), hs = v.disg ? PH.hitShape(v) : null;
-      const y0 = hs ? hs.y0 + vp.y - v.pos.y : vp.y + CFG.capR, y1 = hs ? hs.y1 + vp.y - v.pos.y : vp.y + CFG.capR + CFG.capHalf * 2;
+      const y0 = hs ? hs.y0 + vp.y - v.pos.y : vp.y + CFG.capR, y1 = hs ? hs.y1 + vp.y - v.pos.y : vp.y + (v.slide ? CFG.slideTop - CFG.capR : CFG.capR + CFG.capHalf * 2);   // sliding: a lower hitbox
       const tt = rayCapsule(o, d, vp.x, y0, vp.z, y1, hs ? hs.r : CFG.capR);
       if (tt >= 0 && tt < best) {
         best = tt; const pt = o.clone().addScaledVector(d, tt);
@@ -1182,12 +1205,13 @@ const Auth = {
         e.body.applyImpulseAtPoint({ x: d.x * imp, y: d.y * imp, z: d.z * imp }, { x: h.point.x, y: h.point.y, z: h.point.z }, true);
       }
       const g = e && e.d.g && World.groups.get(e.d.g);
-      if (g && g.t === 'npc') this.hurtPart(g, g.parts.indexOf(e.id), W.dmg, { kind: W.id === 'crowbar' ? 'blunt' : 'bullet', point: h.point, normal: h.normal, dir: d, stun: W.id === 'crowbar' ? 1.5 : W.zoom ? 2 : 0.7, by: 'p:' + p.id });
-      else if (e && e.d.g) this.damageGroup(e.d.g, W.dmg, 0.7);
-      if (e) this.propHit(e, p.id, W.dmg);
+      const dmg = wDmg(W, h.dist);
+      if (g && g.t === 'npc') this.hurtPart(g, g.parts.indexOf(e.id), dmg, { kind: W.id === 'crowbar' ? 'blunt' : 'bullet', point: h.point, normal: h.normal, dir: d, stun: W.id === 'crowbar' ? 1.5 : W.zoom ? 2 : 0.7, by: 'p:' + p.id });
+      else if (e && e.d.g) this.damageGroup(e.d.g, dmg, 0.7);
+      if (e) this.propHit(e, p.id, dmg);
     } else if (typeof h.id === 'string') {
       const victim = Players.map.get(h.id.slice(2));
-      if (victim) { const head = h.point.y > (h.rewound || victim.pos).y + 1.42; this.damagePlayer(victim, W.dmg * (head ? 1.8 : 1), p, W.name, d.clone().multiplyScalar(W.push || 1.2), { p: h.point, head }); if (Rules.combat) Srv.bcastAll({ t: 'fx', k: 'gore', p: a3(h.point), d: a3(d), s: 0.6, w: 'bullet' }); }
+      if (victim) { const head = h.point.y > (h.rewound || victim.pos).y + Players.headY(victim); this.damagePlayer(victim, wDmg(W, h.dist) * (head ? 1.8 : 1), p, W.name, d.clone().multiplyScalar(W.push || 1.2), { p: h.point, head }); if (Rules.combat) Srv.bcastAll({ t: 'fx', k: 'gore', p: a3(h.point), d: a3(d), s: 0.6, w: 'bullet' }); }
     }
     return { h, end };
   },
@@ -1464,7 +1488,7 @@ const Auth = {
       else if (e) this.propHit(e, null, W.dmg);
     } else if (typeof h.id === 'string') {
       const v = Players.map.get(h.id.slice(2));
-      if (v) { this.damagePlayer(v, W.dmg * (h.point.y > v.pos.y + 1.42 ? 1.6 : 1), null, g.n, d.clone().multiplyScalar(1)); if (Rules.combat) Srv.bcastAll({ t: 'fx', k: 'gore', p: a3(h.point), d: a3(d), s: 0.5, w: 'bullet' }); }
+      if (v) { this.damagePlayer(v, W.dmg * (h.point.y > v.pos.y + Players.headY(v) ? 1.6 : 1), null, g.n, d.clone().multiplyScalar(1)); if (Rules.combat) Srv.bcastAll({ t: 'fx', k: 'gore', p: a3(h.point), d: a3(d), s: 0.5, w: 'bullet' }); }
     }
   },
   zombify(g) {

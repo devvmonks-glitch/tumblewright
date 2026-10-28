@@ -97,7 +97,7 @@ const Sim = {
       let y = p.yaw % (Math.PI * 2); if (y > Math.PI) y -= Math.PI * 2; if (y < -Math.PI) y += Math.PI * 2;
       dv.setInt16(o, Math.round(y * 10000)); dv.setInt16(o + 2, Math.round(clamp(p.pitch, -1.6, 1.6) * 10000)); o += 4;
       dv.setUint8(o, clamp(Math.round(p.hp), 0, 255)); o++;
-      dv.setUint8(o, (p.dead ? 1 : 0) | (p.seat ? 2 : 0) | (p.crouch ? 4 : 0) | (p.noclip ? 8 : 0) | (p.beamEnd && p.grab ? 16 : 0) | (p.firing ? 32 : 0) | (p.protUntil && now() < p.protUntil ? 64 : 0)); o++;
+      dv.setUint8(o, (p.dead ? 1 : 0) | (p.seat ? 2 : 0) | (p.crouch ? 4 : 0) | (p.noclip ? 8 : 0) | (p.beamEnd && p.grab ? 16 : 0) | (p.firing ? 32 : 0) | (p.protUntil && now() < p.protUntil ? 64 : 0) | (p.slide ? 128 : 0)); o++;
       dv.setUint8(o, W_BY_ID[p.weapon] ? W_BY_ID[p.weapon].idx : 0); o++;
       dv.setUint16(o, clamp(Math.round(p.ping || 0), 0, 65535)); o += 2;
       const b = p.beamEnd || p.pos; dv.setInt16(o, i16(b.x)); dv.setInt16(o + 2, i16(b.y)); dv.setInt16(o + 4, i16(b.z)); o += 6;

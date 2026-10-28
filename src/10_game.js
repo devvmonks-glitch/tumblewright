@@ -15,7 +15,7 @@ const ENG_LAYERS = [['eng0', 43.2], ['eng2', 65.1], ['eng5', 76.7]];   // car en
 const SND_DEF = { v: 0.8, r: 2.5, max: 70, rf: 1, pv: 0.06, lim: 5, rv: 0.22, occ: 1 };
 const SND = {
   pistol: { v: 1, r: 10, max: 600, rf: 0.75, pv: 0.03, lim: 6, rv: 0.35, del: 1 }, m1911: { v: 1, r: 10, max: 600, rf: 0.75, pv: 0.03, lim: 6, rv: 0.35, del: 1 },
-  rifle: { v: 0.95, r: 11, max: 650, rf: 0.75, pv: 0.03, lim: 8, rv: 0.35, del: 1 }, ak: { v: 0.95, r: 11, max: 650, rf: 0.75, pv: 0.03, lim: 8, rv: 0.35, del: 1 },
+  rifle: { v: 0.95, r: 11, max: 650, rf: 0.75, pv: 0.03, lim: 8, rv: 0.35, del: 1 }, smg: { v: 0.85, r: 9, max: 500, rf: 0.8, pv: 0.04, lim: 10, rv: 0.32, del: 1 }, ak: { v: 0.95, r: 11, max: 650, rf: 0.75, pv: 0.03, lim: 8, rv: 0.35, del: 1 },
   shotgun: { v: 1, r: 12, max: 650, rf: 0.75, pv: 0.03, lim: 4, rv: 0.4, del: 1 }, sniper: { v: 1, r: 14, max: 900, rf: 0.8, pv: 0.02, lim: 3, rv: 0.45, del: 1 },
   rocket_fire: { v: 1, r: 10, max: 500, rf: 0.9, pv: 0.04, lim: 3, rv: 0.4, del: 1 },
   boom: { v: 1.4, r: 18, max: 900, rf: 0.8, pv: 0.06, lim: 4, rv: 0.5, del: 1, occ: 0.4 }, boom_far: { v: 1.2, r: 40, max: 1400, rf: 0.6, pv: 0.06, lim: 3, rv: 0.6, del: 1, occ: 0.4 },
@@ -50,7 +50,7 @@ const SND = {
 // which volume slider a sound belongs to (Settings > Audio)
 const SND_CAT = [['ui', /^(ui|tick|switch|open|close|confirm|error|undo|place|chat|notify|hitmark|kill|draw)$/], ['gore', /^gore_/], ['voices', /^(pain_|death_|scream|z_|jumpscare)/],
   ['steps', /^(step_|cloth|land)/], ['vehicles', /^(eng\d|skid|motor|thruster|crash)/], ['tools', /^(pg_|freeze|unfreeze|tool_|delete_)/], ['amb', /^(amb_|bird|wave|water_loop)/],
-  ['weapons', /^(pistol|m1911|rifle|ak|shotgun|sniper|gun_dist|rocket|boom|debris|casing|hull|pump|bolt|ricochet|whiz|swing|throw|pin|nade_|propcannon|bimp_)/], ['impacts', /./]];
+  ['weapons', /^(pistol|m1911|rifle|smg|ak|shotgun|sniper|gun_dist|rocket|boom|debris|casing|hull|pump|bolt|ricochet|whiz|swing|throw|pin|nade_|propcannon|bimp_)/], ['impacts', /./]];
 const CAT_KEY = { weapons: 'volWeapons', impacts: 'volImpacts', steps: 'volSteps', voices: 'volVoices', gore: 'volGore', vehicles: 'volVehicles', tools: 'volTools', amb: 'volAmb', ui: 'volUI' };
 const _catOf = {};
 function sndVol(name) { const c = _catOf[name] || (_catOf[name] = SND_CAT.find(([, re]) => re.test(name))[0]); return Settings[CAT_KEY[c]] ?? 1; }
@@ -245,7 +245,7 @@ const Audio = {
   // a gunshot heard from pos: the close recording nearby, the distant one further out, a far-away crack beyond that
   gun(w, pos, local) {
     if (!this.ok()) return;
-    const W2 = { m1911: 'm1911', ak: 'ak', pistol: 'pistol', rifle: 'rifle', shotgun: 'shotgun', sniper: 'sniper' }[w];
+    const W2 = { m1911: 'm1911', ak: 'ak', pistol: 'pistol', rifle: 'rifle', smg: 'smg', shotgun: 'shotgun', sniper: 'sniper' }[w];
     if (!W2) { if (w === 'rocket') this.at('rocket_fire', pos); else if (w === 'propcannon') this.at('propcannon', pos); else if (w === 'crowbar') this.at('swing', pos); return; }
     const d = local ? 0 : pos.distanceTo(R.camera.position);
     if (local) this.play(W2, 1.3);
@@ -261,7 +261,7 @@ const Audio = {
       const at = (n, dl, v) => local ? this.play(n, v, { delay: dl }) : this.at(n, pos, v, { delay: dl });
       if (W2 === 'shotgun') { at('pump', 0.32, 1); this.at('hull', foot.clone(), 1, { delay: 0.75 + Math.random() * 0.2 }); }
       else if (W2 === 'sniper') { at('bolt', 0.5, 1); this.at('casing', foot.clone(), 1, { delay: 1.1 + Math.random() * 0.2 }); }
-      else this.at('casing', foot.clone(), W2 === 'rifle' || W2 === 'ak' ? 0.7 : 1, { delay: 0.45 + Math.random() * 0.35 });
+      else this.at('casing', foot.clone(), W2 === 'rifle' || W2 === 'ak' ? 0.7 : W2 === 'smg' ? 0.5 : 1, { delay: 0.45 + Math.random() * 0.35 });
     }
   },
   // a bullet stopping at `end` (normal n): the surface decides the sound, sometimes it ricochets
@@ -358,6 +358,10 @@ const Audio = {
       }
       if (p.dead || p.seat || p.noclip) { p._stepT = 0; continue; }
       const pos = p.renderPos, v = p.vel, hs = Math.hypot(v.x, v.z), st = p._snd || (p._snd = { py: pos.y, vy: 0, air: 0 });
+      if (p.slide !== !!st.sl) {   // a slide starting: cloth and a scrape on the ground under them
+        st.sl = p.slide;
+        if (p.slide) { const s = this.groundUnder(pos, cc => Phys.colMap.get(cc.handle) !== 'p:' + p.id); if (!p.isLocal) this.at('cloth', pos, 1); if (s) this.at(s === 'water' ? 'splash_s' : STEP_OF[s] || 'step_concrete', pos, 1, { rate: 0.7 }); }
+      }
       const vy = (pos.y - st.py) / Math.max(dt, 1e-3); st.py = pos.y;
       const grounded = p.isLocal ? p.grounded : Math.abs(vy) < 1.2;
       const excl = cc => Phys.colMap.get(cc.handle) !== 'p:' + p.id;
@@ -365,7 +369,7 @@ const Audio = {
       else {
         if (st.air > 0.25 && (st.minVy || 0) < -4) { const s = this.groundUnder(pos, excl); this.at(s === 'water' ? 'splash_s' : 'land', pos, clamp(-st.minVy / 12, 0.4, 1)); if (s && s !== 'water') this.at(STEP_OF[s] || 'step_concrete', pos, 1); }
         st.air = 0; st.minVy = 0;
-        if (hs > 1.2) {
+        if (hs > 1.2 && !p.slide) {
           const stride = p.crouch ? 0.9 : hs > 6 ? 1.9 : 1.45;
           p._stepT = (p._stepT || 0) + hs * dt;
           if (p._stepT > stride) { p._stepT = 0; const s = this.groundUnder(pos, excl); if (s) this.at(STEP_OF[s] || 'step_concrete', pos, (p.crouch ? 0.35 : hs > 6 ? 1 : 0.75) * (p.isLocal ? 0.8 : 1)); }
@@ -1006,7 +1010,7 @@ const HOLO = {
 const AIM_ASSIST = [0, 0.55, 1, 1.45];   // Settings.aimAssist: off / low / standard / strong
 const Game = {
   state: 'loading', viewmodel: null, detected: null, pendingWorld: null, aimSeat: 0, lockReleaseOk: false,
-  acc: 0, last: 0, orbit: 0, shake: 0, punch: [0, 0], sway: [0, 0], drawT: 1, sprintK: 0, swingT: 9, moveInp: { mx: 0, my: 0, jump: false, sprint: false, up: 0 }, autoT: 20, hiddenTicker: null, bob: 0, fellT: 0,
+  acc: 0, last: 0, orbit: 0, shake: 0, punch: [0, 0], sway: [0, 0], drawT: 1, sprintK: 0, adsK: 0, swingT: 9, moveInp: { mx: 0, my: 0, jump: false, sprint: false, up: 0, slideReq: 0 }, autoT: 20, hiddenTicker: null, bob: 0, fellT: 0,
   async boot() {
     const lt = $('#loadingText');
     try {
@@ -1248,6 +1252,7 @@ const Game = {
     const me = Players.local; if (!me) return null;
     const inp = { p: a3(me.pos), y: r4(me.yaw), x: r4(me.pitch), c: me.crouch ? 1 : 0, n: me.noclip ? 1 : 0, mv: [r4(this.moveInp.mx), r4(this.moveInp.my)], k: UI.open ? [] : Input.heldCodes().slice(0, 24), w: Tools.weapon, f: Tools.grab ? 1 : 0 };
     if (Tools.grab) inp.gd = r4(Tools.grab.dist);
+    if (me.slide) inp.sl = 1;
     if (me.seat) {   // vehicle: handbrake / boost buttons + analog triggers
       inp.vb = (Input.down('jump') ? 1 : 0) | (Input.down('sprint') || Input.pb[PAD.B] ? 2 : 0);
       if (Input.device === 'pad') inp.tr = [r4(Input.trig[0]), r4(Input.trig[1])];
@@ -1282,7 +1287,11 @@ const Game = {
     if (Input.hit('undo') && !ctrl && !Editor.active) Net.toHost({ t: 'undo' });
     // look
     const lookOK = Input.locked || (Editor.active && Input.mouse[2]);
-    this.zoomed = !!(W_BY_ID[Tools.weapon].zoom && Input.down('alt') && !me.seat && !me.dead && !Editor.active);
+    const ZW = W_BY_ID[Tools.weapon], canZoom = !!((ZW.zoom || ZW.ads) && !me.seat && !me.dead && !Editor.active && !Tools.reloadT);
+    if (!canZoom || this.aimW !== Tools.weapon) this.aimOn = false;   // toggled aim drops when you switch weapon, reload, sit or die
+    this.aimW = Tools.weapon;
+    if (canZoom && Input.hit('alt') && Input.aimToggle()) { this.aimOn = !this.aimOn; Input.suggestToggle(); }
+    this.zoomed = canZoom && (Input.aimToggle() ? this.aimOn : Input.down('alt'));
     if (!Tools.rotating) {
       const inv = Settings.invertY ? -1 : 1, zk = R.camera.fov / Settings.fov;   // slower look while scoped
       const at = this.aimTarget(me), st = AIM_ASSIST[Settings.aimAssist | 0] || 0;
@@ -1320,6 +1329,7 @@ const Game = {
     if (Rules.mode === 'prophunt' && Rules.ph && Rules.ph.phase === 'hide' && me.team === 'hunter') { mi.mx = mi.my = 0; mi.jump = mi.sprint = false; }   // hunters wait, blind
     mi.up = (Input.down('jump') ? 1 : 0) - (Input.down('crouch') ? 1 : 0);
     me.crouch = !me.noclip && !me.seat && Input.down('crouch');
+    if (me.crouch && Input.hit('crouch')) mi.slideReq = now();   // a slide starts on the next fixed step if you're sprinting fast enough
     if (Editor.active) { this.cancelPlace(); Editor.update(dt); }
     else if (this.placing) this.updatePlace(me);
     else {
@@ -1408,7 +1418,7 @@ const Game = {
       if (g.t !== 'npc' || !g.alive) continue;
       const e = World.ents.get(g.parts[1]); if (e && e.mesh) consider(e.mesh.position, 'g', g.id);   // torso
     }
-    if (Rules.combat) for (const p of Players.map.values()) if (!p.isLocal && !p.dead) consider({ x: p.renderPos.x, y: p.renderPos.y + (p.crouch ? 0.95 : 1.25), z: p.renderPos.z }, 'p', p.id);
+    if (Rules.combat) for (const p of Players.map.values()) if (!p.isLocal && !p.dead) consider({ x: p.renderPos.x, y: p.renderPos.y + (p.slide ? 0.55 : p.crouch ? 0.95 : 1.25), z: p.renderPos.z }, 'p', p.id);
     if (!best) return null;
     const h = Phys.cast(eye, new V3().subVectors(best.pt, eye).normalize(), best.d + 0.5, me.body);   // line of sight
     if (h && h.dist < best.d - 0.6) {
@@ -1437,7 +1447,7 @@ const Game = {
       if (g.t !== 'npc' || !g.alive) continue;
       const e = (head && World.ents.get(g.parts[2])) || World.ents.get(g.parts[1]); if (e && e.mesh) consider(e.mesh.position, 'g', g.id);
     }
-    if (Rules.combat) for (const p of Players.map.values()) if (!p.isLocal && !p.dead) consider({ x: p.renderPos.x, y: p.renderPos.y + (head ? 1.62 : 1.25) - (p.crouch ? 0.3 : 0), z: p.renderPos.z }, 'p', p.id);
+    if (Rules.combat) for (const p of Players.map.values()) if (!p.isLocal && !p.dead) consider({ x: p.renderPos.x, y: p.renderPos.y + (p.slide ? (head ? 0.85 : 0.55) : (head ? 1.62 : 1.25) - (p.crouch ? 0.3 : 0)), z: p.renderPos.z }, 'p', p.id);
     cands.sort((a, b) => b.cos - a.cos);
     let best = null;
     for (const c of cands.slice(0, 6)) {   // nearest to the crosshair that we can actually see
@@ -1543,8 +1553,9 @@ const Game = {
       if (h) cam.position.copy(target).addScaledVector(back, Math.max(0.6, h.dist - 0.3));
       cam.lookAt(target);
     } else {
-      const eh = me.crouch ? CFG.eye - 0.5 : CFG.eye;
+      const eh = Players.eyeH(me);
       this.eyeH = lerp(this.eyeH || eh, eh, 1 - Math.exp(-14 * dt));
+      this.slideRoll = lerp(this.slideRoll || 0, me.slide ? 0.06 : 0, 1 - Math.exp(-10 * dt));   // a slight tilt while sliding
       cam.position.set(me.renderPos.x, me.renderPos.y + this.eyeH, me.renderPos.z);
       // landing: remember the fastest fall, dip the view when we touch down
       if (!me.grounded) this.airVy = Math.min(this.airVy || 0, me.vel.y);
@@ -1553,14 +1564,14 @@ const Game = {
       cam.position.y -= Math.sin(Math.min(1, this.land) * Math.PI) * 0.09 * this.land;
       // view punch from recoil: kicks the camera (not the aim) and springs back
       const pk = 1 - Math.exp(-(Tools.cool > 0 ? 6 : 9) * dt); this.punch[0] -= this.punch[0] * pk; this.punch[1] -= this.punch[1] * pk;   // recovers slower while you keep firing
-      cam.rotation.set(me.pitch + this.punch[0], me.yaw + this.punch[1], 0, 'YXZ');
+      cam.rotation.set(me.pitch + this.punch[0], me.yaw + this.punch[1], this.slideRoll, 'YXZ');
       if (me.dead) { cam.position.y = me.renderPos.y + 0.4; cam.rotation.z = 0.4; }
     }
     if (this.shake > 0) { this.shake = Math.max(0, this.shake - dt); cam.position.x += (Math.random() - 0.5) * this.shake * 0.4; cam.position.y += (Math.random() - 0.5) * this.shake * 0.4; }
     R.focus.copy(me.renderPos);
     // viewmodel bob / recoil
     // sniper scope: narrow the FOV, hide the viewmodel, show the scope overlay
-    const fovT = this.zoomed && !me.seat ? Settings.fov / 4.5 : Settings.fov;
+    const ZW = W_BY_ID[Tools.weapon], fovT = this.zoomed && !me.seat ? Settings.fov / (ZW.zoom ? 4.5 : ZW.ads || 1) : Settings.fov;   // scope 4.5x, iron sights a little
     this.fovCur = lerp(this.fovCur || Settings.fov, fovT, 1 - Math.exp(-18 * dt));
     if (Math.abs(this.fovCur - fovT) < 0.05) this.fovCur = fovT;
     if (Math.abs(cam.fov - this.fovCur) > 0.01) R.setFov(this.fovCur);
@@ -1577,20 +1588,24 @@ const Game = {
       this.sway[0] += (clamp(dyaw / sdt * 0.006, -0.035, 0.035) - this.sway[0]) * sk;
       this.sway[1] += (clamp(dpitch / sdt * 0.006, -0.03, 0.03) - this.sway[1]) * sk;
       // sprinting lowers and turns the gun in; drawing raises it from below
-      const sprint = this.moveInp.sprint && me.grounded && spd > 4 && !Tools.grab && Tools.cool <= 0;
+      const sprint = this.moveInp.sprint && me.grounded && spd > 4 && !Tools.grab && Tools.cool <= 0 && !me.slide;
       this.sprintK += ((sprint ? 1 : 0) - this.sprintK) * (1 - Math.exp(-8 * dt));
       this.drawT = Math.min(1, this.drawT + dt / 0.28); const dr = Math.pow(1 - this.drawT, 2);
       const ld = Math.sin(Math.min(1, this.land || 0) * Math.PI) * (this.land || 0), br = Math.sin(t * 1.7) * 0.0025 * (1 - mv);
       this.swingT += dt; const sw = melee ? swingPose(this.swingT) : SWING_REST;
-      const WM = Models.has('wp_' + Tools.weapon) && WEAPON_MODEL[Tools.weapon], VB = WM ? WM.vm : [0.26, -0.25, -0.48], VR = (WM && WM.vr) || [0, 0, 0], spr = melee ? 0.4 : 1;
+      const WM = Models.has('wp_' + Tools.weapon) && WEAPON_MODEL[Tools.weapon], VR = (WM && WM.vr) || [0, 0, 0], spr = melee ? 0.4 : 1;
+      // aiming down the sights: the gun comes to the middle of the view (ads = where it sits then); reloading dips it
+      this.adsK += ((this.zoomed && WM && WM.ads ? 1 : 0) - this.adsK) * (1 - Math.exp(-16 * dt));
+      const VB0 = WM ? WM.vm : [0.26, -0.25, -0.48], VB = WM && WM.ads ? VB0.map((v, i) => lerp(v, WM.ads[i], this.adsK)) : VB0;
+      const rk = Tools.reloadK(), rd = rk ? Math.sin(Math.min(1, rk * 1.15) * Math.PI) : 0, ak = 1 - this.adsK * 0.75;
       vm.position.set(
-        VB[0] + Math.sin(this.bob) * 0.012 * mv + this.sway[0] - this.sprintK * 0.03 * spr + sw[3],
-        VB[1] + Math.abs(Math.cos(this.bob)) * 0.012 * mv - this.sway[1] + br - ld * 0.04 - this.sprintK * 0.035 - dr * 0.22 + sw[4],
-        VB[2] + (melee ? 0 : k * 0.07) + sw[5]);
+        VB[0] + (Math.sin(this.bob) * 0.012 * mv + this.sway[0]) * ak - this.sprintK * 0.03 * spr + sw[3],
+        VB[1] + (Math.abs(Math.cos(this.bob)) * 0.012 * mv - this.sway[1]) * ak + br - ld * 0.04 - this.sprintK * 0.035 - dr * 0.22 - rd * 0.07 + sw[4],
+        VB[2] + (melee ? 0 : k * 0.07 * ak) + sw[5]);
       vm.rotation.set(
-        VR[0] + (melee ? 0 : k * 0.18) - this.sway[1] * 1.6 - this.sprintK * 0.22 * spr - dr * 0.7 - ld * 0.06 + sw[0],
-        VR[1] - this.sway[0] * 1.8 + this.sprintK * 0.55 * spr + sw[1],
-        VR[2] + this.sway[0] * -2.2 + (melee ? 0 : (this.kickRoll || 0) * k) + sw[2]);
+        VR[0] + (melee ? 0 : k * 0.18 * ak) - this.sway[1] * 1.6 * ak - this.sprintK * 0.22 * spr - dr * 0.7 - ld * 0.06 - rd * 0.55 + sw[0],
+        VR[1] - this.sway[0] * 1.8 * ak + this.sprintK * 0.55 * spr + rd * 0.35 + sw[1],
+        VR[2] + this.sway[0] * -2.2 * ak + (melee ? 0 : (this.kickRoll || 0) * k * ak) + rd * 0.4 + sw[2]);
     }
   },
   buildViewmodel() {

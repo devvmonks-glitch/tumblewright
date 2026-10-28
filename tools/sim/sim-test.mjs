@@ -226,6 +226,22 @@ for (const level of [0, 2]) {
   check('pistol shots kill an NPC, which ragdolls', !!victim && !victim.alive && limp.length >= 10 && limp.every(e => e.body && e.body.isDynamic()), `${shots} shots; ${limp ? limp.length : 0} parts, all dynamic: ${!!limp && limp.every(e => e.body && e.body.isDynamic())}`);
   me.yaw = 0; me.pitch = 0;
 
+  // SMG: the host counts the magazine (no shots when it's empty or mid-reload), damage falls off with range
+  const { W_BY_ID, wDmg } = mods, SMG = W_BY_ID.smg, smgDir = new V(0, 0, -1).toArray();
+  let fired = 0; const smgShot = () => { const n0 = me.ammo ? me.ammo.smg ?? SMG.mag : SMG.mag; send({ t: 'fire', w: 'smg', o: eye().toArray(), d: smgDir, i: 0.1 }); if ((me.ammo.smg ?? SMG.mag) < n0) fired++; };
+  for (let i = 0; i < SMG.mag + 8; i++) { smgShot(); run(SMG.rate + 0.01); }
+  const magFired = fired; fired = 0;
+  send({ t: 'reload', w: 'smg' }); smgShot(); const midReload = fired; run(SMG.rl); smgShot();
+  check('SMG: magazine and reload are enforced by the host', magFired === SMG.mag && midReload === 0 && fired === 1, `${magFired} of ${SMG.mag + 8} shots went off, ${midReload} during the reload, ${fired} after it`);
+  check('SMG: damage falls off with range', wDmg(SMG, 5) === SMG.dmg && Math.abs(wDmg(SMG, 80) - SMG.dmg * SMG.fall[2]) < 1e-9 && wDmg(SMG, 25) < SMG.dmg && wDmg(W_BY_ID.rifle, 200) === W_BY_ID.rifle.dmg,
+    `${wDmg(SMG, 5)} at 5 m, ${wDmg(SMG, 25).toFixed(1)} at 25 m, ${wDmg(SMG, 80)} at 80 m`);
+
+  // slide: a sliding player's hitbox is lower (a shot at chest height passes over), and it comes back when they stop
+  const bob = Players.map.get('bob'), chest = bob.pos.clone().add(new V(0, 1.4, 0)), so = chest.clone().add(new V(6, 0, 0)), sd = new V(-1, 0, 0);
+  const hitBob = () => { const r = Auth.hitscan(me, W_BY_ID.rifle, so, sd.clone()); return !!(r.h && r.h.id === 'p:bob'); };
+  const standHit = hitBob(); bob.slide = true; const slideHit = hitBob(), slideLow = (() => { const r = Auth.hitscan(me, W_BY_ID.rifle, so.clone().setY(bob.pos.y + 0.6), sd.clone()); return !!(r.h && r.h.id === 'p:bob'); })(); bob.slide = false;
+  check('a sliding player has a lower hitbox', standHit && !slideHit && slideLow && hitBob(), `chest-high shot hits standing ${standHit}, sliding ${slideHit}; low shot hits sliding ${slideLow}`);
+
   // knockdown: a hit with stun drops an NPC; it gets back up
   const faller = newGroup('npc', ox - 8, gy, oz + 12); run(2);
   act('knockdown', () => Auth.damageGroup(faller.id, 5, 2)); let wentDown = false;

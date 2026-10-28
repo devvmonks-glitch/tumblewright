@@ -28,7 +28,7 @@ function decode(buf) {
   const s = { ver: dv.getUint8(0), key: dv.getUint8(1), seq: dv.getUint16(2), time: dv.getFloat64(4), bodies: [], players: [] };
   const nb = dv.getUint16(12), np = dv.getUint8(14); o = 16;
   for (let i = 0; i < nb; i++, o += 12) s.bodies.push({ id: dv.getUint16(o), p: [dv.getInt16(o + 2) / 100, dv.getInt16(o + 4) / 100, dv.getInt16(o + 6) / 100] });
-  for (let i = 0; i < np; i++, o += 22) s.players.push({ idx: dv.getUint8(o), p: [dv.getInt16(o + 1) / 100, dv.getInt16(o + 3) / 100, dv.getInt16(o + 5) / 100], yaw: dv.getInt16(o + 7) / 10000 });
+  for (let i = 0; i < np; i++, o += 22) s.players.push({ idx: dv.getUint8(o), p: [dv.getInt16(o + 1) / 100, dv.getInt16(o + 3) / 100, dv.getInt16(o + 5) / 100], yaw: dv.getInt16(o + 7) / 10000, fl: dv.getUint8(o + 12) });
   return s;
 }
 
@@ -91,6 +91,10 @@ for (let i = 0; i < 4; i++) { send({ t: 'input', pid: 'c1', inp: { p: to, y: 1.2
 mark = log.length; await sleep(200);
 const me = since(mark, m => m.t === 'snap' && !m.net).pop().s.players.find(p => p.idx === 2);
 check('a remote player\'s input moves them', me && Math.hypot(me.p[0] - to[0], me.p[2] - to[2]) < 0.3 && Math.abs(me.yaw - 1.2) < 0.01, `at ${me && me.p.map(v => v.toFixed(2))}, yaw ${me && me.yaw.toFixed(2)}`);
+// a slide (crouch + sl) shows in their snapshot flags (bit 128, besides crouch's 4) and stops with the input
+const flagsAfter = async inp => { send({ t: 'input', pid: 'c1', inp: Object.assign({ p: to, y: 1.2, x: 0, mv: [0, 0], k: [] }, inp) }); const i = log.length; await sleep(120); const s = since(i, m => m.t === 'snap' && !m.net).pop(); const q = s && s.s.players.find(p => p.idx === 2); return q ? q.fl : -1; };
+const fSlide = await flagsAfter({ c: 1, sl: 1 }), fCrouch = await flagsAfter({ c: 1 });
+check('a slide reaches the snapshot and ends with the input', (fSlide & 132) === 132 && fCrouch >= 0 && !(fCrouch & 128) && (fCrouch & 4), `flags ${fSlide} while sliding, ${fCrouch} after`);
 
 // ---- settled: deltas carry nothing, the window's picture still carries everything ----
 await sleep(1500); mark = log.length; await sleep(800);

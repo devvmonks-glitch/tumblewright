@@ -120,8 +120,14 @@ const HOTBAR_KEYS = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6',
 const HOTBAR_LABEL = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '='];
 const Hotbar = {
   sel: 0,
-  def() { return ['physgun', 'toolgun', 'pistol', 'shotgun', 'rifle', 'sniper', 'rocket', 'grenade', 'crowbar', 'propcannon', 'deleter', null].map(w => w && { w }); },
-  get() { let s = Settings.hotbar; if (!Array.isArray(s) || s.length !== 12) { s = Settings.hotbar = this.def(); saveSettings(); } return s; },
+  def() { return ['physgun', 'toolgun', 'pistol', 'shotgun', 'rifle', 'smg', 'sniper', 'rocket', 'grenade', 'crowbar', 'propcannon', 'deleter'].map(w => w && { w }); },
+  get() {
+    let s = Settings.hotbar; if (!Array.isArray(s) || s.length !== 12) { s = Settings.hotbar = this.def(); saveSettings(); }
+    if (!Settings.hbSmg) {   // a hotbar saved before the SMG existed: put it in the first free slot (once)
+      Settings.hbSmg = true; const i = s.findIndex(e => !e); if (i >= 0 && !s.some(e => e && e.w === 'smg' && !e.m)) s[i] = { w: 'smg' }; saveSettings();
+    }
+    return s;
+  },
   set(i, e) { const s = this.get(); s[i] = e ? Object.assign({}, e) : null; saveSettings(); UI.buildSlots(); },
   valid(e) { return !!e && (e.w ? !!W_BY_ID[e.w] && (!e.m || TOOL_MODES.some(m => m.id === e.m)) : !!(e.i && ITEM_INDEX[e.i] && ITEM_INDEX[e.i].pf)); },
   // what a slot shows: name, small label, thumbnail / icon
@@ -583,7 +589,7 @@ const UI = {
   },
   refreshHints() {
     const me = Players.local, pad = Input.device === 'pad';
-    const ctx = Tools.weapon + Tools.mode + (Tools.grab ? 'g' : '') + (Tools.first ? 'f' : '') + (me && me.seat ? 's' : '') + Editor.active + Editor.piece + Editor.sel + Editor.padMode + Input.device + Input.padType + (Game.aimSeat ? 'A' : '') + (Game.placing ? 'P' : '') + Settings.showHints + (me && me.noclip ? 'n' : '');
+    const ctx = Tools.weapon + Tools.mode + (Tools.grab ? 'g' : '') + (Tools.first ? 'f' : '') + (me && me.seat ? 's' : '') + Editor.active + Editor.piece + Editor.sel + Editor.padMode + Input.device + Input.padType + (Game.aimSeat ? 'A' : '') + (Game.placing ? 'P' : '') + Settings.showHints + (me && me.noclip ? 'n' : '') + Input.aimToggle() + Game.zoomed;
     if (ctx === this.hintKey) return; this.hintKey = ctx;
     const H = [];
     const hint = (g, t) => H.push(`<div class="hint">${g}${esc(t)}</div>`);
@@ -610,7 +616,11 @@ const UI = {
         if (Tools.mode === 'dynamite') hint(`<kbd>${esc(keyLabel(o.dynKey))}</kbd>`, 'Detonate your dynamite');
       }
       else if (w === 'grenade') hint(glyph('fire'), 'Throw');
-      else if (w === 'sniper') { hint(glyph('fire'), 'Shoot'); hint(glyph('alt'), 'Hold to scope in'); }
+      else if (W_BY_ID[w].zoom || W_BY_ID[w].ads) {
+        const tg = Input.aimToggle(), what = W_BY_ID[w].zoom ? 'scope' : 'aim';
+        hint(glyph('fire'), 'Shoot'); hint(glyph('alt'), tg ? (Game.zoomed ? 'Click to stop ' + (what === 'scope' ? 'scoping' : 'aiming') : 'Click to ' + what) : what === 'scope' ? 'Hold to scope in' : 'Hold to aim');
+        if (W_BY_ID[w].mag) hint(glyph('reload'), 'Reload');
+      }
       else hint(glyph('fire'), { crowbar: 'Swing', rocket: 'Fire rocket', propcannon: 'Launch a prop' }[w] || 'Shoot');
       if (me && me.noclip && !pad) hint(glyph('Wheel'), 'Fly speed');
       if (Game.placing) { H.length = 0; hint(glyph('fire'), 'Place (stays selected)'); hint(glyph('reload'), 'Rotate'); hint(glyph('alt'), 'Put away'); }
@@ -662,6 +672,17 @@ const UI = {
         this._hpKey = key; $('#hpText').textContent = hp; $('#hpBox').dataset.lv = lv;
         const sg = $('#hpSegs'); if (sg.children.length !== 10) { sg.innerHTML = ''; for (let i = 0; i < 10; i++) sg.append(h('i')); }
         [...sg.children].forEach((c, i) => c.classList.toggle('on', i < n));
+      }
+      // magazine weapons: rounds left, or the reload filling the bar
+      const AW = W_BY_ID[Tools.weapon], showA = !!(AW && AW.mag && !me.seat && !Editor.active), rl = Tools.reloadK();
+      const akey = showA ? Tools.rounds(AW) + '/' + (rl ? Math.round(rl * 20) : '') : '';
+      if (this._ammoKey !== akey) {
+        this._ammoKey = akey; const box = $('#ammoBox'); box.classList.toggle('hidden', !showA);
+        if (showA) {
+          const n = Tools.rounds(AW); $('#ammoText').textContent = rl ? '··' : n; $('#ammoLb').textContent = rl ? 'RELOADING' : '/ ' + AW.mag;
+          box.classList.toggle('low', !rl && n <= AW.mag / 4); box.classList.toggle('rl', !!rl);
+          $('#ammoBar i').style.width = (rl ? rl * 100 : n / AW.mag * 100).toFixed(1) + '%';
+        }
       }
     }
     $('#hpBox').style.display = Rules.combat ? '' : 'none';
@@ -1133,6 +1154,10 @@ const UI = {
       s.append(row('Field of view', ...range('fov', 60, 110, 1, v => v + '°', () => R.setFov(Settings.fov))));
       s.append(row('Mouse sensitivity', ...range('sens', 0.1, 3, 0.05, v => v.toFixed(2))));
       s.append(row('Invert look Y', check('invertY')));
+      const at = h('select', { onchange: () => { Settings.aimToggle = at.value; saveSettings(); this.hintKey = ''; } });
+      for (const [v, l] of [['auto', 'Auto (toggle without a mouse)'], ['hold', 'Hold alt-fire'], ['toggle', 'Toggle: click on, click off']]) at.append(h('option', { value: v, text: l, selected: (Settings.aimToggle || 'auto') === v }));
+      const pt = Input.pointer || (Input.hasMouse() ? '' : 'no mouse'), atNote = Settings.aimToggle === 'auto' && pt ? ` <span class="muted">(${pt === 'touchpad' ? 'touchpad' : pt} detected: ${Input.aimToggle() ? 'toggle' : 'hold'})</span>` : '';
+      s.append(row('Aim / scope (touchpads: pick toggle)' + atNote, at));
       s.append(row('Ask before closing the tab during a game', check('confirmClose')));
       s.append(row('Show control hints', check('showHints', () => { this.hintKey = ''; })));
       s.append(row('Spawn with hologram preview', check('spawnPreview')));
@@ -1270,7 +1295,8 @@ const UI = {
     const rows = [
       ['Move', `${k(B.forward)}${k(B.left)}${k(B.back)}${k(B.right)}`, '<span class="glyph pad">LS</span>'], ['Look', 'Mouse', '<span class="glyph pad">RS</span>'],
       ['Jump / fly up', k(B.jump), P(PAD.A)], ['Crouch / fly down', k(B.crouch), P(PAD.B)], ['Sprint', k(B.sprint), P(PAD.LS)],
-      ['Fire / grab', '<kbd>LMB</kbd>', P(PAD.RT)], ['Alt-fire / freeze', '<kbd>RMB</kbd>', P(PAD.LT)], ['Rotate held / unfreeze / next tool', k(B.reload), P(PAD.RB)],
+      ['Slide (while sprinting)', k(B.crouch), P(PAD.B)],
+      ['Fire / grab', '<kbd>LMB</kbd>', P(PAD.RT)], ['Alt-fire / aim / freeze', '<kbd>RMB</kbd>', P(PAD.LT)], ['Reload / rotate held / unfreeze / next tool', k(B.reload), P(PAD.RB)],
       ['Push / pull held object', '<kbd>Wheel</kbd>', P(PAD.UP) + P(PAD.DOWN)], ['Switch weapon', '<kbd>1</kbd>–<kbd>6</kbd>, <kbd>Wheel</kbd>', P(PAD.LEFT) + P(PAD.RIGHT)],
       ['Use / enter & exit seat', k(B.use), P(PAD.X)], ['Spawn menu', k(B.spawnMenu), P(PAD.Y)], ['Radial menu (hold)', k(B.radial), P(PAD.LB)],
       ['Scoreboard (hold)', k(B.scoreboard), P(PAD.VIEW)], ['Menu', '<kbd>Esc</kbd>', P(PAD.MENU)], ['Noclip', k(B.noclip), P(PAD.RS)],

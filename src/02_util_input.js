@@ -34,6 +34,8 @@ const CFG = {
   worldHalf: 320, killY: -60, maxBodies: 900, propLimit: 250, maxPlayers: 10,
   walk: 5.2, sprint: 8.8, crouchMul: 0.5, jump: 5.4, gravity: 9.81 * 1.5,
   eye: 1.62, capR: 0.34, capHalf: 0.56, respawn: 3.0, spawnProt: 3.0,
+  // sliding (crouch while sprinting): start speed, boost, top speed, how fast it bleeds off (1/s), when it ends, cooldown, eye height, hitbox top
+  slideMin: 6.4, slideBoost: 2.4, slideMax: 12.5, slideFric: 1.25, slideEnd: 3.8, slideTime: 1.15, slideCd: 0.7, slideEye: 0.8, slideTop: 1.05,
 };
 const V3 = THREE.Vector3, QT = THREE.Quaternion;
 const _v1 = new V3(), _v2 = new V3(), _v3 = new V3(), _v4 = new V3(), _q1 = new QT(), _q2 = new QT(), _q3 = new QT();
@@ -87,8 +89,8 @@ const DEFAULT_BINDS = {
   undo: 'KeyZ', noclip: 'KeyV', snap: 'KeyG', netstats: 'F3', help: 'F1', hints: 'KeyH', inventory: 'KeyI',
 };
 const BIND_LABELS = {
-  forward: 'Move forward', back: 'Move back', left: 'Strafe left', right: 'Strafe right', jump: 'Jump / fly up', crouch: 'Crouch / fly down',
-  sprint: 'Sprint', use: 'Use / enter seat', reload: 'Rotate (physgun) / unfreeze', spawnMenu: 'Spawn menu', radial: 'Radial menu',
+  forward: 'Move forward', back: 'Move back', left: 'Strafe left', right: 'Strafe right', jump: 'Jump / fly up', crouch: 'Crouch / slide / fly down',
+  sprint: 'Sprint', use: 'Use / enter seat', reload: 'Reload / rotate (physgun) / unfreeze', spawnMenu: 'Spawn menu', radial: 'Radial menu',
   chat: 'Chat', scoreboard: 'Scoreboard', editMode: 'Toggle edit mode', undo: 'Undo last spawn', noclip: 'Noclip (fly)',
   snap: 'Editor grid snap', netstats: 'Network stats', help: 'Controls help', hints: 'Show / hide control hints', inventory: 'Inventory / hotbar',
 };
@@ -98,7 +100,7 @@ const AUDIO_DEFAULTS = {
 };
 const Settings = Object.assign({
   tier: null, shadows: true, ao: true, bloom: true, reflections: false, outlines: true, drs: true,
-  targetFps: isChromebook ? 30 : 60, fov: 80, sens: 1.0, invertY: false, deadzone: 0.15, padSens: 1.0, aimAssist: 2, flySpeed: 1, volume: 0.6, gore: 'full', bloodColor: 'red', spawnPreview: true, dmgNums: true, publicRoom: true, simWorker: true,
+  targetFps: isChromebook ? 30 : 60, fov: 80, sens: 1.0, invertY: false, deadzone: 0.15, padSens: 1.0, aimAssist: 2, aimToggle: 'auto', aimTip: false,   // aimToggle: aim / scope on alt-fire 'hold', 'toggle', or 'auto' (toggle on touchpads and without a mouse) flySpeed: 1, volume: 0.6, gore: 'full', bloodColor: 'red', spawnPreview: true, dmgNums: true, publicRoom: true, simWorker: true,
   showNet: false, showFps: false, showHints: true, name: '', color: PLAYER_COLORS[(Math.random() * PLAYER_COLORS.length) | 0],
   turnUrl: '', turnUser: '', turnPass: '', binds: {},
   confirmClose: true, pixelFont: true, aimbot: 0, aimbotFov: 25, aimbotBone: 'head', aimbotSmooth: 0,   // owner-only (Game.ownerAimbot): 0 off / 1 while aiming or shooting / 2 always
@@ -132,6 +134,7 @@ const Input = {
   dx: 0, dy: 0, wheel: 0, mx: 0, my: 0, device: 'kbm', padType: 'xbox', padIndex: -1,
   pb: new Array(17).fill(false), pbPrev: new Array(17).fill(false), axes: [0, 0, 0, 0], trig: [0, 0],
   locked: false, capture: null, listeners: [],
+  pointer: null, wheelVote: 0,   // 'mouse' / 'touchpad', guessed from how the wheel scrolls (null: no wheel seen yet)
   init(canvas) {
     const typing = e => { const t = e.target; return t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT'); };
     addEventListener('keydown', e => {
@@ -154,12 +157,28 @@ const Input = {
       if (this.locked || this.mouse[2]) { this.dx += e.movementX || 0; this.dy += e.movementY || 0; }
       if (Math.abs(e.movementX) + Math.abs(e.movementY) > 2) this.setDevice('kbm');
     });
-    canvas.addEventListener('wheel', e => { this.wheel += Math.sign(e.deltaY); e.preventDefault(); }, { passive: false });
+    canvas.addEventListener('wheel', e => { this.wheel += Math.sign(e.deltaY); this.notePointer(e); e.preventDefault(); }, { passive: false });
     canvas.addEventListener('contextmenu', e => e.preventDefault());
     document.addEventListener('pointerlockchange', () => { this.locked = document.pointerLockElement === canvas; if (!this.locked) this.lockLostAt = performance.now() / 1000; if (this.onLockChange) this.onLockChange(this.locked); });
     document.addEventListener('pointerlockerror', () => { this.locked = false; });
     addEventListener('gamepadconnected', e => { this.padIndex = e.gamepad.index; this.detectPadType(e.gamepad); UI.toast('Controller connected: ' + (this.padType === 'ps' ? 'PlayStation' : 'Xbox') + ' layout'); });
     addEventListener('gamepaddisconnected', e => { if (e.gamepad.index === this.padIndex) { this.padIndex = -1; this.setDevice('kbm'); UI.toast('Controller disconnected'); } });
+  },
+  // mouse wheels scroll in whole notches (lines, or multiples of 120); touchpads in small smooth steps, sideways too, and pinch with ctrl
+  notePointer(e) {
+    const wd = e.wheelDeltaY, notch = e.deltaMode === 1 || (!e.deltaX && wd && Math.abs(wd) % 120 === 0);
+    const pad = e.ctrlKey || (e.deltaMode === 0 && (Math.abs(e.deltaX) > 0.5 || !notch));
+    this.wheelVote = clamp(this.wheelVote + (pad ? 1 : -1), -4, 4);
+    if (this.wheelVote >= 2) this.pointer = 'touchpad'; else if (this.wheelVote <= -2) this.pointer = 'mouse';
+  },
+  hasMouse() { return this.pointer ? this.pointer === 'mouse' : !(isChromebook || (window.matchMedia && !matchMedia('(any-pointer: fine)').matches)); },
+  // does alt-fire toggle aiming / the scope (instead of holding it)?
+  aimToggle() { const m = Settings.aimToggle; return m === 'toggle' || (m !== 'hold' && this.device !== 'pad' && !this.hasMouse()); },
+  // the first time auto mode picks toggle for you, say so (once) and where to change it
+  suggestToggle() {
+    if (Settings.aimTip || Settings.aimToggle !== 'auto' || !this.aimToggle()) return;
+    Settings.aimTip = true; saveSettings();
+    UI.toast('No mouse found: alt-fire now toggles aiming (click on, click off). Settings → Controls to change.', 'touch_app');
   },
   fireKey(code, e, typing) { for (const l of this.listeners) l(code, e, typing); },
   detectPadType(g) { const id = (g.id || '').toLowerCase(); this.padType = /054c|sony|dualshock|dualsense|playstation|wireless controller/.test(id) ? 'ps' : 'xbox'; },

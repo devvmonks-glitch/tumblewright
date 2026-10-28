@@ -591,6 +591,12 @@ kbd,.glyph{border-radius:2px;background:#2b2f35;border-color:#454b53}
 #hpBox[data-lv=mid] #hpSegs i.on,#hpBox[data-lv=mid] .hp-ic{background:var(--acc)}
 #hpBox[data-lv=low] #hpSegs i.on,#hpBox[data-lv=low] .hp-ic{background:var(--bad)}
 #hpBox[data-lv=low] #hpText{color:#f0a597}
+#ammoBox{min-width:120px;padding:10px 14px;background:rgba(21,23,26,.9)}
+#ammoText{font:800 34px/1 var(--title);font-variant-numeric:tabular-nums}
+#ammoBar{height:6px;margin-top:8px;background:#30353b}
+#ammoBar i{display:block;height:100%;background:var(--acc)}
+#ammoBox.low #ammoText{color:#f0a597}
+#ammoBox.rl #ammoBar i{background:var(--muted)}
 #dmgDir{position:absolute;left:50%;top:50%;width:240px;height:240px;border-radius:50%;border:6px solid transparent;border-top-color:rgba(226,85,63,.85);transform:translate(-50%,-50%);opacity:0;pointer-events:none}
 #dmgDir.on{animation:dmgDir 1.1s ease-out forwards}
 @keyframes dmgDir{0%{opacity:1}60%{opacity:.85}100%{opacity:0}}
@@ -826,7 +832,7 @@ input[type=email]:focus,input[type=password]:focus{border-color:var(--acc)}
     <div id="roomInfo" class="panel pe"><span class="ri"><span class="ic"><span class="ms">tag</span><span class="em">#</span></span><span id="roomCode">—</span></span><span class="ri"><span class="ic"><span class="ms">group</span><span class="em">👥</span></span><span id="playerCount">1</span></span><span class="ri"><i id="pingDot"></i><b id="pingVal">0</b>&nbsp;ms</span><span id="hostTag" class="badge" style="background:#b8911c">HOST</span><button class="small" id="btnCopyCode" title="Copy invite link"><span class="ic"><span class="ms">link</span><span class="em">🔗</span></span>Invite</button></div>
     <div id="netStats" class="panel hidden"></div>
     <div id="fpsBox" class="panel hidden"></div>
-    <div id="vitals"><div id="hpBox" class="panel"><div class="hp-top"><span class="hp-ic"></span><span id="hpText">100</span><span class="hp-lb">HEALTH</span></div><div id="hpSegs"></div></div></div>
+    <div id="vitals"><div id="hpBox" class="panel"><div class="hp-top"><span class="hp-ic"></span><span id="hpText">100</span><span class="hp-lb">HEALTH</span></div><div id="hpSegs"></div></div><div id="ammoBox" class="panel hidden"><div class="hp-top"><span id="ammoText">0</span><span class="hp-lb" id="ammoLb"></span></div><div id="ammoBar"><i></i></div></div></div>
     <div id="slots"></div><div id="slotName"></div>
     <div id="toolBox" class="panel"><div id="toolHead"><div id="toolIcon"></div><div class="grow"><div id="toolName">Physics Gun</div><div id="toolMode"></div></div></div><div id="toolDesc"></div><div id="toolModes"></div><div id="hints"></div></div>
     <div id="seatHint" class="panel hidden"></div>

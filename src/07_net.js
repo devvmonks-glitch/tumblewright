@@ -413,7 +413,7 @@ const Net = {
       p.hp = hp; p.ping = ping;
       const wasDead = p.dead; p.dead = !!(fl & 1); p.prot = !!(fl & 64);
       if (p.isLocal) { if (wasDead && !p.dead) UI.hideDeath(); if (!wasDead && p.dead) UI.showDeath(); continue; }
-      p.crouch = !!(fl & 4); p.noclip = !!(fl & 8); p.firing = !!(fl & 32); p.weapon = (WEAPONS[w] || WEAPONS[0]).id;
+      p.crouch = !!(fl & 4); p.slide = !!(fl & 128); p.noclip = !!(fl & 8); p.firing = !!(fl & 32); p.weapon = (WEAPONS[w] || WEAPONS[0]).id;
       p.beamEnd = (fl & 16) ? be : null;
       _q1.setFromAxisAngle(UP, yaw);
       pushSample(p.buf, t, pos, _q1.clone()); p.yaw = yaw; p.pitch = pitch;

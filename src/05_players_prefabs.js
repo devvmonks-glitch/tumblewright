@@ -8,7 +8,7 @@ class Player {
     this.idx = o.idx || 0; this.joinOrder = o.joinOrder || 0; this.isLocal = !!o.isLocal;
     this.hp = 100; this.dead = false; this.deadT = 0; this.seat = 0; this.weapon = 'physgun';
     this.pos = new V3(0, 0, 0); this.prevPos = new V3(); this.vel = new V3(); this.yaw = 0; this.pitch = 0;
-    this.crouch = false; this.noclip = false; this.grounded = false;
+    this.crouch = false; this.slide = false; this.slideT = 0; this.slideCd = 0; this.noclip = false; this.grounded = false;
     this.kills = 0; this.deaths = 0; this.ping = 0; this.muted = false; this.canEdit = false;
     this.held = new Set(); this.mv = { x: 0, y: 0 }; this.up = 0; this.grab = null; this.beamEnd = null; this.firing = false;
     this.buf = []; this.lastInputT = now(); this.walkPhase = 0; this.renderPos = new V3(); this.renderYaw = 0;
@@ -54,24 +54,30 @@ const Players = {
   },
   // spawn protection: the host knows the deadline, everyone else gets a snapshot flag
   isProt(p) { return Srv.isHost() ? !!(p.protUntil && now() < p.protUntil) : !!p.prot; },
-  eyePos(p, out) { return out.set(p.renderPos.x, p.renderPos.y + (p.crouch ? CFG.eye - 0.5 : CFG.eye), p.renderPos.z); },
+  headY(p) { return p.slide ? CFG.slideTop - 0.3 : 1.42; },   // hits above this (over the feet) are headshots
+  eyeH(p) { return p.slide ? CFG.eye - CFG.slideEye : p.crouch ? CFG.eye - 0.5 : CFG.eye; },
+  eyePos(p, out) { return out.set(p.renderPos.x, p.renderPos.y + this.eyeH(p), p.renderPos.z); },
   aimDir(p, out) { const cp = Math.cos(p.pitch); return out.set(-Math.sin(p.yaw) * cp, Math.sin(p.pitch), -Math.cos(p.yaw) * cp); },
   // ---- local movement (client-side prediction; host validates) ------------
   simLocal(p, dt, inp) {
     p.prevPos.copy(p.pos);
-    if (p.dead || p.seat) { p.vel.set(0, 0, 0); return; }
+    if (p.dead || p.seat) { p.vel.set(0, 0, 0); p.slide = false; return; }
     const fwdX = -Math.sin(p.yaw), fwdZ = -Math.cos(p.yaw), rX = Math.cos(p.yaw), rZ = -Math.sin(p.yaw);
     if (p.noclip) {
+      p.slide = false;
       const sp = (inp.sprint ? 22 : 9) * clamp(Settings.flySpeed || 1, 0.25, 5) * dt, cp = Math.cos(p.pitch), sy = Math.sin(p.pitch);   // Settings.flySpeed: wheel / settings
       p.pos.x += (fwdX * cp * inp.my + rX * inp.mx) * sp; p.pos.z += (fwdZ * cp * inp.my + rZ * inp.mx) * sp;
       p.pos.y += (sy * inp.my + inp.up) * sp; p.vel.set(0, 0, 0);
       p.body.setNextKinematicTranslation({ x: p.pos.x, y: p.pos.y + CFG.capHalf + CFG.capR, z: p.pos.z });
       return;
     }
-    const speed = (inp.sprint ? CFG.sprint : CFG.walk) * (p.crouch ? CFG.crouchMul : 1);
-    const wx = (fwdX * inp.my + rX * inp.mx) * speed, wz = (fwdZ * inp.my + rZ * inp.mx) * speed;
-    const acc = p.grounded ? 14 : 3.5, k = 1 - Math.exp(-acc * dt);
-    p.vel.x += (wx - p.vel.x) * k; p.vel.z += (wz - p.vel.z) * k;
+    if (this.slideStep(p, dt, inp)) { const f = Math.exp(-CFG.slideFric * dt); p.vel.x *= f; p.vel.z *= f; }   // sliding: momentum, no steering, bleeds off
+    else {
+      const speed = (inp.sprint ? CFG.sprint : CFG.walk) * (p.crouch ? CFG.crouchMul : 1);
+      const wx = (fwdX * inp.my + rX * inp.mx) * speed, wz = (fwdZ * inp.my + rZ * inp.mx) * speed;
+      const acc = p.grounded ? 14 : 3.5, k = 1 - Math.exp(-acc * dt);
+      p.vel.x += (wx - p.vel.x) * k; p.vel.z += (wz - p.vel.z) * k;
+    }
     p.vel.y -= CFG.gravity * dt;
     if (p.grounded && inp.jump) { p.vel.y = CFG.jump; p.grounded = false; View.sound('cloth', null, 0.7); }
     if (p.kb) { p.vel.add(p.kb); p.kb = null; }
@@ -90,6 +96,24 @@ const Players = {
     if (des.y > 0 && mv.y < des.y * 0.5) p.vel.y = Math.min(p.vel.y, 0);
     p.body.setNextKinematicTranslation({ x: p.pos.x, y: p.pos.y + CFG.capHalf + CFG.capR, z: p.pos.z });
     if (p.pos.y < CFG.killY) View.localFellOut();
+  },
+  // slide: press crouch while sprinting on the ground. Boosts you a little, then slows down; ends when you let go of crouch,
+  // leave the ground, slow down or after slideTime, then a short cooldown. inp.slideReq: when crouch was pressed (buffered briefly)
+  slideStep(p, dt, inp) {
+    p.slideCd = Math.max(0, p.slideCd - dt);
+    const hs = Math.hypot(p.vel.x, p.vel.z);
+    if (!p.slide) {
+      const req = inp.slideReq && now() - inp.slideReq < 0.2;
+      if (req && inp.sprint && p.crouch && p.grounded && !p.slideCd && hs > CFG.slideMin) {
+        const k = Math.min(CFG.slideMax, hs + CFG.slideBoost) / hs; p.vel.x *= k; p.vel.z *= k;
+        p.slide = true; p.slideT = 0; inp.slideReq = 0;
+        View.sound('cloth', null, 1);
+      }
+      return p.slide;
+    }
+    p.slideT += dt;
+    if (!p.crouch || hs < CFG.slideEnd || p.slideT > CFG.slideTime || (!p.grounded && p.slideT > 0.15)) { p.slide = false; p.slideCd = CFG.slideCd; }
+    return p.slide;
   },
   setPos(p, v) { p.pos.copy(v); p.prevPos.copy(v); p.renderPos.copy(v); p.vel.set(0, 0, 0); if (p.body) p.body.setTranslation({ x: v.x, y: v.y + CFG.capHalf + CFG.capR, z: v.z }, true); },
   // remote players: kinematic capsule follows reported/interpolated position
