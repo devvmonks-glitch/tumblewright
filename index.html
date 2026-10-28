@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <!-- auto-update config: stamped by tools/release/release.mjs (version, update server, public signing key) -->
-<meta name="tw-version" content="1.9.10">
+<meta name="tw-version" content="1.9.11">
 <meta name="tw-update-url" content="https://tumblewright.vercel.app/">
 <meta name="tw-update-key" content="MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEY+Cnn8Lm7Qg8qyzAHUGYObpBjSgdckeo7PetlABb0TomToEhaMbLW/zaRHOAbvsMn1TRCb4I/cPFv1ghZ6CgWw==">
-<meta name="tw-notes" content="Cleaner menus: the hotbar is grouped (build tools, then weapons) with names on every slot; the spawn menu shows only the settings for the tool you hold, attachments on the Weapons tab; grouped pause menu and a new General settings tab.">
+<meta name="tw-notes" content="Every gun has a magazine now (R reloads). Hotbar: AR, shotgun, SMG, pistol and sniper on 1-5. Cancelling the close-tab prompt no longer kicks you from the room.">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Tumblewright — Multiplayer Physics Sandbox</title>
 <meta name="description" content="Tumblewright: a multiplayer 3D physics sandbox. Build, weld, drive and blow things up together in your browser.">
@@ -3405,14 +3405,14 @@ const Srv = {
 const WEAPONS = [
   { id: 'physgun', name: 'Physics Gun', icon: '🧲', desc: 'Grab, move, rotate and freeze objects.' },
   { id: 'toolgun', name: 'Tool Gun', icon: '🔧', desc: '' },
-  // att: the attachments a gun takes (ATTACH)
-  { id: 'pistol', name: 'Pistol', icon: '🔫', desc: 'Semi-automatic. Knocks props around.', rate: 0.22, dmg: 22, imp: 1.2, dv: 8, spread: 0.004, range: 300, vp: 0.03, bloom: 0.6, att: ['reddot', 'supp', 'comp'] },
-  { id: 'shotgun', name: 'Shotgun', icon: '💥', desc: 'Pump action, 8 pellets. Devastating up close.', rate: 0.85, dmg: 11, imp: 0.9, dv: 2, spread: 0.055, pellets: 8, range: 120, push: 2, vp: 0.06 },
-  { id: 'rifle', name: 'Rifle', icon: '🎯', desc: 'Automatic rifle.', rate: 0.09, dmg: 13, imp: 0.7, dv: 5, spread: 0.011, auto: true, range: 300, vp: 0.017, bloom: 0.3, att: ['reddot', 'scope', 'supp', 'comp', 'grip'] },
-  // smg: fast and light. ads: aim-down-sights zoom (alt-fire), mag / rl: magazine and reload time (s), fall: [full damage to (m), lowest at (m), lowest share]
-  { id: 'smg', name: 'SMG', icon: '💨', desc: 'Very fast fire, light hits. Aim (alt-fire) and fire short bursts to stay on target; weaker at range. 32 rounds, R reloads.', rate: 0.065, dmg: 9, imp: 0.5, dv: 4, spread: 0.008, hipSpread: 0.024, auto: true, range: 220, vp: 0.011, bloom: 0.14, bloomMax: 2.6, ads: 1.3, mag: 32, rl: 1.9, fall: [12, 38, 0.5], att: ['reddot', 'supp', 'comp', 'grip', 'extmag'] },
-  { id: 'sniper', name: 'Sniper Rifle', icon: '🔭', desc: 'Alt-fire scopes in. Inaccurate from the hip.', rate: 1.2, dmg: 95, imp: 4, dv: 16, spread: 0, hipSpread: 0.03, zoom: 1, range: 800, push: 3, vp: 0.07, att: ['supp'] },
-  { id: 'rocket', name: 'Rocket Launcher', icon: '🚀', desc: 'Rockets explode on impact. Rocket-jump if you dare.', rate: 1.0, proj: 'rocket', vp: 0.045 },
+  // att: the attachments a gun takes (ATTACH); mag / rl: magazine and reload time (s), counted by the host
+  { id: 'pistol', name: 'Pistol', icon: '🔫', desc: 'Semi-automatic. Knocks props around. 12 rounds.', mag: 12, rl: 1.3, rate: 0.22, dmg: 22, imp: 1.2, dv: 8, spread: 0.004, range: 300, vp: 0.03, bloom: 0.6, att: ['reddot', 'supp', 'comp'] },
+  { id: 'shotgun', name: 'Shotgun', icon: '💥', desc: 'Pump action, 8 pellets. Devastating up close. 6 shells.', mag: 6, rl: 2.4, rate: 0.85, dmg: 11, imp: 0.9, dv: 2, spread: 0.055, pellets: 8, range: 120, push: 2, vp: 0.06 },
+  { id: 'rifle', name: 'Assault Rifle', icon: '🎯', desc: 'Automatic rifle. 30 rounds.', mag: 30, rl: 2.2, rate: 0.09, dmg: 13, imp: 0.7, dv: 5, spread: 0.011, auto: true, range: 300, vp: 0.017, bloom: 0.3, att: ['reddot', 'scope', 'supp', 'comp', 'grip'] },
+  // smg: fast and light. ads: aim-down-sights zoom (alt-fire), fall: [full damage to (m), lowest at (m), lowest share]
+  { id: 'smg', name: 'SMG', icon: '💨', desc: 'Very fast fire, light hits. Aim (alt-fire) and fire short bursts to stay on target; weaker at range. 32 rounds.', rate: 0.065, dmg: 9, imp: 0.5, dv: 4, spread: 0.008, hipSpread: 0.024, auto: true, range: 220, vp: 0.011, bloom: 0.14, bloomMax: 2.6, ads: 1.3, mag: 32, rl: 1.9, fall: [12, 38, 0.5], att: ['reddot', 'supp', 'comp', 'grip', 'extmag'] },
+  { id: 'sniper', name: 'Sniper Rifle', icon: '🔭', desc: 'Alt-fire scopes in. Inaccurate from the hip. 5 rounds.', mag: 5, rl: 2.6, rate: 1.2, dmg: 95, imp: 4, dv: 16, spread: 0, hipSpread: 0.03, zoom: 1, range: 800, push: 3, vp: 0.07, att: ['supp'] },
+  { id: 'rocket', name: 'Rocket Launcher', icon: '🚀', desc: 'Rockets explode on impact. Rocket-jump if you dare. Reloads after every rocket.', mag: 1, rl: 1.2, rate: 1.0, proj: 'rocket', vp: 0.045 },
   { id: 'grenade', name: 'Grenade', icon: '💣', desc: 'Throw it. It explodes after 2.5 s. One every 2.5 s.', rate: 2.5 },
   { id: 'crowbar', name: 'Crowbar', icon: '🪓', desc: 'Melee. Great for smashing ragdolls.', rate: 0.42, dmg: 34, imp: 3, dv: 10, range: 2.4, push: 4, vp: 0.012 },
   { id: 'propcannon', name: 'Prop Cannon', icon: '📦', desc: 'Fires random props. They vanish after 30 s.', rate: 0.35, proj: 'prop', vp: 0.03 },
@@ -6848,21 +6848,23 @@ const Nav = {
 // ---- hotbar: 12 slots (keys 1-9, 0, -, =) the player fills from the inventory with weapons, tool-gun modes or spawnable items ----
 const HOTBAR_KEYS = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0', 'Minus', 'Equal'];
 const HOTBAR_LABEL = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '='];
-// the default bar: building tools first (1-4), then the weapons, lightest to heaviest (5 to =)
-const HOTBAR_DEF = ['physgun', 'toolgun', 'deleter', 'propcannon', 'pistol', 'smg', 'rifle', 'shotgun', 'sniper', 'rocket', 'grenade', 'crowbar'];
-const HOTBAR_OLD = ['physgun', 'toolgun', 'pistol', 'shotgun', 'rifle', 'smg', 'sniper', 'rocket', 'grenade', 'crowbar', 'propcannon', 'deleter'];   // the default until v1.9.9
+// the default bar: the guns on 1-5 (assault rifle, shotgun, SMG, pistol, sniper), the rest of the weapons, then the building tools.
+// The prop cannon isn't on it (it's in the spawn menu, Weapons). null: an empty slot.
+const HOTBAR_DEF = ['rifle', 'shotgun', 'smg', 'pistol', 'sniper', 'rocket', 'grenade', 'crowbar', 'physgun', 'toolgun', 'deleter', null];
+const HOTBAR_OLD = [['physgun', 'toolgun', 'pistol', 'shotgun', 'rifle', 'smg', 'sniper', 'rocket', 'grenade', 'crowbar', 'propcannon', 'deleter'],   // the defaults until v1.9.9
+  ['physgun', 'toolgun', 'deleter', 'propcannon', 'pistol', 'smg', 'rifle', 'shotgun', 'sniper', 'rocket', 'grenade', 'crowbar']];   // and v1.9.10
 const BUILD_TOOLS = ['physgun', 'toolgun', 'deleter', 'propcannon'];
-const SHORT_NAME = { physgun: 'Physgun', deleter: 'Delete', propcannon: 'Cannon', rocket: 'Rocket', sniper: 'Sniper' };   // names that fit under a hotbar slot
+const SHORT_NAME = { physgun: 'Physgun', deleter: 'Delete', propcannon: 'Cannon', rocket: 'Rocket', sniper: 'Sniper', rifle: 'AR' };   // names that fit under a hotbar slot
 const Hotbar = {
   sel: 0,
-  def() { return HOTBAR_DEF.map(w => ({ w })); },
+  def() { return HOTBAR_DEF.map(w => w && { w }); },
   get() {
     let s = Settings.hotbar; if (!Array.isArray(s) || s.length !== 12) { s = Settings.hotbar = this.def(); saveSettings(); }
     if (!Settings.hbSmg) {   // a hotbar saved before the SMG existed: put it in the first free slot (once)
       Settings.hbSmg = true; const i = s.findIndex(e => !e); if (i >= 0 && !s.some(e => e && e.w === 'smg' && !e.m)) s[i] = { w: 'smg' }; saveSettings();
     }
-    if (!Settings.hbV2) {   // still the old default order: move to the grouped one (once; a bar someone arranged is left alone)
-      Settings.hbV2 = true; if (JSON.stringify(s) === JSON.stringify(HOTBAR_OLD.map(w => ({ w })))) s = Settings.hotbar = this.def(); saveSettings();
+    if (!Settings.hbV3) {   // still an old default: move to the current one (once; a bar someone arranged is left alone)
+      Settings.hbV3 = true; if (HOTBAR_OLD.some(o => JSON.stringify(s) === JSON.stringify(o.map(w => ({ w }))))) s = Settings.hotbar = this.def(); saveSettings();
     }
     return s;
   },
@@ -7364,7 +7366,7 @@ const UI = {
         hint(glyph('fire'), 'Shoot'); hint(glyph('alt'), tg ? (Game.zoomed ? 'Click to stop ' + (what === 'scope' ? 'scoping' : 'aiming') : 'Click to ' + what) : what === 'scope' ? 'Hold to scope in' : 'Hold to aim');
         if (W_BY_ID[w].mag) hint(glyph('reload'), 'Reload');
       }
-      else hint(glyph('fire'), { crowbar: 'Swing', rocket: 'Fire rocket', propcannon: 'Launch a prop' }[w] || 'Shoot');
+      else { hint(glyph('fire'), { crowbar: 'Swing', rocket: 'Fire rocket', propcannon: 'Launch a prop' }[w] || 'Shoot'); if (W_BY_ID[w].mag) hint(glyph('reload'), 'Reload'); }
       if (me && me.noclip && !pad) hint(glyph('Wheel'), 'Fly speed');
       if (Game.placing) { H.length = 0; hint(glyph('fire'), 'Place (stays selected)'); hint(glyph('reload'), 'Rotate'); hint(glyph('alt'), 'Put away'); }
       else if (Game.aimSeat) hint(glyph('use'), Game.aimSeatName ? (Game.aimSeatDrive ? 'Drive' : 'Ride') : 'Sit in seat');
@@ -7588,10 +7590,10 @@ const UI = {
           sec('inventory_2', '📦', 'All props');
         }
       }
-      if (tab === 'weapons') {   // in the hotbar's order: building tools, then weapons
-        const all = this.spawnEntries(tab), at = k => all.find(e => e.key === 'wp_' + k), rest = WEAPONS.map(w => w.id).filter(k => !HOTBAR_DEF.includes(k));
-        sec('construction', '🛠', 'Building tools'); BUILD_TOOLS.forEach(k => g.append(this.spawnCard(at(k))));
-        sec('swords', '🔫', 'Weapons'); [...HOTBAR_DEF, ...rest].filter(k => !BUILD_TOOLS.includes(k)).forEach(k => g.append(this.spawnCard(at(k))));
+      if (tab === 'weapons') {   // in the hotbar's order: weapons, then building tools
+        const all = this.spawnEntries(tab), at = k => all.find(e => e.key === 'wp_' + k), order = [...HOTBAR_DEF.filter(Boolean), ...WEAPONS.map(w => w.id).filter(k => !HOTBAR_DEF.includes(k))];
+        sec('swords', '🔫', 'Weapons'); order.filter(k => !BUILD_TOOLS.includes(k)).forEach(k => g.append(this.spawnCard(at(k))));
+        sec('construction', '🛠', 'Building tools'); order.filter(k => BUILD_TOOLS.includes(k)).forEach(k => g.append(this.spawnCard(at(k))));
       } else this.spawnEntries(tab).forEach(e => g.append(this.spawnCard(e)));
     }
     this.buildToolOptions();
@@ -7950,7 +7952,7 @@ const UI = {
       s.append(row('Ask before closing the tab during a game', check('confirmClose')));
       head('Hotbar');
       s.append(row('Change what\'s on each slot', h('button', { class: 'small', text: 'Open inventory', onclick: () => this.openMenu('inventory') })));
-      s.append(row('Back to the default order <span class="muted">(build tools 1-4, weapons 5-=)</span>', h('button', { class: 'small', text: 'Reset hotbar', onclick: () => { Settings.hotbar = Hotbar.def(); saveSettings(); this.buildSlots(); this.toast('Hotbar reset', 'check'); } })));
+      s.append(row('Back to the default order <span class="muted">(guns 1-8, build tools 9, 0, -)</span>', h('button', { class: 'small', text: 'Reset hotbar', onclick: () => { Settings.hotbar = Hotbar.def(); saveSettings(); this.buildSlots(); this.toast('Hotbar reset', 'check'); } })));
     } else if (t === 'graphics') {
       const sel = h('select', { onchange: () => Game.setTier(sel.value) });
       for (const k of TIER_KEYS) sel.append(h('option', { value: k, text: TIERS[k].label + (k === 'low' ? ' (PS1 style)' : ''), selected: R.tier === k }));
@@ -9603,6 +9605,11 @@ const Game = {
       if (GAME.discord) DiscordAct.start();   // launched from a voice channel: go straight into its room
       // crouch (Ctrl) + forward (W) is also the browser's close-tab shortcut: ask first while a game is running
       addEventListener('beforeunload', e => { if (this.state === 'playing' && Settings.confirmClose !== false && !GAME.discord) { e.preventDefault(); e.returnValue = ''; } });
+      // Trystero leaves every room on beforeunload, which fires before that prompt: cancelling it still disconnected you.
+      // Listeners added from here on (Trystero's, when a room starts) run on pagehide instead: only once the page really goes.
+      const addL = window.addEventListener, remL = window.removeEventListener, onLeave = t => t === 'beforeunload' ? 'pagehide' : t;
+      window.addEventListener = function (t, ...a) { return addL.call(this || window, onLeave(t), ...a); };
+      window.removeEventListener = function (t, ...a) { return remL.call(this || window, onLeave(t), ...a); };
       addEventListener('pointerdown', () => Audio.ensure(), true); addEventListener('keydown', () => Audio.ensure(), true);
       this.lastRaf = performance.now(); this.startWatchdog();
       $('#c').addEventListener('click', () => { if (this.state === 'playing' && !UI.open && !Editor.active) this.lock(); });
