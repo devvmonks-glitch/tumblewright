@@ -1027,6 +1027,7 @@ const Game = {
       UI.buildSlots(); UI.refreshLobbyAvatar();
       this.buildViewmodel();
       this.startAttract();
+      if (WorkerLink.wanted()) WorkerLink.start().catch(e => console.warn('host worker:', e.message || e));   // ready by the time a game starts
       $('#loading').classList.add('hidden'); $('#lobby').classList.remove('hidden');
       try { if (window.TWUpdate && TWUpdate.bootOk) TWUpdate.bootOk(); } catch (e) { }   // tell the updater this version started fine
       UI.initUpdates();
@@ -1050,7 +1051,7 @@ const Game = {
   },
   // ---- attract mode behind the title screen ---------------------------------------------
   startAttract() {
-    Net.startOffline(); World.clear(); for (const id of [...Players.map.keys()]) Players.remove(id);
+    Net.useLink(LocalLink); Net.startOffline(); World.clear(); for (const id of [...Players.map.keys()]) Players.remove(id);
     const S = (k, x, z, yaw) => Auth.spawnPrefab(ITEM_INDEX[k].pf(), new V3(x, 0, z), yaw || 0, 'sys');
     for (let y = 0; y < 4; y++) for (let x = 0; x < 3; x++) Auth.spawnPrefab(ITEM_INDEX.crate.pf(), new V3(-4 + x * 0.82, y * 0.82, -2), 0, 'sys', { noLift: false });
     S('car', 3, 1, 0.6); S('npc', -1, 3); S('npc', 1.5, -3); S('barrel', -6, 2); S('barrel', -6.8, 2.5); S('ball', 0, 5); S('cone', 5, -2); S('cone', 5.6, -2.6); S('kart', -3, 7, 2.2);
@@ -1061,17 +1062,31 @@ const Game = {
   // ---- room flow ---------------------------------------------------------------------
   profileName() { let n = ($('#inName').value || Settings.name || '').trim().slice(0, 18); if (!n) n = 'Player' + ((Math.random() * 900 + 100) | 0); Settings.name = n; $('#inName').value = n; saveSettings(); return n; },
   resetForPlay() { Net.link.reset(); Editor.undo = []; Editor.redo = []; $('#chatLog').innerHTML = ''; },
+  // where a game this window hosts is simulated: in the host worker when it's on and starts, else here
+  async hostLink() {
+    Net.useLink(LocalLink);
+    if (!WorkerLink.wanted()) return;
+    try { await WorkerLink.start(); Net.useLink(WorkerLink); }
+    catch (e) { console.warn('host worker unavailable, simulating in the page:', e.message || e); }
+  },
+  // the world and rules the game starts with: a world picked in the lobby goes to whichever side simulates
+  startWorld() {
+    if (Net.auth()) return this.loadPending();
+    const w = this.pendingWorld; this.pendingWorld = null; if (w && w.rules) Object.assign(Rules, w.rules);
+    Net.link.open(w);
+  },
   async createRoom(code0) {
     const name = this.profileName(); UI.lobbyStatus('Creating room…');
     const code = code0 || randCode();
+    await this.hostLink();
     try { this.resetForPlay(); await Net.start(code, true); }
     catch (e) { UI.lobbyStatus('Could not reach the network (' + e.message + '). You can still Play Solo.', true); this.startAttract(); return; }
     Players.add({ id: Net.me, name, color: Settings.color, tier: R.tier, idx: 0, joinOrder: 0, isLocal: true, lvl: Prog.level().l });
-    this.loadPending();
+    this.startWorld();
     try { history.replaceState(null, '', '#room=' + code); } catch (e) { }
     this.enterPlay(Auth.pickSpawn());
     UI.chat({ sys: 1, text: `Room ${fmtCode(code)} created. Share the code or invite link (Esc → Copy invite link).` });
-    Net.sendPlayers();
+    if (Net.auth()) Net.sendPlayers();   // (the worker sends the list when this window's player joins it)
   },
   // main menu "Play": join the busiest public room on our version that has space, else host a new one
   quickPlay() {
@@ -1084,7 +1099,7 @@ const Game = {
     const code = (link ? link[1] : txt).toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (code.length !== 6) return UI.lobbyStatus('Room codes have 6 characters, e.g. KX7-P2Q (or paste the invite link)', true);
     this.profileName(); UI.lobbyStatus('Connecting to room ' + fmtCode(code) + '…');
-    try { this.resetForPlay(); await Net.start(code, false); }
+    try { Net.useLink(LocalLink); this.resetForPlay(); await Net.start(code, false); }
     catch (e) { UI.lobbyStatus('Could not reach the network (' + e.message + ').', true); this.startAttract(); return; }
     this.state = 'joining';
     const started = now(), LIMIT = 45;
@@ -1105,11 +1120,12 @@ const Game = {
     };
     wait();
   },
-  startSolo() {
+  async startSolo() {
     const name = this.profileName();
+    await this.hostLink();
     this.resetForPlay(); Net.startOffline();
     Players.add({ id: 'local', name, color: Settings.color, tier: R.tier, idx: 0, joinOrder: 0, isLocal: true, lvl: Prog.level().l });
-    this.loadPending();
+    this.startWorld();
     this.enterPlay(Auth.pickSpawn());
     UI.chat({ sys: 1, text: 'Offline. Create a room from the main menu to play with others.' });
   },

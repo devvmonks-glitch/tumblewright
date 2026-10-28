@@ -6,9 +6,9 @@
    Every peer is meshed so host migration needs no reconnection.
    ========================================================================== */
 // ---- where the authoritative simulation runs -----------------------------------------------------------------
-// The room host's window simulates the world itself (LocalLink) or, later, hands it to a worker. Everything the window
-// asks of the authority goes through Net.link: players' requests and inputs, joins and leaves, stepping, snapshots,
-// taking over as host. Clients have no use for it: their authority is the host, over the network.
+// The room host's window simulates the world itself (LocalLink) or hands it to its simulation worker (WorkerLink).
+// Everything the window asks of the authority goes through Net.link: players' requests and inputs, joins and leaves,
+// stepping, snapshots, taking over as host. Clients have no use for it: their authority is the host, over the network.
 const LocalLink = {
   local: true,   // the simulation lives in this window (Net.auth() is true for its room host)
   request(pid, m) { Auth.handle(pid, m); },
@@ -34,6 +34,80 @@ const LocalLink = {
   snapshot(key, hostTime) { return Sim.snapshot(key, hostTime); },
   forgetSent() { Sim.forgetSent(); },
   reset() { Sim.reset(); },
+  ping(pid, ms) { const p = Players.map.get(pid); if (p) p.ping = ms; },
+};
+// The host's simulation in a worker (SimWorker, 06_worker.js), so physics never holds up this window's frames. The window
+// becomes a client of its worker: it keeps a mirror of the world drawn from the worker's snapshots (Net.auth() is false,
+// so the game takes the client paths), its own player is predicted here like any client's, and it passes on what the
+// worker says: to its own player (Net.onEv / onWorldState / onSnap) and to the other players (Net.send).
+const WorkerLink = {
+  local: false, w: null, starting: null, nClients: -1, stats: null, saves: new Map(), saveN: 0,
+  // on unless switched off (Settings > Network, or ?simworker=0 / 1 to try either way)
+  wanted() {
+    const q = /[?&]simworker=([01])/.exec(location.search);
+    return typeof Worker !== 'undefined' && !!window.TWWorker && (q ? q[1] === '1' : Settings.simWorker !== false);
+  },
+  // start the worker once (the game boots it ahead of time); resolves when its physics is ready
+  start() {
+    if (this.starting) return this.starting;
+    return this.starting = new Promise((res, rej) => {
+      let url, done = false;
+      const fail = e => { if (done) return; done = true; clearTimeout(t); this.starting = null; try { this.w && this.w.terminate(); } catch (x) { } this.w = null; rej(e instanceof Error ? e : new Error(String(e && e.message || e))); };
+      const t = setTimeout(() => fail(new Error('the simulation worker did not start in time')), 30000);
+      try {
+        url = URL.createObjectURL(new Blob([TWWorker.source()], { type: 'text/javascript' }));
+        this.w = new Worker(url, { type: 'module', name: 'tw-sim' });
+      } catch (e) { return fail(e); }
+      this.w.onerror = e => { if (!done) fail(e); else console.warn('simulation worker', e.message || e); };
+      this.w.onmessage = e => {
+        const m = e.data;
+        if (m.t === 'boot') this.post({ t: 'init' });
+        else if (m.t === 'ready') { done = true; clearTimeout(t); URL.revokeObjectURL(url); res(this); }
+        else this.recv(m);
+      };
+    });
+  },
+  post(m) { if (this.w) this.w.postMessage(m); },
+  // a fresh room (or solo game) in the worker: this window's player first, then the clock starts
+  open(world) {
+    this.nClients = -1; this.stats = null;
+    this.post({ t: 'session', hostId: Net.me, online: Net.online, code: Net.code, epoch: performance.timeOrigin / 1000 + Net.t0, rules: Object.assign({}, Rules), world: world || null });
+    this.post({ t: 'join', pid: Net.me, d: Net.hello(), joinOrder: 0, quiet: 1 });
+    this.post({ t: 'run', on: true });
+  },
+  close() { this.post({ t: 'run', on: false }); },
+  request(pid, m) { this.post({ t: 'req', pid, m }); },
+  input(pid, inp) { this.post({ t: 'input', pid, inp }); },
+  join(pid, d, joinOrder) { this.post({ t: 'join', pid, d, joinOrder }); },
+  leave(pid) { this.post({ t: 'leave', pid }); },
+  // the worker runs on its own clock: nothing to step, govern or pack here
+  step() { }, govern() { }, forgetSent() { },
+  reset() { Sim.reset(); },   // this window's mirror
+  clients(n) { if (n !== this.nClients) { this.nClients = n; this.post({ t: 'clients', n }); } },
+  ping(pid, ms) { this.post({ t: 'ping', pid, ms }); },
+  // the world as the worker has it (saves): resolves with { world, rules }
+  serialize() { const id = ++this.saveN; this.post({ t: 'serialize', id }); return new Promise(res => this.saves.set(id, res)); },
+  recv(m) {
+    switch (m.t) {
+      case 'out':
+        if (m.to === 'all') Net.bcastAll(m.m); else if (m.to && m.to.except) Net.bcastExcept(m.to.except, m.m); else Net.sendTo(m.to, m.m);
+        if (m.m.t === 'pl' || m.m.t === 'rules') Online.updateRoom();
+        break;
+      case 'ws':
+        if (m.to !== Net.me) { Net.send('ws', m.payload, m.to); break; }
+        Net.onWorldState(Net.me, m.payload);
+        if (m.payload.you && m.payload.you.spawn) Game.teleport(new V3().fromArray(m.payload.you.spawn));
+        break;
+      case 'world': for (const pid of Net.clientIds()) Net.send('ws', m.payload, pid); Net.onWorldState(Net.me, m.payload); break;
+      case 'ban': Net.banned.add(m.pid); break;
+      case 'snap':
+        if (!m.net) Net.onSnap(m.buf);
+        else { const ids = Net.clientIds(); if (ids.length) Net.send('st', m.buf, ids); }
+        break;
+      case 'saved': { const f = this.saves.get(m.id); this.saves.delete(m.id); if (f) f(m); break; }
+      case 'stats': this.stats = m; break;
+    }
+  },
 };
 const NOSTR_RELAYS = ['wss://nos.lol', 'wss://relay.primal.net', 'wss://relay.snort.social', 'wss://offchain.pub', 'wss://bucket.coracle.social'];
 
@@ -48,6 +122,7 @@ const Net = {
   activeThr: new Set(), link: LocalLink,
   // isHost: this window is the room host (the role). auth(): the world is simulated in this window
   auth() { return this.isHost && this.link.local; },
+  useLink(l) { if (this.link !== l && !this.link.local) this.link.close(); this.link = l; },
   hostTime() { return now() - this.t0; },
   // the host time remote objects are drawn at. It follows (local time + clock offset - interp delay) but never jumps:
   // it runs up to 15% fast or slow to catch up, and only snaps after a big change (joining, a long stall)
@@ -177,6 +252,7 @@ const Net = {
     if (Online.listed) Online.listRoom(null);
     for (const r of this.rooms || []) { try { r.leave(); } catch (e) { } }
     this.rooms = []; if (this.via) this.via.clear(); this.online = false; this.isHost = true; this.hostId = this.me = 'local'; this.peers.clear(); this.ready = false;
+    this.useLink(LocalLink);
   },
   hello() { return { name: Settings.name, color: Settings.color, tier: R.tier, host: this.isHost, v: GAME.version, lvl: Prog.level().l }; },
   // ---- sending --------------------------------------------------------------------
@@ -318,7 +394,8 @@ const Net = {
     const sample = t - now();
     if (this.offset == null) this.offset = sample;
     else { const dev = sample - this.offset; this.stats.jitter = this.stats.jitter * 0.9 + Math.abs(dev) * 0.1; this.offset += dev > 0 ? dev * 0.3 : dev * 0.02; }
-    this.interp = clamp(0.07 + this.stats.jitter * 2.5, 0.08, 0.3);
+    this.interp = this.isHost ? clamp(0.025 + this.stats.jitter * 2.5, 0.035, 0.2)   // from this window's own worker, 60 a second
+      : clamp(0.07 + this.stats.jitter * 2.5, 0.08, 0.3);
     this.stats.snaps++; this.stats.bodies = nb;
     for (let i = 0; i < nb; i++) {
       const id = dv.getUint16(o); o += 2;
@@ -348,9 +425,11 @@ const Net = {
   update(dt) {
     const s = this.stats; s.t += dt;
     if (s.t >= 1) { s.inRate = s.inB / s.t; s.outRate = s.outB / s.t; s.snapRate = s.snaps / s.t; s.inB = s.outB = s.snaps = 0; s.t = 0; }
-    if (!this.online || !this.ready) return;
+    if (!this.ready) return;
     if (!this.auth()) this.tickClock(dt);
-    if (this.isHost) {
+    if (this.isHost && !this.link.local) this.link.clients(this.online ? this.clientIds().length : 0);   // the worker sends the clients' snapshots
+    if (!this.online) return;
+    if (this.isHost && this.link.local) {
       this.snapT -= dt; this.keyT -= dt;
       if (this.snapT <= 0) {
         this.snapT += 1 / CFG.snapRate; if (this.snapT < 0) this.snapT = 0;
@@ -358,7 +437,7 @@ const Net = {
         if (this.clientIds().length) this.send('st', this.link.snapshot(key, this.hostTime()), this.clientIds());
         else this.link.forgetSent();
       }
-    } else {
+    } else if (!this.isHost) {
       this.inT -= dt;
       if (this.inT <= 0) {
         this.inT += 1 / CFG.inputRate; if (this.inT < 0) this.inT = 0;
@@ -372,7 +451,7 @@ const Net = {
       this.pingT = 2;
       const targets = this.isHost ? this.clientIds() : (this.hostId && this.peers.has(this.hostId) ? [this.hostId] : []);
       for (const pid of targets) { const r = this.rooms && this.rooms[this.via.get(pid)]; if (!r) continue; r.ping(pid).then(ms => {
-        if (this.isHost) { const p = Players.map.get(pid); if (p) p.ping = ms; }
+        if (this.isHost) this.link.ping(pid, ms);
         else { const me = Players.local; if (me) me.ping = ms; }
       }).catch(() => { }); }
     }

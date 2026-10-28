@@ -5,8 +5,9 @@
    Window -> worker:
      init                                  load physics; answered with ready
      session {hostId, online, code, epoch, rules, world?}   a fresh room (or solo game); epoch: the window's clock zero
-     join {pid, d, joinOrder, pos?}        a player the window let in (bans, version and room size are checked there)
-     leave {pid}   req {pid, m}   input {pid, inp}
+     join {pid, d, joinOrder, pos?, quiet?}   a player the window let in (bans, version and room size are checked there);
+                                           quiet: the window's own player, not announced
+     leave {pid}   req {pid, m}   input {pid, inp}   ping {pid, ms}
      clients {n}                           how many players the window sends snapshots to (0: start the stream over)
      run {on}   serialize {id}   stats   probe (tests)
    Worker -> window:
@@ -58,10 +59,11 @@ const SimWorker = {
         Object.assign(Rules, m.rules || {}); Env.update();
         if (m.world && World.validWorld(m.world)) World.load(m.world);
         break;
-      case 'join': { const p = Auth.addPlayer(m.pid, m.d || {}, m.joinOrder | 0); if (m.pos) Players.setPos(p, new V3().fromArray(m.pos)); break; }
+      case 'join': { const p = Auth.addPlayer(m.pid, m.d || {}, m.joinOrder | 0, !!m.quiet); if (m.pos) Players.setPos(p, new V3().fromArray(m.pos)); break; }
       case 'leave': Auth.removePlayer(m.pid); break;
       case 'req': Auth.handle(m.pid, m.m); break;
       case 'input': { const p = Players.map.get(m.pid); if (p) Auth.onInput(p, m.inp); break; }
+      case 'ping': { const p = Players.map.get(m.pid); if (p) p.ping = m.ms; break; }
       case 'clients': this.clients = m.n | 0; if (!this.clients) Sim.forgetSent(); break;
       case 'run': this.run(!!m.on); break;
       case 'serialize': this.post({ t: 'saved', id: m.id, world: World.serialize(), rules: Rules }); break;

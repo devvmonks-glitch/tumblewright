@@ -98,7 +98,7 @@ const AUDIO_DEFAULTS = {
 };
 const Settings = Object.assign({
   tier: null, shadows: true, ao: true, bloom: true, reflections: false, outlines: true, drs: true,
-  targetFps: isChromebook ? 30 : 60, fov: 80, sens: 1.0, invertY: false, deadzone: 0.15, padSens: 1.0, aimAssist: 2, flySpeed: 1, volume: 0.6, gore: 'full', bloodColor: 'red', spawnPreview: true, dmgNums: true, publicRoom: true,
+  targetFps: isChromebook ? 30 : 60, fov: 80, sens: 1.0, invertY: false, deadzone: 0.15, padSens: 1.0, aimAssist: 2, flySpeed: 1, volume: 0.6, gore: 'full', bloodColor: 'red', spawnPreview: true, dmgNums: true, publicRoom: true, simWorker: true,
   showNet: false, showFps: false, showHints: true, name: '', color: PLAYER_COLORS[(Math.random() * PLAYER_COLORS.length) | 0],
   turnUrl: '', turnUser: '', turnPass: '', binds: {},
   confirmClose: true, pixelFont: true, aimbot: 0, aimbotFov: 25, aimbotBone: 'head', aimbotSmooth: 0,   // owner-only (Game.ownerAimbot): 0 off / 1 while aiming or shooting / 2 always

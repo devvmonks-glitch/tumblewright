@@ -512,13 +512,14 @@ const Auth = {
     p.lastInputT = t;
   },
   // ---- players coming and going (the window checked bans, version and room size first) ----
-  addPlayer(pid, d, joinOrder) {
+  addPlayer(pid, d, joinOrder, quiet) {   // quiet: the host's own player (nobody else is here yet)
     const used = new Set([...Players.map.values()].map(p => p.idx)); let idx = 1; while (used.has(idx)) idx++;
     const name = String(d.name || 'Player').replace(/[<>]/g, '').slice(0, 18) || 'Player';
     const p = Players.add({ id: pid, name, color: /^#[0-9a-f]{6}$/i.test(d.color) ? d.color : '#ff9f43', tier: TIERS[d.tier] ? d.tier : 'medium', idx, joinOrder, lvl: clamp(d.lvl | 0, 1, 999) });
     const sp = this.pickSpawn(); p.pos.copy(sp); p.tpGrace = now() + 1.5;
     Srv.welcome(pid, a3(sp));
     Srv.sendPlayers();
+    if (quiet) return p;
     Srv.sysChat(`${p.name} joined the room`);
     if (p.tier === 'low') Srv.sysChat(`${p.name} is on Low graphics (PS1 style).`, 'tier');
     return p;
