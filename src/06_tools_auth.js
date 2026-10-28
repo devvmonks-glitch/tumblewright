@@ -5,12 +5,13 @@
 const WEAPONS = [
   { id: 'physgun', name: 'Physics Gun', icon: '🧲', desc: 'Grab, move, rotate and freeze objects.' },
   { id: 'toolgun', name: 'Tool Gun', icon: '🔧', desc: '' },
-  { id: 'pistol', name: 'Pistol', icon: '🔫', desc: 'Semi-automatic. Knocks props around.', rate: 0.22, dmg: 22, imp: 1.2, dv: 8, spread: 0.004, range: 300, vp: 0.03, bloom: 0.6 },
+  // att: the attachments a gun takes (ATTACH)
+  { id: 'pistol', name: 'Pistol', icon: '🔫', desc: 'Semi-automatic. Knocks props around.', rate: 0.22, dmg: 22, imp: 1.2, dv: 8, spread: 0.004, range: 300, vp: 0.03, bloom: 0.6, att: ['reddot', 'supp', 'comp'] },
   { id: 'shotgun', name: 'Shotgun', icon: '💥', desc: 'Pump action, 8 pellets. Devastating up close.', rate: 0.85, dmg: 11, imp: 0.9, dv: 2, spread: 0.055, pellets: 8, range: 120, push: 2, vp: 0.06 },
-  { id: 'rifle', name: 'Rifle', icon: '🎯', desc: 'Automatic rifle.', rate: 0.09, dmg: 13, imp: 0.7, dv: 5, spread: 0.011, auto: true, range: 300, vp: 0.017, bloom: 0.3 },
+  { id: 'rifle', name: 'Rifle', icon: '🎯', desc: 'Automatic rifle.', rate: 0.09, dmg: 13, imp: 0.7, dv: 5, spread: 0.011, auto: true, range: 300, vp: 0.017, bloom: 0.3, att: ['reddot', 'scope', 'supp', 'comp', 'grip'] },
   // smg: fast and light. ads: aim-down-sights zoom (alt-fire), mag / rl: magazine and reload time (s), fall: [full damage to (m), lowest at (m), lowest share]
-  { id: 'smg', name: 'SMG', icon: '💨', desc: 'Very fast fire, light hits. Aim (alt-fire) and fire short bursts to stay on target; weaker at range. 32 rounds, R reloads.', rate: 0.065, dmg: 9, imp: 0.5, dv: 4, spread: 0.008, hipSpread: 0.024, auto: true, range: 220, vp: 0.011, bloom: 0.14, bloomMax: 2.6, ads: 1.3, mag: 32, rl: 1.9, fall: [12, 38, 0.5] },
-  { id: 'sniper', name: 'Sniper Rifle', icon: '🔭', desc: 'Alt-fire scopes in. Inaccurate from the hip.', rate: 1.2, dmg: 95, imp: 4, dv: 16, spread: 0, hipSpread: 0.03, zoom: 1, range: 800, push: 3, vp: 0.07 },
+  { id: 'smg', name: 'SMG', icon: '💨', desc: 'Very fast fire, light hits. Aim (alt-fire) and fire short bursts to stay on target; weaker at range. 32 rounds, R reloads.', rate: 0.065, dmg: 9, imp: 0.5, dv: 4, spread: 0.008, hipSpread: 0.024, auto: true, range: 220, vp: 0.011, bloom: 0.14, bloomMax: 2.6, ads: 1.3, mag: 32, rl: 1.9, fall: [12, 38, 0.5], att: ['reddot', 'supp', 'comp', 'grip', 'extmag'] },
+  { id: 'sniper', name: 'Sniper Rifle', icon: '🔭', desc: 'Alt-fire scopes in. Inaccurate from the hip.', rate: 1.2, dmg: 95, imp: 4, dv: 16, spread: 0, hipSpread: 0.03, zoom: 1, range: 800, push: 3, vp: 0.07, att: ['supp'] },
   { id: 'rocket', name: 'Rocket Launcher', icon: '🚀', desc: 'Rockets explode on impact. Rocket-jump if you dare.', rate: 1.0, proj: 'rocket', vp: 0.045 },
   { id: 'grenade', name: 'Grenade', icon: '💣', desc: 'Throw it. It explodes after 2.5 s. One every 2.5 s.', rate: 2.5 },
   { id: 'crowbar', name: 'Crowbar', icon: '🪓', desc: 'Melee. Great for smashing ragdolls.', rate: 0.42, dmg: 34, imp: 3, dv: 10, range: 2.4, push: 4, vp: 0.012 },
@@ -21,7 +22,53 @@ const WEAPONS = [
 function wDmg(W, dist) { const f = W.fall; return f ? W.dmg * lerp(1, f[2], clamp((dist - f[0]) / (f[1] - f[0]), 0, 1)) : W.dmg; }
 // random cone spread around a direction
 function jitter(v, s) { v.x += (Math.random() - 0.5) * s * 2; v.y += (Math.random() - 0.5) * s * 2; v.z += (Math.random() - 0.5) * s * 2; return v.normalize(); }
-const CANNON_AMMO = ['crate_s', 'crate_s', 'barrel', 'melon', 'melon', 'bowling', 'tire', 'cone', 'beachball', 'cube', 'pin'];
+// weapon attachments, one per slot. Each one trades something away (no strict upgrades). Stat changes are multipliers:
+// dmg, range (also the falloff distances), spread (hip and aimed), hip (hip spread), aimSpread (aimed spread), vp (recoil), bloom,
+// mag (rounds), rl (reload time), aimT (time to aim in), swap (time to draw), flash (muzzle flash size).
+// An optic gives the gun its aim zoom (ads; scope: 1 looks through the scope overlay) with its sight line `sight` m over the top mount.
+// quiet: suppressed (quieter, heard less far). The host uses them for damage, range, pellet spread and magazines (wStat).
+const ATT_SLOTS = [['optic', 'Optic'], ['muzzle', 'Muzzle'], ['grip', 'Underbarrel'], ['mag', 'Magazine']];
+const ATTACH = {
+  reddot: { slot: 'optic', name: 'Red Dot', icon: '🔴', desc: 'Reflex sight: a clear aim point and a little zoom. Tighter aimed shots, a touch slower to aim in.', ads: 1.35, sight: 0.03, aimSpread: 0.8, aimT: 1.15 },
+  scope: { slot: 'optic', name: '3x Scope', icon: '🔭', desc: '3x magnified scope. Very accurate aimed, but slow to aim in and looser from the hip.', ads: 3, scope: 1, sight: 0.045, aimSpread: 0.55, aimT: 1.7, hip: 1.25 },
+  supp: { slot: 'muzzle', name: 'Suppressor', icon: '🤫', desc: 'Much quieter shots and almost no flash. 10% less damage and a shorter reach.', quiet: 1, flash: 0.3, dmg: 0.9, range: 0.85 },
+  comp: { slot: 'muzzle', name: 'Compensator', icon: '🔥', desc: 'Much less recoil and bloom. A bigger flash and looser from the hip.', vp: 0.6, bloom: 0.8, hip: 1.15, flash: 1.6 },
+  grip: { slot: 'grip', name: 'Vertical Grip', icon: '✊', desc: 'Steadier: 20% less spread and less recoil. Slower to aim in and to draw.', spread: 0.8, vp: 0.85, bloom: 0.85, aimT: 1.35, swap: 1.5 },
+  extmag: { slot: 'mag', name: 'Extended Mag', icon: '🧱', desc: '50% more rounds. Slower to reload and a little slower to aim in.', mag: 1.5, rl: 1.3, aimT: 1.1 },
+};
+// only attachments the gun takes, one per slot: { weaponId: { slot: attachmentId } }
+function cleanAtt(a) {
+  const out = {}; if (!a || typeof a !== 'object') return out;
+  for (const W of WEAPONS) {
+    const s = W.att && a[W.id]; if (!s || typeof s !== 'object') continue;
+    const o = {}; for (const id of W.att) if (s[ATTACH[id].slot] === id) o[ATTACH[id].slot] = id;
+    if (Object.keys(o).length) out[W.id] = o;
+  }
+  return out;
+}
+// a gun's stats with a player's attachments on (att as cleanAtt makes it); the bare gun when it has none
+const wStatCache = new Map();
+function wStat(W, att) {
+  const a = att && W && W.att && att[W.id]; if (!a) return W;
+  const ids = W.att.filter(id => a[ATTACH[id].slot] === id); if (!ids.length) return W;
+  const key = W.id + ':' + ids.join(','); let S = wStatCache.get(key); if (S) return S;
+  S = Object.assign({}, W, { mods: ids, aimT: 1, swap: 1, flash: 1 });
+  let hip = W.hipSpread ?? W.spread, aim = W.spread;
+  for (const id of ids) {
+    const A = ATTACH[id];
+    if (A.dmg) S.dmg *= A.dmg;
+    if (A.range) { S.range *= A.range; if (S.fall) S.fall = [S.fall[0] * A.range, S.fall[1] * A.range, S.fall[2]]; }
+    hip *= (A.spread || 1) * (A.hip || 1); aim *= (A.spread || 1) * (A.aimSpread || 1);
+    if (A.vp && S.vp) S.vp *= A.vp; if (A.bloom && S.bloom) S.bloom *= A.bloom;
+    if (A.mag && S.mag) S.mag = Math.round(S.mag * A.mag); if (A.rl && S.rl) S.rl *= A.rl;
+    for (const k of ['aimT', 'swap', 'flash']) if (A[k]) S[k] *= A[k];
+    if (A.ads) { S.ads = A.ads; S.optic = id; S.scope = !!A.scope; }
+    if (A.quiet) S.quiet = true;
+  }
+  if (S.spread != null) { S.spread = aim; S.hipSpread = hip; }
+  wStatCache.set(key, S); return S;
+}
+const CANNON_AMMO =['crate_s', 'crate_s', 'barrel', 'melon', 'melon', 'bowling', 'tire', 'cone', 'beachball', 'cube', 'pin'];
 const W_BY_ID = Object.fromEntries(WEAPONS.map((w, i) => [w.id, Object.assign({ idx: i }, w)]));
 const TOOL_MODES = [
   { id: 'weld', name: 'Weld', icon: '🔗', desc: 'Click two objects to weld them. Click the ground second to weld to the world.', two: true },
@@ -41,6 +88,7 @@ const TOOL_MODES = [
 const Tools = {
   weapon: 'physgun', mode: 'weld', grab: null, first: null, cool: 0, rot: [0, 0], rotating: false, clipboard: null, marker: null, beam: null, kick: 0, bloom: 0, swingAt: 0,
   ammo: {}, reloadT: 0, reloadW: null,   // magazine weapons: rounds left per weapon, reload time left
+  att: cleanAtt(store.get('att', {})),   // your weapon attachments ({ weaponId: { slot: id } }; the host keeps its own copy, p.att)
   opt: Object.assign({ ropeLen: 1.0, ropeRigid: 1.0, thrForce: 12, thrKey: 'KeyF', thrPad: 'Pad7', wheelR: 0.4, paintMat: 'metal', paintCol: '#ff5a5f', motSpd: 4, motKey: 'KeyM', motTog: false,
     blLift: 10, blLen: 2, hovSpd: 3, hovAir: 0.3, hovUp: 'KeyU', hovDn: 'KeyJ', dynPow: 1, dynKey: 'KeyX' }, store.get('toolopt', {})),
   saveOpt() { store.set('toolopt', this.opt); },
@@ -49,6 +97,17 @@ const Tools = {
     this.marker.renderOrder = 999; this.marker.visible = false; this.marker.material.userData.outlineParameters = { visible: false };
     R.scene.add(this.marker);
     this.beam = new Beam(0x6fe3ff, 0.05);
+  },
+  stat(W) { return wStat(W, this.att); },   // a gun's stats with your attachments
+  // fit (id) or take off (null) an attachment on a gun; the host and the other players hear about it
+  setAtt(wid, slot, id) {
+    const W = W_BY_ID[wid], cur = this.att[wid] || {}; if (!W || !W.att || (id && (!W.att.includes(id) || ATTACH[id].slot !== slot)) || (cur[slot] || null) === id) return;
+    const next = Object.assign({}, cur); if (id) next[slot] = id; else delete next[slot];
+    this.att = cleanAtt(Object.assign({}, this.att, { [wid]: next })); store.set('att', this.att);
+    if (W.mag) { if (this.ammo[wid] != null) this.ammo[wid] = Math.min(this.ammo[wid], this.stat(W).mag); if (this.reloadW === wid) this.reloadT = 0; }   // like the host: a smaller magazine keeps only what fits
+    Net.toHost({ t: 'att', a: this.att });
+    if (this.weapon === wid) { Game.drawT = 0; Game.buildViewmodel(); }
+    Audio.play('switch', 0.7); UI.refreshTool();
   },
   setWeapon(id) { if (!W_BY_ID[id] || this.weapon === id) return; this.release(); this.reloadT = 0; this.weapon = id; this.first = null; Game.drawT = 0; Game.buildViewmodel(); UI.refreshTool(); Audio.play('draw'); },
   cycleWeapon(dir) { const i = W_BY_ID[this.weapon].idx; this.setWeapon(WEAPONS[(i + dir + WEAPONS.length) % WEAPONS.length].id); },
@@ -68,16 +127,16 @@ const Tools = {
     const p = Players.local;
     this.cool -= dt; this.kick = Math.max(0, this.kick - dt * 6);
     if (this.cool < -0.06) this.bloom = Math.max(0, this.bloom - dt * 3);   // settles shortly after you stop firing
-    if (this.reloadT > 0 && (this.reloadT -= dt) <= 0) { this.reloadT = 0; const RW = W_BY_ID[this.reloadW]; if (RW) this.ammo[RW.id] = RW.mag; Audio.play('switch', 0.6); }
+    if (this.reloadT > 0 && (this.reloadT -= dt) <= 0) { this.reloadT = 0; const RW = W_BY_ID[this.reloadW]; if (RW) this.ammo[RW.id] = this.stat(RW).mag; Audio.play('switch', 0.6); }
     if (!p || p.dead || p.seat) { this.release(); this.swingAt = 0; this.reloadT = 0; return; }
     if (this.swingAt > 0 && (this.swingAt -= dt) <= 0) { this.swingAt = 0; if (this.weapon === 'crowbar') this.fireGun(W_BY_ID.crowbar, true); }   // the crowbar lands mid-swing
-    const W = W_BY_ID[this.weapon];
+    const W = this.stat(W_BY_ID[this.weapon]);
     if (this.weapon === 'physgun') this.updPhysgun(dt);
     else if (this.weapon === 'toolgun') this.updToolgun(dt);
     else if (this.weapon === 'grenade') { if (Input.hit('fire') && this.cool <= 0) { this.cool = W.rate; const o = new V3(), d = new V3(); this.aim(o, d); Net.toHost({ t: 'nade', o: a3(o), d: a3(d) }); this.kick = 1; Audio.play('pin', 0.8); Audio.play('throw', 1, { delay: 0.12 }); } }
     else if (this.weapon === 'deleter') { if (Input.hit('fire') && this.cool <= 0) { this.cool = W.rate; this.fireDelete(); } }
     else if (W.mag && Input.hit('reload')) this.reload(W);
-    else if ((W.auto ? Input.down('fire') : Input.hit('fire')) && this.cool <= 0) {
+    else if ((W.auto ? Input.down('fire') : Input.hit('fire')) && this.cool <= 0 && (!(W.swap > 1) || Game.drawT >= 1)) {   // a slow-to-draw gun fires once it's up
       if (!W.mag) this.fireGun(W);
       else if (this.reloadT) { /* still reloading */ }
       else if (this.rounds(W) > 0) { this.ammo[W.id] = this.rounds(W) - 1; this.fireGun(W); if (!this.ammo[W.id]) this.reload(W); }
@@ -195,7 +254,7 @@ const Tools = {
     Net.toHost({ t: 'reload', w: W.id });
     Audio.play('cloth', 0.5); Audio.play('tick', 0.7, { delay: 0.25 }); Audio.play('bolt', 0.8, { delay: W.rl * 0.62, rate: 1.25 });
   },
-  reloadK() { const W = W_BY_ID[this.reloadW]; return this.reloadT && W ? 1 - this.reloadT / W.rl : 0; },   // reload progress 0..1 (0 when not reloading)
+  reloadK() { const W = this.stat(W_BY_ID[this.reloadW]); return this.reloadT && W ? 1 - this.reloadT / W.rl : 0; },   // reload progress 0..1 (0 when not reloading)
   muzzle() { const vm = Game.viewmodel; const m = vm && vm.getObjectByName('muzzle'); return m ? m.getWorldPosition(new V3()) : R.camera.position.clone(); },
   fireGun(W, landed) {
     if (W.id === 'crowbar' && !landed) { this.cool = W.rate; this.swingAt = SWING_HIT; Game.swingT = 0; Audio.play('swing'); return; }   // wind up first, hit when the bar arrives
@@ -204,12 +263,12 @@ const Tools = {
     Game.kickRoll = (Math.random() - 0.5) * 0.12;
     const o = new V3(), d = new V3(); this.aim(o, d);
     const mzo = Game.viewmodel && Game.viewmodel.getObjectByName('muzzle');
-    if (W.id !== 'crowbar') FX.muzzle(mzo && Game.viewmodel.visible ? mzo : this.muzzle(), W.proj ? 'puff' : W.pellets || W.zoom ? 'big' : 'small');
-    // bloom: the first shot is on target, keep firing and the spread opens up (shown by the crosshair)
-    const spread = (W.hipSpread != null && !Game.zoomed ? W.hipSpread : W.spread) * (1 + this.bloom);
+    if (W.id !== 'crowbar') FX.muzzle(mzo && Game.viewmodel.visible ? mzo : this.muzzle(), W.proj ? 'puff' : W.pellets || W.zoom ? 'big' : 'small', W.flash);
+    // bloom: the first shot is on target, keep firing and the spread opens up (shown by the crosshair). Aimed spread once you've aimed in.
+    const spread = (W.hipSpread != null ? lerp(W.hipSpread, W.spread, Game.zoomed ? Game.aimK : 0) : W.spread) * (1 + this.bloom);
     if (W.bloom) this.bloom = Math.min(W.bloomMax || 1.8, this.bloom + W.bloom);
     if (spread && !W.pellets) jitter(d, spread);
-    if (W.proj === 'rocket') Audio.play('rocket_fire'); else if (W.proj) Audio.play('propcannon'); else if (W.id !== 'crowbar') Audio.gun(W.id, R.camera.position, true);
+    if (W.proj === 'rocket') Audio.play('rocket_fire'); else if (W.proj) Audio.play('propcannon'); else if (W.id !== 'crowbar') Audio.gun(W.id, R.camera.position, true, W.quiet);
     if (W.zoom) Game.shake = Math.max(Game.shake, 0.12);
     if (!W.proj) {   // hitscan: predicted tracers + sparks (the host does the real hits)
       const p = Players.local, n = W.pellets || 1;
@@ -490,7 +549,8 @@ const Auth = {
       case 'spawn': return this.spawnItem(p, m);
       case 'dupe': return this.spawnDupe(p, m);
       case 'fire': return this.fire(p, m);
-      case 'reload': { const W = W_BY_ID[m.w]; if (W && W.mag && !p.dead) { p.rlT = now() + W.rl * 0.75; (p.ammo || (p.ammo = {}))[W.id] = W.mag; } return; }   // no shots until it's (nearly) done
+      case 'reload': { const W = wStat(W_BY_ID[m.w], p.att); if (W && W.mag && !p.dead) { p.rlT = now() + W.rl * 0.75; (p.ammo || (p.ammo = {}))[W.id] = W.mag; } return; }   // no shots until it's (nearly) done
+      case 'att': return this.setAtt(p, m.a);
       case 'nade': return this.throwNade(p, m);
       case 'use': return this.use(p, m);
       case 'undo': return this.undo(p);
@@ -538,6 +598,7 @@ const Auth = {
     const used = new Set([...Players.map.values()].map(p => p.idx)); let idx = 1; while (used.has(idx)) idx++;
     const name = String(d.name || 'Player').replace(/[<>]/g, '').slice(0, 18) || 'Player';
     const p = Players.add({ id: pid, name, color: /^#[0-9a-f]{6}$/i.test(d.color) ? d.color : '#ff9f43', tier: TIERS[d.tier] ? d.tier : 'medium', idx, joinOrder, lvl: clamp(d.lvl | 0, 1, 999) });
+    p.att = cleanAtt(d.att);
     const sp = this.pickSpawn(); p.pos.copy(sp); p.tpGrace = now() + 1.5;
     Srv.welcome(pid, a3(sp));
     Srv.sendPlayers();
@@ -556,6 +617,12 @@ const Auth = {
     text = String(text || '').trim().slice(0, 160); if (!text) return;
     if (p.muted) return Srv.notify(p.id, 'You are muted.');
     Srv.bcastAll({ t: 'chat', pid: p.id, name: p.name, color: p.color, text });
+  },
+  // a player's weapon attachments: kept with the player, shown to everyone in the player list
+  setAtt(p, a) {
+    p.att = cleanAtt(a);
+    if (p.ammo) for (const id in p.ammo) { const W = W_BY_ID[id]; if (W && W.mag) p.ammo[id] = Math.min(p.ammo[id], wStat(W, p.att).mag); }   // a smaller magazine keeps only what fits (a bigger one isn't refilled)
+    Srv.sendPlayers();
   },
   setTier(p, tier) {
     if (!TIERS[tier] || p.tier === tier) return;
@@ -1166,7 +1233,8 @@ const Auth = {
     // rate limit as a small token bucket: shots that arrive bunched up by the network still count, the average can't beat W.rate
     const t = now(); p.fireTok = Math.min(2, (p.fireTok ?? 2) + (t - (p.fireT ?? t)) / W.rate); p.fireT = t;
     if (p.fireTok < 0.9) return; p.fireTok -= 1;
-    if (W.mag) { const a = p.ammo || (p.ammo = {}), n = a[W.id] ?? W.mag; if (n <= 0 || t < (p.rlT || 0)) return; a[W.id] = n - 1; }   // magazine: empty or reloading = no shot
+    const S = wStat(W, p.att);   // with the shooter's attachments
+    if (S.mag) { const a = p.ammo || (p.ammo = {}), n = a[W.id] ?? S.mag; if (n <= 0 || t < (p.rlT || 0)) return; a[W.id] = n - 1; }   // magazine: empty or reloading = no shot
     const o = new V3().fromArray(m.o), d = new V3().fromArray(m.d).normalize();
     if (!isFinite(o.x + o.y + o.z + d.x + d.y + d.z) || o.distanceTo(p.pos) > 7) return;   // the shooter's own view runs ahead of our copy of them
     p.protUntil = 0;   // shooting ends spawn protection
@@ -1175,10 +1243,10 @@ const Auth = {
     if (W.proj === 'rocket') return this.launchRocket(p, o, d);
     if (W.proj === 'prop') return this.launchProp(p, o, d);
     const n = W.pellets || 1, ends = []; let last = null;
-    for (let i = 0; i < n; i++) { const r = this.hitscan(p, W, o, n > 1 ? jitter(d.clone(), W.spread) : d, rw); ends.push(a3(r.end)); if (r.h) last = r; }
-    if (W.id !== 'crowbar') Srv.bcastExcept(p.id, { t: 'fx', k: 'shot', o: a3(o.clone().addScaledVector(d, 0.6)), e: n > 1 ? ends : ends[0], w: W.id, n: n === 1 && last ? a3(last.h.normal) : null });
+    for (let i = 0; i < n; i++) { const r = this.hitscan(p, S, o, n > 1 ? jitter(d.clone(), S.spread) : d, rw); ends.push(a3(r.end)); if (r.h) last = r; }
+    if (W.id !== 'crowbar') Srv.bcastExcept(p.id, Object.assign({ t: 'fx', k: 'shot', o: a3(o.clone().addScaledVector(d, 0.6)), e: n > 1 ? ends : ends[0], w: W.id, n: n === 1 && last ? a3(last.h.normal) : null }, S.quiet ? { q: 1 } : null, S.flash !== 1 && S.flash ? { fl: S.flash } : null));
     else if (last) Srv.bcastExcept(p.id, { t: 'fx', k: 'spark', e: a3(last.end), n: a3(last.h.normal) });
-    this.scare(last ? last.end : o.clone().addScaledVector(d, 30), 9); this.scare(o, 6);
+    this.scare(last ? last.end : o.clone().addScaledVector(d, 30), 9); this.scare(o, S.quiet ? 2 : 6);   // a suppressed shot is only noticed close by
   },
   // one hitscan ray: knock the prop, hurt the NPC / player, set off explosives, break breakables
   hitscan(p, W, o, d, rw = 0) {

@@ -254,7 +254,7 @@ const Net = {
     this.rooms = []; if (this.via) this.via.clear(); this.online = false; this.isHost = true; this.hostId = this.me = 'local'; this.peers.clear(); this.ready = false;
     this.useLink(LocalLink);
   },
-  hello() { return { name: Settings.name, color: Settings.color, tier: R.tier, host: this.isHost, v: GAME.version, lvl: Prog.level().l }; },
+  hello() { return { name: Settings.name, color: Settings.color, tier: R.tier, host: this.isHost, v: GAME.version, lvl: Prog.level().l, att: Tools.att }; },
   // ---- sending --------------------------------------------------------------------
   countIn(d) { this.stats.inB += typeof d === 'string' ? d.length : (d && d.byteLength) || 64; },
   send(action, data, target) {

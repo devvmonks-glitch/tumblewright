@@ -58,6 +58,18 @@ const Thumbs = {
       this.urls[mk] = cv.toDataURL('image/png');
       sc.remove(g);
     }
+    for (const id in ATTACH) {   // attachment thumbnails (loadout panel)
+      const mk = 'at_' + id; if (!Models.has(mk)) continue;
+      const g = Models.instance(mk, 'metal', '#2e3238'); sc.add(g); g.updateMatrixWorld(true);
+      box.setFromObject(g); box.getCenter(ctr); box.getSize(sz);
+      const rad = Math.max(sz.length() * 0.5, 0.02), dist = rad / Math.sin(THREE.MathUtils.degToRad(15)) * 1.05;
+      cam.position.copy(ctr).add(new V3(1.2, 0.6, -0.5).normalize().multiplyScalar(dist)); cam.lookAt(ctr); cam.near = dist / 50; cam.far = dist * 4; cam.updateProjectionMatrix();
+      fill.position.copy(cam.position).add(new V3(0, dist * 0.5, 0)); fill.target.position.copy(ctr); fill.target.updateMatrixWorld();
+      r.clear(); r.render(sc, cam);
+      ctx.clearRect(0, 0, size, size); ctx.drawImage(r.domElement, 0, H - size * pr, size * pr, size * pr, 0, 0, size, size);
+      this.urls[mk] = cv.toDataURL('image/png');
+      sc.remove(g);
+    }
     r.setScissorTest(false); r.setClearColor(0x000000, 1); R.resize();
     this.done = true;
   },
@@ -589,7 +601,7 @@ const UI = {
   },
   refreshHints() {
     const me = Players.local, pad = Input.device === 'pad';
-    const ctx = Tools.weapon + Tools.mode + (Tools.grab ? 'g' : '') + (Tools.first ? 'f' : '') + (me && me.seat ? 's' : '') + Editor.active + Editor.piece + Editor.sel + Editor.padMode + Input.device + Input.padType + (Game.aimSeat ? 'A' : '') + (Game.placing ? 'P' : '') + Settings.showHints + (me && me.noclip ? 'n' : '') + Input.aimToggle() + Game.zoomed;
+    const ctx = Tools.weapon + Tools.mode + (Tools.grab ? 'g' : '') + (Tools.first ? 'f' : '') + (me && me.seat ? 's' : '') + Editor.active + Editor.piece + Editor.sel + Editor.padMode + Input.device + Input.padType + (Game.aimSeat ? 'A' : '') + (Game.placing ? 'P' : '') + Settings.showHints + (me && me.noclip ? 'n' : '') + Input.aimToggle() + Game.zoomed + JSON.stringify(Tools.att[Tools.weapon] || '');
     if (ctx === this.hintKey) return; this.hintKey = ctx;
     const H = [];
     const hint = (g, t) => H.push(`<div class="hint">${g}${esc(t)}</div>`);
@@ -616,8 +628,8 @@ const UI = {
         if (Tools.mode === 'dynamite') hint(`<kbd>${esc(keyLabel(o.dynKey))}</kbd>`, 'Detonate your dynamite');
       }
       else if (w === 'grenade') hint(glyph('fire'), 'Throw');
-      else if (W_BY_ID[w].zoom || W_BY_ID[w].ads) {
-        const tg = Input.aimToggle(), what = W_BY_ID[w].zoom ? 'scope' : 'aim';
+      else if (Tools.stat(W_BY_ID[w]).zoom || Tools.stat(W_BY_ID[w]).ads) {
+        const ZS = Tools.stat(W_BY_ID[w]), tg = Input.aimToggle(), what = ZS.zoom || ZS.scope ? 'scope' : 'aim';
         hint(glyph('fire'), 'Shoot'); hint(glyph('alt'), tg ? (Game.zoomed ? 'Click to stop ' + (what === 'scope' ? 'scoping' : 'aiming') : 'Click to ' + what) : what === 'scope' ? 'Hold to scope in' : 'Hold to aim');
         if (W_BY_ID[w].mag) hint(glyph('reload'), 'Reload');
       }
@@ -625,7 +637,7 @@ const UI = {
       if (me && me.noclip && !pad) hint(glyph('Wheel'), 'Fly speed');
       if (Game.placing) { H.length = 0; hint(glyph('fire'), 'Place (stays selected)'); hint(glyph('reload'), 'Rotate'); hint(glyph('alt'), 'Put away'); }
       else if (Game.aimSeat) hint(glyph('use'), Game.aimSeatName ? (Game.aimSeatDrive ? 'Drive' : 'Ride') : 'Sit in seat');
-      hint(glyph('spawnMenu'), 'Spawn menu'); hint(glyph('radial'), 'Radial menu');
+      hint(glyph('spawnMenu'), W_BY_ID[w] && W_BY_ID[w].att ? 'Spawn menu (Weapons: attachments)' : 'Spawn menu'); hint(glyph('radial'), 'Radial menu');
       if (!pad) hint('<kbd>1</kbd>–<kbd>0</kbd>', 'Weapons'); else hint(glyph(PAD.LEFT) + glyph(PAD.RIGHT), 'Switch weapon');
     }
     if (!pad) H.push(`<div class="hint more">${glyph('hints')}${Settings.showHints ? 'Hide hints' : 'Show controls'}</div>`);
@@ -674,8 +686,8 @@ const UI = {
         [...sg.children].forEach((c, i) => c.classList.toggle('on', i < n));
       }
       // magazine weapons: rounds left, or the reload filling the bar
-      const AW = W_BY_ID[Tools.weapon], showA = !!(AW && AW.mag && !me.seat && !Editor.active), rl = Tools.reloadK();
-      const akey = showA ? Tools.rounds(AW) + '/' + (rl ? Math.round(rl * 20) : '') : '';
+      const AW = Tools.stat(W_BY_ID[Tools.weapon]), showA = !!(AW && AW.mag && !me.seat && !Editor.active), rl = Tools.reloadK();
+      const akey = showA ? Tools.rounds(AW) + '/' + AW.mag + '/' + (rl ? Math.round(rl * 20) : '') : '';
       if (this._ammoKey !== akey) {
         this._ammoKey = akey; const box = $('#ammoBox'); box.classList.toggle('hidden', !showA);
         if (showA) {
@@ -840,8 +852,40 @@ const UI = {
         }
       }
       this.spawnEntries(tab).forEach(e => g.append(this.spawnCard(e)));
+      if (tab === 'weapons') { sec('build', '🔧', 'Attachments'); g.append(this.attPanel()); }
     }
     this.buildToolOptions();
+  },
+  // the weapon attachments loadout (spawn menu, Weapons): pick a gun, one attachment per slot, and see what it changes
+  attPanel() {
+    const guns = WEAPONS.filter(w => w.att);
+    if (!W_BY_ID[this.attGun] || !W_BY_ID[this.attGun].att) this.attGun = W_BY_ID[Tools.weapon].att ? Tools.weapon : 'smg';
+    const wid = this.attGun, W = W_BY_ID[wid], cur = Tools.att[wid] || {}, S = Tools.stat(W);
+    const box = h('div', { class: 'att-panel' }), redo = () => box.replaceWith(this.attPanel());
+    box.append(h('div', { class: 'att-guns' }, ...guns.map(w => h('button', { class: w.id === wid ? 'on' : '', html: `${esc(w.icon)} ${esc(w.name)}` + ((n => n ? ` <small>${n}</small>` : '')(Object.keys(Tools.att[w.id] || {}).length)), onclick: () => { this.attGun = w.id; redo(); } }))));
+    const thumb = id => { const u = Thumbs.urls['at_' + id]; return u ? `<img src="${u}" alt="">` : `<span class="ph">${esc(ATTACH[id].icon)}</span>`; };
+    for (const [slot, label] of ATT_SLOTS) {
+      const ids = W.att.filter(id => ATTACH[id].slot === slot); if (!ids.length) continue;
+      const row = h('div', { class: 'att-opts' }, h('button', { class: cur[slot] ? '' : 'on', html: '<span class="ph">∅</span>None', onclick: () => { Tools.setAtt(wid, slot, null); redo(); } }));
+      for (const id of ids) row.append(h('button', { class: cur[slot] === id ? 'on' : '', title: ATTACH[id].desc, html: thumb(id) + esc(ATTACH[id].name), onclick: () => { Tools.setAtt(wid, slot, id); redo(); } }));
+      const sel = cur[slot] && ATTACH[cur[slot]];
+      box.append(h('div', { class: 'att-slot' }, h('div', { class: 'att-lbl', text: label }), row, h('div', { class: 'att-desc', text: sel ? sel.desc : 'Nothing fitted.' })));
+    }
+    // what the attachments change, against the bare gun (green: better, red: worse)
+    const st = h('div', { class: 'att-stats' }), aims = s => !!(s.ads || s.zoom);
+    const row = (label, a, b, fmt, lowBetter) => { const d = b - a, cls = Math.abs(d) < 1e-9 ? '' : (d < 0) === !!lowBetter ? 'up' : 'down'; st.append(h('div', {}, h('span', { text: label }), h('b', { class: cls, text: fmt(b) + (cls ? ` (${fmt(a)})` : '') }))); };
+    const r1 = v => String(Math.round(v * 10) / 10), pct = base => v => Math.round(v / base * 100) + '%', ms = v => Math.round(v * 1000) + ' ms';
+    row('Damage', W.dmg, S.dmg, r1);
+    if (W.fall) row('Full damage to', W.fall[0], S.fall[0], v => r1(v) + ' m'); else row('Range', W.range, S.range, v => Math.round(v) + ' m');
+    const hip0 = W.hipSpread ?? W.spread; row('Hip spread', hip0, S.hipSpread ?? S.spread, pct(hip0), true);
+    if (aims(S)) { const a0 = aims(W) ? W.spread : hip0; if (a0) row('Aimed spread', a0, S.spread, pct(a0), true); row('Aim in', AIM_IN, AIM_IN * (S.aimT || 1), ms, true); row('Zoom', aims(W) ? (W.zoom ? 4.5 : W.ads) : 1, S.zoom ? 4.5 : S.ads, v => r1(v) + 'x'); }
+    if (W.vp) row('Recoil', W.vp, S.vp, pct(W.vp), true);
+    if (W.bloom) row('Bloom', W.bloom, S.bloom, pct(W.bloom), true);
+    if (W.mag) { row('Magazine', W.mag, S.mag, v => String(v)); row('Reload', W.rl, S.rl, v => v.toFixed(2) + ' s', true); }
+    row('Draw', 0.28, 0.28 * (S.swap || 1), ms, true);
+    st.append(h('div', {}, h('span', { text: 'Sound' }), h('b', { class: S.quiet ? 'up' : '', text: S.quiet ? 'Suppressed' : 'Loud' })));
+    box.append(st, h('div', { class: 'att-note', text: 'Attachments stay on the gun until you change them. Everyone sees them, and the host applies them.' }));
+    return box;
   },
   buildToolOptions() {
     const s = $('#smSide'); s.innerHTML = ''; const o = Tools.opt;

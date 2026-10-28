@@ -243,12 +243,13 @@ const Audio = {
   },
   // ---- game-level helpers -----------------------------------------------------------------------------------
   // a gunshot heard from pos: the close recording nearby, the distant one further out, a far-away crack beyond that
-  gun(w, pos, local) {
+  gun(w, pos, local, quiet) {   // quiet: suppressed (thinner, much quieter, not heard far off)
     if (!this.ok()) return;
     const W2 = { m1911: 'm1911', ak: 'ak', pistol: 'pistol', rifle: 'rifle', smg: 'smg', shotgun: 'shotgun', sniper: 'sniper' }[w];
     if (!W2) { if (w === 'rocket') this.at('rocket_fire', pos); else if (w === 'propcannon') this.at('propcannon', pos); else if (w === 'crowbar') this.at('swing', pos); return; }
     const d = local ? 0 : pos.distanceTo(R.camera.position);
-    if (local) this.play(W2, 1.3);
+    if (quiet) { if (local) this.play(W2, 0.42, { rate: 1.3 }); else if (d < 90) this.at(W2, pos, 0.3, { rate: 1.3 }); }
+    else if (local) this.play(W2, 1.3);
     else {
       const kFar = smooth01((d - 30) / 50), kDist = smooth01((d - 170) / 150);
       if (kFar < 1) this.at(W2, pos, 1 - kFar);
@@ -487,6 +488,7 @@ const SWING_KEYS = [
   [0.46, [0, 0, 0, 0, 0, 0], ''],
 ];
 const SWING_HIT = 0.12, SWING_REST = [0, 0, 0, 0, 0, 0];
+const AIM_IN = 0.14;   // seconds to aim in (times the gun's aimT): the view zooms and shots tighten over it
 const _swOut = [0, 0, 0, 0, 0, 0];
 function swingPose(t) {
   if (t >= SWING_KEYS[SWING_KEYS.length - 1][0]) return SWING_REST;
@@ -513,16 +515,16 @@ const FX = {
   tracer(a, b) { this.beam(a, b, 0xffd27a, 0.07, 0.018); },
   // muzzle flash: a hot core and an orange bloom for a couple of frames, a flicker of light, and smoke for big guns.
   // `at` is the viewmodel's muzzle (the flash rides along with the gun) or a world position (other players).
-  muzzle(at, kind) {
+  muzzle(at, kind, scale = 1) {   // scale: attachments (a suppressor nearly hides it, a compensator throws it wider)
     const big = kind === 'big', puff = kind === 'puff', obj = at.isObject3D ? at : null, wp = obj ? obj.getWorldPosition(new V3()) : at;
-    if (!puff) for (const [col, sz, op] of [[0xfff2c8, big ? 0.2 : 0.13, 1], [0xff9a3c, big ? 0.55 : 0.34, 0.8]]) {
+    if (!puff) for (const [col, sz, op] of [[0xfff2c8, (big ? 0.2 : 0.13) * scale, 1], [0xff9a3c, (big ? 0.55 : 0.34) * scale, 0.8]]) {
       const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.smokeTex, color: col, transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false, rotation: Math.random() * Math.PI }));
       sp.material.userData.outlineParameters = { visible: false }; sp.renderOrder = 10;
       const s0 = sz * (0.8 + Math.random() * 0.4); sp.scale.setScalar(s0);
       if (obj) obj.add(sp); else { sp.position.copy(wp); R.scene.add(sp); }
       this.list.push({ t: 0, life: 0.06, upd: k => { sp.material.opacity = op * (1 - k); sp.scale.setScalar(s0 * (1 + k * 0.6)); }, end: () => { sp.removeFromParent(); sp.material.dispose(); } });
     }
-    if (this.light.intensity < 2 && !puff) {   // shares the explosion light: only when no explosion is lighting things up
+    if (this.light.intensity < 2 && !puff && scale > 0.5) {   // shares the explosion light: only when no explosion is lighting things up
       this.light.position.copy(wp); this.light.intensity = big ? 9 : 6;
       this.list.push({ t: 0, life: 0.05, upd: k => { if (this.light.intensity <= 9) this.light.intensity = (big ? 9 : 6) * (1 - k); }, end: () => { if (this.light.intensity <= 9) this.light.intensity = 0; } });
     }
@@ -581,9 +583,9 @@ const FX = {
   remote(m) {
     if (m.k === 'shot') {
       const o = new V3().fromArray(m.o), ends = Array.isArray(m.e[0]) ? m.e : [m.e];
-      if (o.distanceTo(R.camera.position) > 1.5 && m.w !== 'crowbar') this.muzzle(_v1.fromArray(ends[0]).sub(o).normalize().multiplyScalar(0.7).add(o).clone(), ends.length > 1 || m.w === 'sniper' ? 'big' : 'small');
+      if (o.distanceTo(R.camera.position) > 1.5 && m.w !== 'crowbar') this.muzzle(_v1.fromArray(ends[0]).sub(o).normalize().multiplyScalar(0.7).add(o).clone(), ends.length > 1 || m.w === 'sniper' ? 'big' : 'small', m.fl || 1);
       ends.forEach((a, i) => { const e = new V3().fromArray(a); this.tracer(o, e); if (m.n) this.spark(e, new V3().fromArray(m.n)); else if (ends.length > 1) this.spark(e, null, null, 4); if (i < 3) Audio.bulletHit(o, e, m.n || ends.length > 1 ? UP : null); Audio.flyby(o, e); });
-      Audio.gun(m.w, o);
+      Audio.gun(m.w, o, false, !!m.q);
     }
     else if (m.k === 'burst') this.burst(new V3().fromArray(m.p), m.n, m.c);
     else if (m.k === 'gore') Gore.hit(m);
@@ -1010,7 +1012,7 @@ const HOLO = {
 const AIM_ASSIST = [0, 0.55, 1, 1.45];   // Settings.aimAssist: off / low / standard / strong
 const Game = {
   state: 'loading', viewmodel: null, detected: null, pendingWorld: null, aimSeat: 0, lockReleaseOk: false,
-  acc: 0, last: 0, orbit: 0, shake: 0, punch: [0, 0], sway: [0, 0], drawT: 1, sprintK: 0, adsK: 0, swingT: 9, moveInp: { mx: 0, my: 0, jump: false, sprint: false, up: 0, slideReq: 0 }, autoT: 20, hiddenTicker: null, bob: 0, fellT: 0,
+  acc: 0, last: 0, orbit: 0, shake: 0, punch: [0, 0], sway: [0, 0], drawT: 1, sprintK: 0, adsK: 0, aimK: 0, swingT: 9, moveInp: { mx: 0, my: 0, jump: false, sprint: false, up: 0, slideReq: 0 }, autoT: 20, hiddenTicker: null, bob: 0, fellT: 0,
   async boot() {
     const lt = $('#loadingText');
     try {
@@ -1085,7 +1087,7 @@ const Game = {
     await this.hostLink();
     try { this.resetForPlay(); await Net.start(code, true); }
     catch (e) { UI.lobbyStatus('Could not reach the network (' + e.message + '). You can still Play Solo.', true); this.startAttract(); return; }
-    Players.add({ id: Net.me, name, color: Settings.color, tier: R.tier, idx: 0, joinOrder: 0, isLocal: true, lvl: Prog.level().l });
+    Players.add({ id: Net.me, name, color: Settings.color, tier: R.tier, idx: 0, joinOrder: 0, isLocal: true, lvl: Prog.level().l, att: Tools.att });
     this.startWorld();
     try { history.replaceState(null, '', '#room=' + code); } catch (e) { }
     this.enterPlay(Auth.pickSpawn());
@@ -1128,7 +1130,7 @@ const Game = {
     const name = this.profileName();
     await this.hostLink();
     this.resetForPlay(); Net.startOffline();
-    Players.add({ id: 'local', name, color: Settings.color, tier: R.tier, idx: 0, joinOrder: 0, isLocal: true, lvl: Prog.level().l });
+    Players.add({ id: 'local', name, color: Settings.color, tier: R.tier, idx: 0, joinOrder: 0, isLocal: true, lvl: Prog.level().l, att: Tools.att });
     this.startWorld();
     this.enterPlay(Auth.pickSpawn());
     UI.chat({ sys: 1, text: 'Offline. Create a room from the main menu to play with others.' });
@@ -1287,11 +1289,12 @@ const Game = {
     if (Input.hit('undo') && !ctrl && !Editor.active) Net.toHost({ t: 'undo' });
     // look
     const lookOK = Input.locked || (Editor.active && Input.mouse[2]);
-    const ZW = W_BY_ID[Tools.weapon], canZoom = !!((ZW.zoom || ZW.ads) && !me.seat && !me.dead && !Editor.active && !Tools.reloadT);
+    const ZW = Tools.stat(W_BY_ID[Tools.weapon]), canZoom = !!((ZW.zoom || ZW.ads) && !me.seat && !me.dead && !Editor.active && !Tools.reloadT);
     if (!canZoom || this.aimW !== Tools.weapon) this.aimOn = false;   // toggled aim drops when you switch weapon, reload, sit or die
     this.aimW = Tools.weapon;
     if (canZoom && Input.hit('alt') && Input.aimToggle()) { this.aimOn = !this.aimOn; Input.suggestToggle(); }
     this.zoomed = canZoom && (Input.aimToggle() ? this.aimOn : Input.down('alt'));
+    this.aimK = this.zoomed ? Math.min(1, this.aimK + dt / (AIM_IN * (ZW.aimT || 1))) : 0;   // aiming in: shots tighten from hip to aimed spread
     if (!Tools.rotating) {
       const inv = Settings.invertY ? -1 : 1, zk = R.camera.fov / Settings.fov;   // slower look while scoped
       const at = this.aimTarget(me), st = AIM_ASSIST[Settings.aimAssist | 0] || 0;
@@ -1571,8 +1574,8 @@ const Game = {
     R.focus.copy(me.renderPos);
     // viewmodel bob / recoil
     // sniper scope: narrow the FOV, hide the viewmodel, show the scope overlay
-    const ZW = W_BY_ID[Tools.weapon], fovT = this.zoomed && !me.seat ? Settings.fov / (ZW.zoom ? 4.5 : ZW.ads || 1) : Settings.fov;   // scope 4.5x, iron sights a little
-    this.fovCur = lerp(this.fovCur || Settings.fov, fovT, 1 - Math.exp(-18 * dt));
+    const ZW = Tools.stat(W_BY_ID[Tools.weapon]), aimR = 1 / (ZW.aimT || 1), fovT = this.zoomed && !me.seat ? Settings.fov / (ZW.zoom ? 4.5 : ZW.ads || 1) : Settings.fov;   // scope 4.5x, iron sights a little (optics: their own zoom)
+    this.fovCur = lerp(this.fovCur || Settings.fov, fovT, 1 - Math.exp(-18 * aimR * dt));
     if (Math.abs(this.fovCur - fovT) < 0.05) this.fovCur = fovT;
     if (Math.abs(cam.fov - this.fovCur) > 0.01) R.setFov(this.fovCur);
     const scoped = this.fovCur < Settings.fov * 0.55; $('#scope').classList.toggle('on', scoped);
@@ -1590,13 +1593,14 @@ const Game = {
       // sprinting lowers and turns the gun in; drawing raises it from below
       const sprint = this.moveInp.sprint && me.grounded && spd > 4 && !Tools.grab && Tools.cool <= 0 && !me.slide;
       this.sprintK += ((sprint ? 1 : 0) - this.sprintK) * (1 - Math.exp(-8 * dt));
-      this.drawT = Math.min(1, this.drawT + dt / 0.28); const dr = Math.pow(1 - this.drawT, 2);
+      this.drawT = Math.min(1, this.drawT + dt / (0.28 * (ZW.swap || 1))); const dr = Math.pow(1 - this.drawT, 2);
       const ld = Math.sin(Math.min(1, this.land || 0) * Math.PI) * (this.land || 0), br = Math.sin(t * 1.7) * 0.0025 * (1 - mv);
       this.swingT += dt; const sw = melee ? swingPose(this.swingT) : SWING_REST;
       const WM = Models.has('wp_' + Tools.weapon) && WEAPON_MODEL[Tools.weapon], VR = (WM && WM.vr) || [0, 0, 0], spr = melee ? 0.4 : 1;
       // aiming down the sights: the gun comes to the middle of the view (ads = where it sits then); reloading dips it
-      this.adsK += ((this.zoomed && WM && WM.ads ? 1 : 0) - this.adsK) * (1 - Math.exp(-16 * dt));
-      const VB0 = WM ? WM.vm : [0.26, -0.25, -0.48], VB = WM && WM.ads ? VB0.map((v, i) => lerp(v, WM.ads[i], this.adsK)) : VB0;
+      const ADS = WM && gunAds(Tools.weapon, ZW);
+      this.adsK += ((this.zoomed && ADS ? 1 : 0) - this.adsK) * (1 - Math.exp(-16 * aimR * dt));
+      const VB0 = WM ? WM.vm : [0.26, -0.25, -0.48], VB = ADS ? VB0.map((v, i) => lerp(v, ADS[i], this.adsK)) : VB0;
       const rk = Tools.reloadK(), rd = rk ? Math.sin(Math.min(1, rk * 1.15) * Math.PI) : 0, ak = 1 - this.adsK * 0.75;
       vm.position.set(
         VB[0] + (Math.sin(this.bob) * 0.012 * mv + this.sway[0]) * ak - this.sprintK * 0.03 * spr + sw[3],
@@ -1618,9 +1622,9 @@ const Game = {
     const muzzle = new THREE.Object3D(); muzzle.name = 'muzzle'; vm.add(muzzle);
     const WM = WEAPON_MODEL[Tools.weapon], mk = 'wp_' + ((WM && WM.model) || Tools.weapon);
     if (WM && Models.has(mk)) {
-      const inst = Models.instance(mk, WM.t, WM.c), me = Players.local;
+      const inst = Models.instance(mk, WM.t, WM.c), me = Players.local, mz = dressGun(inst, Tools.weapon, Tools.att);
       inst.traverse(o => { if (!o.isMesh) return; o.castShadow = o.receiveShadow = false; if (o.userData.slot === 'sleeve') { const c = me ? me.color : Settings.color; o.material = Mats.get('plastic', c); o.userData.mt = 'plastic'; o.userData.mc = c; } });
-      vm.add(inst); muzzle.position.fromArray(WM.muzzle);
+      vm.add(inst); muzzle.position.fromArray(mz);
       return;
     }
     switch (Tools.weapon) {

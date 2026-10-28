@@ -21,7 +21,7 @@ const Players = {
   map: new Map(), local: null, cc: null,
   // who's in the room, as every player's list shows it
   list() {
-    return [...this.map.values()].map(p => ({ id: p.id, name: p.name, color: p.color, tier: p.tier, idx: p.idx, joinOrder: p.joinOrder, kills: p.kills, deaths: p.deaths, canEdit: p.canEdit, muted: p.muted, lvl: p.lvl || 1, team: p.team || null, disg: p.disg || null }));
+    return [...this.map.values()].map(p => ({ id: p.id, name: p.name, color: p.color, tier: p.tier, idx: p.idx, joinOrder: p.joinOrder, kills: p.kills, deaths: p.deaths, canEdit: p.canEdit, muted: p.muted, lvl: p.lvl || 1, team: p.team || null, disg: p.disg || null, att: p.att || null }));
   },
   init() {
     const cc = this.cc = Phys.world.createCharacterController(0.02);
@@ -32,7 +32,7 @@ const Players = {
     let p = this.map.get(o.id);
     if (!p) { p = new Player(o); this.map.set(o.id, p); this.makeBody(p); View.playerAdded(p); }
     else { p.name = o.name ?? p.name; p.color = o.color ?? p.color; p.tier = o.tier ?? p.tier; if (o.idx != null) p.idx = o.idx; if (o.joinOrder != null) p.joinOrder = o.joinOrder; View.playerLook(p); }
-    if (o.canEdit != null) p.canEdit = o.canEdit; if (o.muted != null) p.muted = o.muted; if (o.lvl != null) p.lvl = o.lvl; if ('team' in o) p.team = o.team; if ('disg' in o) p.disg = o.disg;
+    if (o.canEdit != null) p.canEdit = o.canEdit; if (o.muted != null) p.muted = o.muted; if (o.lvl != null) p.lvl = o.lvl; if ('team' in o) p.team = o.team; if ('disg' in o) p.disg = o.disg; if ('att' in o) p.att = cleanAtt(o.att);
     if (o.kills != null) p.kills = o.kills; if (o.deaths != null) p.deaths = o.deaths;
     if (o.isLocal) { p.isLocal = true; this.local = p; }
     View.playerShow(p);

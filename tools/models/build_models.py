@@ -946,13 +946,14 @@ def rifle():
     n.add(bm_tube((0, -0.035, 0.0), (0, -0.06, -0.03), 0.004, 6), 'darkmetal')
     n.add(xf(bm_rbox(0.04, 0.085, 0.22, 0.02), (0, -0.018, 0.2)), 'main')                    # stock
     n.add(xf(bm_rbox(0.042, 0.09, 0.02, 0.008), (0, -0.018, 0.315)), 'rubber')              # butt pad
-    n.add(cyl_z(0.02, 0.13, -0.06, 0.08), 'darkmetal')                                     # optic
-    n.add(cyl_z(0.024, 0.02, -0.13, 0.08), 'darkmetal')
-    n.add(cyl_z(0.017, 0.004, -0.141, 0.08), 'glass')
-    for z in (-0.1, -0.02):
-        n.add(xf(bm_box(0.02, 0.03, 0.02), (0, 0.05, z)), 'darkmetal')                      # optic mounts
     n.add(xf(bm_rbox(0.006, 0.018, 0.05, 0.003), (0.028, 0.012, -0.02)), 'darkmetal')        # ejection port cover
-    finish('wp_rifle', n, hand_node('wp_rifle', (0, -0.075, 0.04), 0.3))
+    o = Node('wp_rifle_optic')                                                             # built-in optic (the game hides it under a mounted one)
+    o.add(cyl_z(0.02, 0.13, -0.06, 0.08), 'darkmetal')
+    o.add(cyl_z(0.024, 0.02, -0.13, 0.08), 'darkmetal')
+    o.add(cyl_z(0.017, 0.004, -0.141, 0.08), 'glass')
+    for z in (-0.1, -0.02):
+        o.add(xf(bm_box(0.02, 0.03, 0.02), (0, 0.05, z)), 'darkmetal')                      # optic mounts
+    finish('wp_rifle', n, o, hand_node('wp_rifle', (0, -0.075, 0.04), 0.3))
 
 
 def grenade():
@@ -1363,10 +1364,83 @@ def prop_cannon():
     finish('wp_propcannon', n, hand_node('wp_propcannon', (0, -0.1, 0.08), 0.28))
 
 
+# ---------------------------------------------------------------------------
+# WEAPON ATTACHMENTS: each authored at its mount point (the game places it per gun, see WEAPON_MODEL.mt):
+# optics sit on the top mount (sight line: red dot 0.03, scope 0.045 above it), muzzle devices start at the
+# muzzle and run forward (-Z), the grip hangs below the handguard, the magazine extension below the mag's base plate.
+# ---------------------------------------------------------------------------
+def at_reddot():
+    n = Node('at_reddot_mesh')
+    n.add(xf(bm_rbox(0.024, 0.008, 0.05, 0.003), (0, 0.004, 0)), 'darkmetal')                       # rail clamp
+    n.add(xf(bm_rbox(0.028, 0.006, 0.034, 0.003), (0, 0.011, 0.002)), 'main')                      # body
+    for x in (-0.0175, 0.0175):
+        n.add(xf(bm_box(0.004, 0.022, 0.012), (x, 0.022, -0.008)), 'main')                         # hood posts
+    n.add(xf(ring_z(0.0175, 0.0028, -0.008, 24, 6), (0, 0.03, 0)), 'main')                         # hood
+    n.add(xf(cyl_z(0.0155, 0.0015, -0.008), (0, 0.03, 0)), 'glass')                                # lens
+    n.add(xf(bm_sphere(0.0016, 8, 6), (0, 0.03, -0.0095)), 'redlight')                             # the dot
+    n.add(xf(bm_cyl(0.006, 0.006, 0.008, 12), (0.017, 0.012, 0.012), (0, 0, math.pi / 2)), 'darkmetal')   # battery cap
+    finish('at_reddot', n)
+
+
+def at_scope():
+    n = Node('at_scope_mesh')
+    for z in (-0.045, 0.045):
+        n.add(xf(bm_box(0.026, 0.008, 0.02), (0, 0.004, z)), 'darkmetal')                           # ring bases
+        n.add(xf(ring_z(0.0175, 0.004, 0.0, 20, 6), (0, 0.045, z)), 'darkmetal')                     # rings
+        n.add(xf(bm_box(0.008, 0.026, 0.014), (0, 0.018, z)), 'darkmetal')
+    n.add(cyl_z(0.015, 0.2, 0.0, 0.045, seg=20), 'main')                                            # tube
+    n.add(xf(lathe_z([(0.015, 0.0), (0.024, 0.035), (0.024, 0.06), (0.021, 0.06)], 20), (0, 0.045, -0.095)), 'main')   # objective bell
+    n.add(xf(lathe_z([(0.015, 0.0), (0.019, -0.025), (0.019, -0.05), (0.017, -0.05)], 20), (0, 0.045, 0.095)), 'main')  # eyepiece
+    n.add(cyl_z(0.022, 0.003, -0.153, 0.045), 'glass')
+    n.add(xf(bm_cyl(0.01, 0.01, 0.018, 10), (0, 0.066, -0.005)), 'darkmetal')                       # turrets
+    n.add(xf(bm_cyl(0.01, 0.01, 0.018, 10), (0.022, 0.045, -0.005), (0, 0, math.pi / 2)), 'darkmetal')
+    finish('at_scope', n)
+
+
+def at_supp():
+    n = Node('at_supp_mesh')
+    n.add(cyl_z(0.0125, 0.02, -0.01), 'darkmetal')                                                  # thread collar
+    n.add(cyl_z(0.019, 0.13, -0.085, seg=20), 'main')                                               # can
+    for z in (-0.024, -0.146):
+        n.add(cyl_z(0.0205, 0.008, z, seg=20), 'trim')                                              # end bands
+    n.add(cyl_z(0.007, 0.003, -0.15), 'trim')                                                       # bore
+    finish('at_supp', n)
+
+
+def at_comp():
+    n = Node('at_comp_mesh')
+    n.add(cyl_z(0.0155, 0.05, -0.025, seg=18), 'main')
+    for z in (-0.012, -0.025, -0.038):
+        n.add(xf(bm_box(0.014, 0.008, 0.006), (0, 0.0135, z)), 'trim')                             # top vents
+        for x in (-0.0135, 0.0135):
+            n.add(xf(bm_box(0.008, 0.01, 0.005), (x, 0.004, z)), 'trim')                            # side vents
+    finish('at_comp', n)
+
+
+def at_grip():
+    n = Node('at_grip_mesh')
+    n.add(xf(bm_rbox(0.03, 0.012, 0.05, 0.003), (0, -0.006, 0)), 'darkmetal')                       # rail clamp
+    n.add(xf(bm_rbox(0.028, 0.09, 0.03, 0.01), (0, -0.055, 0.004), (0.12, 0, 0)), 'main')           # grip
+    for y in (-0.04, -0.06, -0.08):
+        n.add(xf(bm_box(0.03, 0.006, 0.026), (0, y, 0.004 - y * 0.12)), 'rubber')                   # finger ribs
+    n.add(xf(bm_rbox(0.032, 0.008, 0.034, 0.003), (0, -0.1, 0.012), (0.12, 0, 0)), 'darkmetal')     # end cap
+    finish('at_grip', n)
+
+
+def at_extmag():
+    n = Node('at_extmag_mesh')
+    n.add(xf(bm_rbox(0.031, 0.07, 0.045, 0.008), (0, -0.03, 0)), 'trim')                           # extension (base plate at the origin)
+    for y in (-0.02, -0.045):
+        n.add(xf(bm_box(0.033, 0.004, 0.047), (0, y, 0)), 'darkmetal')                              # ribs
+    n.add(xf(bm_rbox(0.035, 0.012, 0.052, 0.004), (0, -0.068, -0.001)), 'darkmetal')                # new base plate
+    finish('at_extmag', n)
+
+
 for fn in (crate, metal_crate, barrel, xbarrel, cone, concrete_block, seat, wheel, car, kart, pickup, monster, buggy, sled, avatar, ragdoll, pine, pine_snow, rock, palm, container,
            physgun, toolgun, pistol, rifle, grenade, crowbar,
            propane, balloon, trampoline, melon, pin, chair, table, couch, fridge, vending, tv, bookshelf, dumpster, pallet, barrier, rocket,
-           shotgun, sniper, smg, rocket_launcher, prop_cannon):
+           shotgun, sniper, smg, rocket_launcher, prop_cannon,
+           at_reddot, at_scope, at_supp, at_comp, at_grip, at_extmag):
     fn()
 
 bpy.ops.export_scene.gltf(filepath=OUT, export_format='GLB', export_apply=True, export_yup=True,

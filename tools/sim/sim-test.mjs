@@ -236,6 +236,20 @@ for (const level of [0, 2]) {
   check('SMG: damage falls off with range', wDmg(SMG, 5) === SMG.dmg && Math.abs(wDmg(SMG, 80) - SMG.dmg * SMG.fall[2]) < 1e-9 && wDmg(SMG, 25) < SMG.dmg && wDmg(W_BY_ID.rifle, 200) === W_BY_ID.rifle.dmg,
     `${wDmg(SMG, 5)} at 5 m, ${wDmg(SMG, 25).toFixed(1)} at 25 m, ${wDmg(SMG, 80)} at 80 m`);
 
+  // attachments: the host keeps only what each gun takes, sizes the magazine by them, and every player sees them in the list
+  const { wStat } = mods;
+  let lastPl = null; const sendPlayers0 = Srv.sendPlayers; Srv.sendPlayers = () => { lastPl = Players.list(); };
+  send({ t: 'att', a: { smg: { mag: 'extmag', muzzle: 'supp', optic: 'scope', grip: 'nope' }, rocket: { optic: 'reddot' }, junk: 5 } });
+  Srv.sendPlayers = sendPlayers0;
+  const kept = JSON.stringify(me.att), ES = wStat(SMG, me.att), seen = lastPl && lastPl.find(e => e.id === me.id);
+  fired = 0; send({ t: 'reload', w: 'smg' }); run(ES.rl + 0.1);
+  for (let i = 0; i < ES.mag + 8; i++) { smgShot(); run(SMG.rate + 0.01); }
+  check('attachments: kept per gun, extended magazine enforced by the host', kept === '{"smg":{"muzzle":"supp","mag":"extmag"}}' && ES.mag === 48 && fired === ES.mag && !!seen && JSON.stringify(seen.att) === kept,
+    `kept ${kept}; ${fired} of ${ES.mag + 8} shots went off (magazine ${ES.mag}); in the player list: ${seen ? JSON.stringify(seen.att) : 'missing'}`);
+  check('attachments: trade-offs, no strict upgrades', ES.dmg < SMG.dmg && ES.rl > SMG.rl && ES.quiet && wStat(SMG, { smg: { grip: 'grip' } }).aimT > 1 && wStat(SMG, { smg: { muzzle: 'comp' } }).hipSpread > SMG.hipSpread,
+    `suppressed + extended SMG: ${ES.dmg.toFixed(1)} damage (${SMG.dmg}), reload ${ES.rl.toFixed(2)} s (${SMG.rl})`);
+  send({ t: 'att', a: {} }); send({ t: 'reload', w: 'smg' }); run(SMG.rl + 0.1);
+
   // slide: a sliding player's hitbox is lower (a shot at chest height passes over), and it comes back when they stop
   const bob = Players.map.get('bob'), chest = bob.pos.clone().add(new V(0, 1.4, 0)), so = chest.clone().add(new V(6, 0, 0)), sd = new V(-1, 0, 0);
   const hitBob = () => { const r = Auth.hitscan(me, W_BY_ID.rifle, so, sd.clone()); return !!(r.h && r.h.id === 'p:bob'); };

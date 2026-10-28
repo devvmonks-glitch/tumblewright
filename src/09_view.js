@@ -338,8 +338,9 @@ const PlayerView = {
     a.getObjectByName('legL').rotation.x = sw + 1.15 * sk; a.getObjectByName('legR').rotation.x = -sw + 0.95 * sk;
     gun.rotation.x = p.pitch;
     const wcol = { physgun: '#4dd0e1', toolgun: '#fed330', pistol: '#5b6270', rifle: '#3d4a32', smg: '#2e3238', grenade: '#3d4a32', crowbar: '#c0392b' }[p.weapon] || '#5b6270';
-    if (gun.userData.w !== p.weapon) {
-      gun.userData.w = p.weapon;
+    const wkey = p.weapon + JSON.stringify((p.att && p.att[p.weapon]) || '');   // the held gun and its attachments
+    if (gun.userData.w !== wkey) {
+      gun.userData.w = wkey;
       const W = WEAPON_MODEL[p.weapon], mk = 'wp_' + ((W && W.model) || p.weapon);
       if (W && Models.has(mk) && Models.has('avatar')) {
         // swap in the held weapon's model (its first-person hand is hidden; the avatar has its own hands)
@@ -347,6 +348,7 @@ const PlayerView = {
         else gun.traverse(o => { if (o.isMesh) o.visible = false; });
         const wm = Models.instance(mk, W.t, W.c), hand = wm.getObjectByName(mk + '_hand');
         if (hand) hand.visible = false;
+        dressGun(wm, p.weapon, p.att);
         wm.position.set(0, 0.03, -0.12); gun.add(wm); gun.userData.wm = wm;
       } else Models.recolor(gun, 'metal', wcol);
     }

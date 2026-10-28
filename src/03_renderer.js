@@ -533,21 +533,47 @@ const SLOT_MATS = {
   sleeve: ['plastic', '#3a3f4b'], second: ['plastic', '#fed330'], skin: ['plastic', '#e0ac7e'], red: ['plastic', '#d63031'], wood: ['wood', null],
   book1: ['plastic', '#8e2f2f'], book2: ['plastic', '#2f4f8e'], book3: ['plastic', '#3e7a3e'], book4: ['plastic', '#c9a23a'],
 };
-// weapon models: main slot material, first-person offset from the camera (vm), and muzzle point (tracers / physgun beam) in first-person space
+// weapon models: main slot material, first-person offset from the camera (vm), and muzzle point (tracers / physgun beam) in first-person space.
+// mt: attachment mounts in model space: top [y, z] (optics), grip [y, z] (under the handguard), mag [y, z, tilt] (the magazine's base plate),
+// adsZ: how far ahead the gun sits while aiming through an optic, optic: the built-in sight node a mounted optic replaces
 const WEAPON_MODEL = {
   physgun: { t: 'metal', c: '#39404d', muzzle: [0, 0, -0.43], vm: [0.2, -0.17, -0.66] },
   toolgun: { t: 'plastic', c: '#fed330', muzzle: [0, 0, -0.32], vm: [0.2, -0.19, -0.56] },
-  pistol: { t: 'metal', c: '#2a2c31', muzzle: [0, 0.018, -0.155], vm: [0.19, -0.17, -0.5] },
-  rifle: { t: 'plastic', c: '#3d4a32', muzzle: [0, 0, -0.65], vm: [0.17, -0.17, -0.74] },
-  smg: { t: 'metal', c: '#2e3238', muzzle: [0, 0.012, -0.44], vm: [0.17, -0.16, -0.52], ads: [0, -0.05, -0.5] },   // ads: where it sits while aiming (sights on the view's centre)
+  pistol: { t: 'metal', c: '#2a2c31', muzzle: [0, 0.018, -0.155], vm: [0.19, -0.17, -0.5], mt: { top: [0.037, 0.0], adsZ: -0.4 } },
+  rifle: { t: 'plastic', c: '#3d4a32', muzzle: [0, 0, -0.65], vm: [0.17, -0.17, -0.74], mt: { top: [0.035, -0.06], grip: [-0.024, -0.3], adsZ: -0.52, optic: 'wp_rifle_optic' } },
+  smg: { t: 'metal', c: '#2e3238', muzzle: [0, 0.012, -0.44], vm: [0.17, -0.16, -0.52], ads: [0, -0.05, -0.5],   // ads: where it sits while aiming (sights on the view's centre)
+    mt: { top: [0.035, -0.12], grip: [-0.027, -0.27], mag: [-0.183, -0.162, -0.32], adsZ: -0.46 } },
   grenade: { t: 'plastic', c: '#4b5b3a', muzzle: [0, 0, -0.06], vm: [0.2, -0.16, -0.5] },
   crowbar: { t: 'metal', c: '#c0392b', muzzle: [0, 0.24, -0.47], vm: [0.23, -0.27, -0.4], vr: [0.9, 0.3, 0.85] },   // vr: resting tilt (held up across the body, twisted so the hook shows side-on)
   shotgun: { t: 'metal', c: '#2e3238', muzzle: [0, 0.022, -0.66], vm: [0.18, -0.17, -0.62] },
-  sniper: { t: 'plastic', c: '#6b6247', muzzle: [0, 0.008, -0.88], vm: [0.17, -0.16, -0.72] },
+  sniper: { t: 'plastic', c: '#6b6247', muzzle: [0, 0.008, -0.88], vm: [0.17, -0.16, -0.72], mt: {} },
   rocket: { t: 'plastic', c: '#55653f', muzzle: [0, 0.06, -0.64], vm: [0.2, -0.2, -0.46] },
   propcannon: { t: 'plastic', c: '#ff9f43', muzzle: [0, 0, -0.52], vm: [0.2, -0.17, -0.52] },
   deleter: { model: 'toolgun', t: 'plastic', c: '#e0463c', muzzle: [0, 0, -0.32], vm: [0.2, -0.19, -0.56] },
 };
+// muzzle devices: how far they move the muzzle forward
+const ATT_LEN = { supp: 0.15, comp: 0.05 };
+// a gun model instance (first person or on an avatar) with its attachments on (att: { weaponId: { slot: id } }). Returns the muzzle point.
+function dressGun(inst, wid, att) {
+  const WM = WEAPON_MODEL[wid], W = W_BY_ID[wid], S = wStat(W, att), mz = WM ? WM.muzzle.slice() : [0, 0, 0], M = WM && WM.mt;
+  if (!M || S === W) return mz;
+  for (const id of S.mods) {
+    const slot = ATTACH[id].slot, m = Models.has('at_' + id) && Models.instance('at_' + id, WM.t, WM.c); if (!m) continue;
+    if (slot === 'optic' && M.top) { m.position.set(0, M.top[0], M.top[1]); const b = M.optic && inst.getObjectByName(M.optic); if (b) b.visible = false; }
+    else if (slot === 'muzzle') { m.position.fromArray(WM.muzzle); mz[2] -= ATT_LEN[id] || 0; }
+    else if (slot === 'grip' && M.grip) m.position.set(0, M.grip[0], M.grip[1]);
+    else if (slot === 'mag' && M.mag) { m.position.set(0, M.mag[0], M.mag[1]); m.rotation.x = M.mag[2]; }
+    else continue;
+    inst.add(m);
+  }
+  return mz;
+}
+// where the gun sits while aiming (the sight line on the view's centre): through a mounted optic, else its iron sights (null: no aiming pose)
+function gunAds(wid, S) {
+  const WM = WEAPON_MODEL[wid], M = WM && WM.mt;
+  if (S && S.optic && M && M.top) return [0, -(M.top[0] + ATTACH[S.optic].sight), M.adsZ];
+  return (WM && WM.ads) || null;
+}
 // reference sizes the models were authored at (scaled to the entity's collider)
 const MODEL_REF = { crate: { box: [1, 1, 1] }, mcrate: { box: [1, 1, 1] }, cblock: { box: [1.2, 0.6, 0.6] }, barrel: { cyl: [0.34, 1] }, cone: { cyl: [0.24, 0.7] } };
 const DEFAULT_VIS = { seat: 'seat', wheel: 'wheel' };
