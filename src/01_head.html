@@ -739,6 +739,47 @@ input[type=email]:focus,input[type=password]:focus{border-color:var(--acc)}
 #inviteBox b{font:700 17px var(--title);letter-spacing:.02em}
 #inviteBox small{display:block;font-size:12px;color:var(--muted)}
 #inName[readonly]{cursor:default}
+/* spawn menu (v5): grouped categories, and a side panel only when there's something to set */
+.cat-h{padding:12px 12px 4px;font:700 11px var(--title);letter-spacing:.14em;text-transform:uppercase;color:var(--dim,var(--muted))}
+.cat-h:first-child{padding-top:2px}
+#smBody.noside #smSide{display:none}
+@media (max-width:700px){.cat-h{font-size:0;padding:0;margin:6px 10px;border-top:1px solid var(--line)}.cat-h:first-child{display:none}}
+#smSide{width:320px}
+.side-t{margin:16px 0 8px;font:700 12px var(--title);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.side-t:first-child{margin-top:0}
+.side-head{display:flex;align-items:center;gap:10px}
+.side-head select{flex:1;font-size:15px;padding:8px 10px}
+.side-ic{width:40px;height:40px;flex:none;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.06);border:1px solid var(--line);font-size:22px}
+.side-ic .ms{font-size:24px;color:var(--acc)}
+.side-p{margin:8px 0;font-size:12.5px;line-height:1.5;color:var(--muted)}
+.side-how{display:flex;flex-direction:column;gap:5px;padding:8px 10px;background:rgba(0,0,0,.22);border:1px solid var(--line);font-size:12px}
+.side-how .hint{display:flex;align-items:center}
+.side-btns{display:flex;gap:8px;margin-top:16px}
+.side-btns button{flex:1}
+.item.sel{border-color:var(--acc);background:rgba(242,194,48,.1)}
+.item .tag:not(.hostile){color:var(--acc)}
+.sm-inline{grid-column:1/-1;padding:12px;border:1px solid var(--line);background:rgba(0,0,0,.2)}
+.sm-inline .att-panel{border:0;padding:0;background:none}
+#smSide .att-panel{border:0;padding:0;background:none}
+/* pause (v5): grouped; settings section headings */
+#pause .mitem{padding-top:7px;padding-bottom:7px;font-size:19px}
+#pause .mlist{margin-top:14px}
+#pause .mhead{padding:12px 24px 2px;font:700 11px var(--title);letter-spacing:.16em;text-transform:uppercase;color:var(--dim,var(--muted))}
+#pause .mitem.small{font-size:15px;color:var(--muted)}
+#settings{width:min(620px,96vw)}
+#settings .tabs button{padding:8px 10px;letter-spacing:.05em}
+.set-h{margin:18px 0 2px;font:700 12px var(--title);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.set-h:first-of-type{margin-top:8px}
+/* hotbar (v5): every slot named, a gap between the building tools, the weapons and spawn items */
+#slots{align-items:flex-end}
+#slots .slot-gap{width:14px;flex:none}
+#slots .slot{flex-direction:column;justify-content:flex-start;gap:1px;padding:15px 3px 3px;width:clamp(44px,calc((100vw - 820px) / 10),62px);height:clamp(52px,calc((100vw - 820px) / 10 + 12px),74px)}
+#slots .slot img{width:100%;height:auto;flex:1;min-height:0;max-height:38px}
+#slots .slot .emo{flex:1;display:flex;align-items:center;font-size:20px}
+#slots .slot .emo .ms{font-size:22px}
+#slots .slot .snm{position:static;font:700 10px var(--title);letter-spacing:.02em;color:var(--muted);max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#slots .slot.act .snm{color:var(--text)}
+@media (max-width:1100px) and (min-width:701px){#slots .slot{width:46px;height:52px;padding-top:13px}#slots .slot .snm{font-size:9px}#slots .slot-gap{width:8px}}
 </style>
 <!-- import map: installed by the loader at the end of the file -->
 <script id="tw-importmap" type="text/tw-importmap">
