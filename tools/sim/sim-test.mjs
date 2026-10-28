@@ -236,6 +236,15 @@ for (const level of [0, 2]) {
   check('SMG: damage falls off with range', wDmg(SMG, 5) === SMG.dmg && Math.abs(wDmg(SMG, 80) - SMG.dmg * SMG.fall[2]) < 1e-9 && wDmg(SMG, 25) < SMG.dmg && wDmg(W_BY_ID.rifle, 200) === W_BY_ID.rifle.dmg,
     `${wDmg(SMG, 5)} at 5 m, ${wDmg(SMG, 25).toFixed(1)} at 25 m, ${wDmg(SMG, 80)} at 80 m`);
 
+  // every gun counts its own magazine on the host (aimed at the sky so nothing is in the way)
+  const magOf = {}, sky = new V(0, 1, 0).toArray();
+  for (const id of ['pistol', 'shotgun', 'rifle', 'sniper']) {
+    const W = W_BY_ID[id]; send({ t: 'reload', w: id }); run(W.rl + 0.1); let n = 0;
+    for (let i = 0; i < W.mag + 3; i++) { const n0 = me.ammo[id] ?? W.mag; send({ t: 'fire', w: id, o: eye().toArray(), d: sky, i: 0.1 }); if ((me.ammo[id] ?? W.mag) < n0) n++; run(W.rate + 0.01); }
+    magOf[id] = [n, W.mag];
+  }
+  check('every gun has a magazine the host enforces', Object.values(magOf).every(([n, m]) => m > 0 && n === m), Object.entries(magOf).map(([k, [n, m]]) => `${k} ${n}/${m}`).join(', '));
+
   // attachments: the host keeps only what each gun takes, sizes the magazine by them, and every player sees them in the list
   const { wStat } = mods;
   let lastPl = null; const sendPlayers0 = Srv.sendPlayers; Srv.sendPlayers = () => { lastPl = Players.list(); };

@@ -130,21 +130,23 @@ const Nav = {
 // ---- hotbar: 12 slots (keys 1-9, 0, -, =) the player fills from the inventory with weapons, tool-gun modes or spawnable items ----
 const HOTBAR_KEYS = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0', 'Minus', 'Equal'];
 const HOTBAR_LABEL = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '='];
-// the default bar: building tools first (1-4), then the weapons, lightest to heaviest (5 to =)
-const HOTBAR_DEF = ['physgun', 'toolgun', 'deleter', 'propcannon', 'pistol', 'smg', 'rifle', 'shotgun', 'sniper', 'rocket', 'grenade', 'crowbar'];
-const HOTBAR_OLD = ['physgun', 'toolgun', 'pistol', 'shotgun', 'rifle', 'smg', 'sniper', 'rocket', 'grenade', 'crowbar', 'propcannon', 'deleter'];   // the default until v1.9.9
+// the default bar: the guns on 1-5 (assault rifle, shotgun, SMG, pistol, sniper), the rest of the weapons, then the building tools.
+// The prop cannon isn't on it (it's in the spawn menu, Weapons). null: an empty slot.
+const HOTBAR_DEF = ['rifle', 'shotgun', 'smg', 'pistol', 'sniper', 'rocket', 'grenade', 'crowbar', 'physgun', 'toolgun', 'deleter', null];
+const HOTBAR_OLD = [['physgun', 'toolgun', 'pistol', 'shotgun', 'rifle', 'smg', 'sniper', 'rocket', 'grenade', 'crowbar', 'propcannon', 'deleter'],   // the defaults until v1.9.9
+  ['physgun', 'toolgun', 'deleter', 'propcannon', 'pistol', 'smg', 'rifle', 'shotgun', 'sniper', 'rocket', 'grenade', 'crowbar']];   // and v1.9.10
 const BUILD_TOOLS = ['physgun', 'toolgun', 'deleter', 'propcannon'];
-const SHORT_NAME = { physgun: 'Physgun', deleter: 'Delete', propcannon: 'Cannon', rocket: 'Rocket', sniper: 'Sniper' };   // names that fit under a hotbar slot
+const SHORT_NAME = { physgun: 'Physgun', deleter: 'Delete', propcannon: 'Cannon', rocket: 'Rocket', sniper: 'Sniper', rifle: 'AR' };   // names that fit under a hotbar slot
 const Hotbar = {
   sel: 0,
-  def() { return HOTBAR_DEF.map(w => ({ w })); },
+  def() { return HOTBAR_DEF.map(w => w && { w }); },
   get() {
     let s = Settings.hotbar; if (!Array.isArray(s) || s.length !== 12) { s = Settings.hotbar = this.def(); saveSettings(); }
     if (!Settings.hbSmg) {   // a hotbar saved before the SMG existed: put it in the first free slot (once)
       Settings.hbSmg = true; const i = s.findIndex(e => !e); if (i >= 0 && !s.some(e => e && e.w === 'smg' && !e.m)) s[i] = { w: 'smg' }; saveSettings();
     }
-    if (!Settings.hbV2) {   // still the old default order: move to the grouped one (once; a bar someone arranged is left alone)
-      Settings.hbV2 = true; if (JSON.stringify(s) === JSON.stringify(HOTBAR_OLD.map(w => ({ w })))) s = Settings.hotbar = this.def(); saveSettings();
+    if (!Settings.hbV3) {   // still an old default: move to the current one (once; a bar someone arranged is left alone)
+      Settings.hbV3 = true; if (HOTBAR_OLD.some(o => JSON.stringify(s) === JSON.stringify(o.map(w => ({ w }))))) s = Settings.hotbar = this.def(); saveSettings();
     }
     return s;
   },
@@ -646,7 +648,7 @@ const UI = {
         hint(glyph('fire'), 'Shoot'); hint(glyph('alt'), tg ? (Game.zoomed ? 'Click to stop ' + (what === 'scope' ? 'scoping' : 'aiming') : 'Click to ' + what) : what === 'scope' ? 'Hold to scope in' : 'Hold to aim');
         if (W_BY_ID[w].mag) hint(glyph('reload'), 'Reload');
       }
-      else hint(glyph('fire'), { crowbar: 'Swing', rocket: 'Fire rocket', propcannon: 'Launch a prop' }[w] || 'Shoot');
+      else { hint(glyph('fire'), { crowbar: 'Swing', rocket: 'Fire rocket', propcannon: 'Launch a prop' }[w] || 'Shoot'); if (W_BY_ID[w].mag) hint(glyph('reload'), 'Reload'); }
       if (me && me.noclip && !pad) hint(glyph('Wheel'), 'Fly speed');
       if (Game.placing) { H.length = 0; hint(glyph('fire'), 'Place (stays selected)'); hint(glyph('reload'), 'Rotate'); hint(glyph('alt'), 'Put away'); }
       else if (Game.aimSeat) hint(glyph('use'), Game.aimSeatName ? (Game.aimSeatDrive ? 'Drive' : 'Ride') : 'Sit in seat');
@@ -870,10 +872,10 @@ const UI = {
           sec('inventory_2', '📦', 'All props');
         }
       }
-      if (tab === 'weapons') {   // in the hotbar's order: building tools, then weapons
-        const all = this.spawnEntries(tab), at = k => all.find(e => e.key === 'wp_' + k), rest = WEAPONS.map(w => w.id).filter(k => !HOTBAR_DEF.includes(k));
-        sec('construction', '🛠', 'Building tools'); BUILD_TOOLS.forEach(k => g.append(this.spawnCard(at(k))));
-        sec('swords', '🔫', 'Weapons'); [...HOTBAR_DEF, ...rest].filter(k => !BUILD_TOOLS.includes(k)).forEach(k => g.append(this.spawnCard(at(k))));
+      if (tab === 'weapons') {   // in the hotbar's order: weapons, then building tools
+        const all = this.spawnEntries(tab), at = k => all.find(e => e.key === 'wp_' + k), order = [...HOTBAR_DEF.filter(Boolean), ...WEAPONS.map(w => w.id).filter(k => !HOTBAR_DEF.includes(k))];
+        sec('swords', '🔫', 'Weapons'); order.filter(k => !BUILD_TOOLS.includes(k)).forEach(k => g.append(this.spawnCard(at(k))));
+        sec('construction', '🛠', 'Building tools'); order.filter(k => BUILD_TOOLS.includes(k)).forEach(k => g.append(this.spawnCard(at(k))));
       } else this.spawnEntries(tab).forEach(e => g.append(this.spawnCard(e)));
     }
     this.buildToolOptions();
@@ -1232,7 +1234,7 @@ const UI = {
       s.append(row('Ask before closing the tab during a game', check('confirmClose')));
       head('Hotbar');
       s.append(row('Change what\'s on each slot', h('button', { class: 'small', text: 'Open inventory', onclick: () => this.openMenu('inventory') })));
-      s.append(row('Back to the default order <span class="muted">(build tools 1-4, weapons 5-=)</span>', h('button', { class: 'small', text: 'Reset hotbar', onclick: () => { Settings.hotbar = Hotbar.def(); saveSettings(); this.buildSlots(); this.toast('Hotbar reset', 'check'); } })));
+      s.append(row('Back to the default order <span class="muted">(guns 1-8, build tools 9, 0, -)</span>', h('button', { class: 'small', text: 'Reset hotbar', onclick: () => { Settings.hotbar = Hotbar.def(); saveSettings(); this.buildSlots(); this.toast('Hotbar reset', 'check'); } })));
     } else if (t === 'graphics') {
       const sel = h('select', { onchange: () => Game.setTier(sel.value) });
       for (const k of TIER_KEYS) sel.append(h('option', { value: k, text: TIERS[k].label + (k === 'low' ? ' (PS1 style)' : ''), selected: R.tier === k }));

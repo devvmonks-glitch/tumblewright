@@ -5,14 +5,14 @@
 const WEAPONS = [
   { id: 'physgun', name: 'Physics Gun', icon: '🧲', desc: 'Grab, move, rotate and freeze objects.' },
   { id: 'toolgun', name: 'Tool Gun', icon: '🔧', desc: '' },
-  // att: the attachments a gun takes (ATTACH)
-  { id: 'pistol', name: 'Pistol', icon: '🔫', desc: 'Semi-automatic. Knocks props around.', rate: 0.22, dmg: 22, imp: 1.2, dv: 8, spread: 0.004, range: 300, vp: 0.03, bloom: 0.6, att: ['reddot', 'supp', 'comp'] },
-  { id: 'shotgun', name: 'Shotgun', icon: '💥', desc: 'Pump action, 8 pellets. Devastating up close.', rate: 0.85, dmg: 11, imp: 0.9, dv: 2, spread: 0.055, pellets: 8, range: 120, push: 2, vp: 0.06 },
-  { id: 'rifle', name: 'Rifle', icon: '🎯', desc: 'Automatic rifle.', rate: 0.09, dmg: 13, imp: 0.7, dv: 5, spread: 0.011, auto: true, range: 300, vp: 0.017, bloom: 0.3, att: ['reddot', 'scope', 'supp', 'comp', 'grip'] },
-  // smg: fast and light. ads: aim-down-sights zoom (alt-fire), mag / rl: magazine and reload time (s), fall: [full damage to (m), lowest at (m), lowest share]
-  { id: 'smg', name: 'SMG', icon: '💨', desc: 'Very fast fire, light hits. Aim (alt-fire) and fire short bursts to stay on target; weaker at range. 32 rounds, R reloads.', rate: 0.065, dmg: 9, imp: 0.5, dv: 4, spread: 0.008, hipSpread: 0.024, auto: true, range: 220, vp: 0.011, bloom: 0.14, bloomMax: 2.6, ads: 1.3, mag: 32, rl: 1.9, fall: [12, 38, 0.5], att: ['reddot', 'supp', 'comp', 'grip', 'extmag'] },
-  { id: 'sniper', name: 'Sniper Rifle', icon: '🔭', desc: 'Alt-fire scopes in. Inaccurate from the hip.', rate: 1.2, dmg: 95, imp: 4, dv: 16, spread: 0, hipSpread: 0.03, zoom: 1, range: 800, push: 3, vp: 0.07, att: ['supp'] },
-  { id: 'rocket', name: 'Rocket Launcher', icon: '🚀', desc: 'Rockets explode on impact. Rocket-jump if you dare.', rate: 1.0, proj: 'rocket', vp: 0.045 },
+  // att: the attachments a gun takes (ATTACH); mag / rl: magazine and reload time (s), counted by the host
+  { id: 'pistol', name: 'Pistol', icon: '🔫', desc: 'Semi-automatic. Knocks props around. 12 rounds.', mag: 12, rl: 1.3, rate: 0.22, dmg: 22, imp: 1.2, dv: 8, spread: 0.004, range: 300, vp: 0.03, bloom: 0.6, att: ['reddot', 'supp', 'comp'] },
+  { id: 'shotgun', name: 'Shotgun', icon: '💥', desc: 'Pump action, 8 pellets. Devastating up close. 6 shells.', mag: 6, rl: 2.4, rate: 0.85, dmg: 11, imp: 0.9, dv: 2, spread: 0.055, pellets: 8, range: 120, push: 2, vp: 0.06 },
+  { id: 'rifle', name: 'Assault Rifle', icon: '🎯', desc: 'Automatic rifle. 30 rounds.', mag: 30, rl: 2.2, rate: 0.09, dmg: 13, imp: 0.7, dv: 5, spread: 0.011, auto: true, range: 300, vp: 0.017, bloom: 0.3, att: ['reddot', 'scope', 'supp', 'comp', 'grip'] },
+  // smg: fast and light. ads: aim-down-sights zoom (alt-fire), fall: [full damage to (m), lowest at (m), lowest share]
+  { id: 'smg', name: 'SMG', icon: '💨', desc: 'Very fast fire, light hits. Aim (alt-fire) and fire short bursts to stay on target; weaker at range. 32 rounds.', rate: 0.065, dmg: 9, imp: 0.5, dv: 4, spread: 0.008, hipSpread: 0.024, auto: true, range: 220, vp: 0.011, bloom: 0.14, bloomMax: 2.6, ads: 1.3, mag: 32, rl: 1.9, fall: [12, 38, 0.5], att: ['reddot', 'supp', 'comp', 'grip', 'extmag'] },
+  { id: 'sniper', name: 'Sniper Rifle', icon: '🔭', desc: 'Alt-fire scopes in. Inaccurate from the hip. 5 rounds.', mag: 5, rl: 2.6, rate: 1.2, dmg: 95, imp: 4, dv: 16, spread: 0, hipSpread: 0.03, zoom: 1, range: 800, push: 3, vp: 0.07, att: ['supp'] },
+  { id: 'rocket', name: 'Rocket Launcher', icon: '🚀', desc: 'Rockets explode on impact. Rocket-jump if you dare. Reloads after every rocket.', mag: 1, rl: 1.2, rate: 1.0, proj: 'rocket', vp: 0.045 },
   { id: 'grenade', name: 'Grenade', icon: '💣', desc: 'Throw it. It explodes after 2.5 s. One every 2.5 s.', rate: 2.5 },
   { id: 'crowbar', name: 'Crowbar', icon: '🪓', desc: 'Melee. Great for smashing ragdolls.', rate: 0.42, dmg: 34, imp: 3, dv: 10, range: 2.4, push: 4, vp: 0.012 },
   { id: 'propcannon', name: 'Prop Cannon', icon: '📦', desc: 'Fires random props. They vanish after 30 s.', rate: 0.35, proj: 'prop', vp: 0.03 },
