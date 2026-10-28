@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <!-- auto-update config: stamped by tools/release/release.mjs (version, update server, public signing key) -->
-<meta name="tw-version" content="1.9.9">
+<meta name="tw-version" content="1.9.10">
 <meta name="tw-update-url" content="https://tumblewright.vercel.app/">
 <meta name="tw-update-key" content="MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEY+Cnn8Lm7Qg8qyzAHUGYObpBjSgdckeo7PetlABb0TomToEhaMbLW/zaRHOAbvsMn1TRCb4I/cPFv1ghZ6CgWw==">
-<meta name="tw-notes" content="Weapon attachments: red dot, 3x scope, suppressor, compensator, vertical grip and extended mag (Spawn menu > Weapons > Attachments). Fixes broken audio for players with no saved settings.">
+<meta name="tw-notes" content="Cleaner menus: the hotbar is grouped (build tools, then weapons) with names on every slot; the spawn menu shows only the settings for the tool you hold, attachments on the Weapons tab; grouped pause menu and a new General settings tab.">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Tumblewright — Multiplayer Physics Sandbox</title>
 <meta name="description" content="Tumblewright: a multiplayer 3D physics sandbox. Build, weld, drive and blow things up together in your browser.">
@@ -739,6 +739,47 @@ input[type=email]:focus,input[type=password]:focus{border-color:var(--acc)}
 #inviteBox b{font:700 17px var(--title);letter-spacing:.02em}
 #inviteBox small{display:block;font-size:12px;color:var(--muted)}
 #inName[readonly]{cursor:default}
+/* spawn menu (v5): grouped categories, and a side panel only when there's something to set */
+.cat-h{padding:12px 12px 4px;font:700 11px var(--title);letter-spacing:.14em;text-transform:uppercase;color:var(--dim,var(--muted))}
+.cat-h:first-child{padding-top:2px}
+#smBody.noside #smSide{display:none}
+@media (max-width:700px){.cat-h{font-size:0;padding:0;margin:6px 10px;border-top:1px solid var(--line)}.cat-h:first-child{display:none}}
+#smSide{width:320px}
+.side-t{margin:16px 0 8px;font:700 12px var(--title);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.side-t:first-child{margin-top:0}
+.side-head{display:flex;align-items:center;gap:10px}
+.side-head select{flex:1;font-size:15px;padding:8px 10px}
+.side-ic{width:40px;height:40px;flex:none;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.06);border:1px solid var(--line);font-size:22px}
+.side-ic .ms{font-size:24px;color:var(--acc)}
+.side-p{margin:8px 0;font-size:12.5px;line-height:1.5;color:var(--muted)}
+.side-how{display:flex;flex-direction:column;gap:5px;padding:8px 10px;background:rgba(0,0,0,.22);border:1px solid var(--line);font-size:12px}
+.side-how .hint{display:flex;align-items:center}
+.side-btns{display:flex;gap:8px;margin-top:16px}
+.side-btns button{flex:1}
+.item.sel{border-color:var(--acc);background:rgba(242,194,48,.1)}
+.item .tag:not(.hostile){color:var(--acc)}
+.sm-inline{grid-column:1/-1;padding:12px;border:1px solid var(--line);background:rgba(0,0,0,.2)}
+.sm-inline .att-panel{border:0;padding:0;background:none}
+#smSide .att-panel{border:0;padding:0;background:none}
+/* pause (v5): grouped; settings section headings */
+#pause .mitem{padding-top:7px;padding-bottom:7px;font-size:19px}
+#pause .mlist{margin-top:14px}
+#pause .mhead{padding:12px 24px 2px;font:700 11px var(--title);letter-spacing:.16em;text-transform:uppercase;color:var(--dim,var(--muted))}
+#pause .mitem.small{font-size:15px;color:var(--muted)}
+#settings{width:min(620px,96vw)}
+#settings .tabs button{padding:8px 10px;letter-spacing:.05em}
+.set-h{margin:18px 0 2px;font:700 12px var(--title);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.set-h:first-of-type{margin-top:8px}
+/* hotbar (v5): every slot named, a gap between the building tools, the weapons and spawn items */
+#slots{align-items:flex-end}
+#slots .slot-gap{width:14px;flex:none}
+#slots .slot{flex-direction:column;justify-content:flex-start;gap:1px;padding:15px 3px 3px;width:clamp(44px,calc((100vw - 820px) / 10),62px);height:clamp(52px,calc((100vw - 820px) / 10 + 12px),74px)}
+#slots .slot img{width:100%;height:auto;flex:1;min-height:0;max-height:38px}
+#slots .slot .emo{flex:1;display:flex;align-items:center;font-size:20px}
+#slots .slot .emo .ms{font-size:22px}
+#slots .slot .snm{position:static;font:700 10px var(--title);letter-spacing:.02em;color:var(--muted);max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#slots .slot.act .snm{color:var(--text)}
+@media (max-width:1100px) and (min-width:701px){#slots .slot{width:46px;height:52px;padding-top:13px}#slots .slot .snm{font-size:9px}#slots .slot-gap{width:8px}}
 </style>
 <!-- import map: installed by the loader at the end of the file -->
 <script id="tw-importmap" type="text/tw-importmap">
@@ -6807,24 +6848,34 @@ const Nav = {
 // ---- hotbar: 12 slots (keys 1-9, 0, -, =) the player fills from the inventory with weapons, tool-gun modes or spawnable items ----
 const HOTBAR_KEYS = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0', 'Minus', 'Equal'];
 const HOTBAR_LABEL = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '='];
+// the default bar: building tools first (1-4), then the weapons, lightest to heaviest (5 to =)
+const HOTBAR_DEF = ['physgun', 'toolgun', 'deleter', 'propcannon', 'pistol', 'smg', 'rifle', 'shotgun', 'sniper', 'rocket', 'grenade', 'crowbar'];
+const HOTBAR_OLD = ['physgun', 'toolgun', 'pistol', 'shotgun', 'rifle', 'smg', 'sniper', 'rocket', 'grenade', 'crowbar', 'propcannon', 'deleter'];   // the default until v1.9.9
+const BUILD_TOOLS = ['physgun', 'toolgun', 'deleter', 'propcannon'];
+const SHORT_NAME = { physgun: 'Physgun', deleter: 'Delete', propcannon: 'Cannon', rocket: 'Rocket', sniper: 'Sniper' };   // names that fit under a hotbar slot
 const Hotbar = {
   sel: 0,
-  def() { return ['physgun', 'toolgun', 'pistol', 'shotgun', 'rifle', 'smg', 'sniper', 'rocket', 'grenade', 'crowbar', 'propcannon', 'deleter'].map(w => w && { w }); },
+  def() { return HOTBAR_DEF.map(w => ({ w })); },
   get() {
     let s = Settings.hotbar; if (!Array.isArray(s) || s.length !== 12) { s = Settings.hotbar = this.def(); saveSettings(); }
     if (!Settings.hbSmg) {   // a hotbar saved before the SMG existed: put it in the first free slot (once)
       Settings.hbSmg = true; const i = s.findIndex(e => !e); if (i >= 0 && !s.some(e => e && e.w === 'smg' && !e.m)) s[i] = { w: 'smg' }; saveSettings();
     }
+    if (!Settings.hbV2) {   // still the old default order: move to the grouped one (once; a bar someone arranged is left alone)
+      Settings.hbV2 = true; if (JSON.stringify(s) === JSON.stringify(HOTBAR_OLD.map(w => ({ w })))) s = Settings.hotbar = this.def(); saveSettings();
+    }
     return s;
   },
+  // which group a slot belongs to (the bar leaves a gap between groups): build tools, weapons, spawn items
+  group(e) { return !e ? '' : e.i ? 'spawn' : BUILD_TOOLS.includes(e.w) ? 'build' : 'fight'; },
   set(i, e) { const s = this.get(); s[i] = e ? Object.assign({}, e) : null; saveSettings(); UI.buildSlots(); },
   valid(e) { return !!e && (e.w ? !!W_BY_ID[e.w] && (!e.m || TOOL_MODES.some(m => m.id === e.m)) : !!(e.i && ITEM_INDEX[e.i] && ITEM_INDEX[e.i].pf)); },
   // what a slot shows: name, small label, thumbnail / icon
   info(e) {
     if (!this.valid(e)) return null;
-    if (e.i) { const it = ITEM_INDEX[e.i]; return { name: it.name || e.i, sub: 'Spawn', url: Thumbs.urls[e.i], icon: it.icon || '📦' }; }
+    if (e.i) { const it = ITEM_INDEX[e.i]; return { name: it.name || e.i, short: it.name || e.i, sub: 'Spawn', url: Thumbs.urls[e.i], icon: it.icon || '📦' }; }
     const W = W_BY_ID[e.w], M = e.m && TOOL_MODES.find(m => m.id === e.m);
-    return { name: M ? M.name : W.name, sub: M ? 'Tool gun' : '', url: M ? null : Thumbs.urls['wp_' + W.id], icon: M ? ic(TOOL_ICON[M.id], M.icon) : W.icon, html: !!M };
+    return { name: M ? M.name : W.name, short: M ? M.name : SHORT_NAME[W.id] || W.name, sub: M ? 'Tool gun' : '', url: M ? null : Thumbs.urls['wp_' + W.id], icon: M ? ic(TOOL_ICON[M.id], M.icon) : W.icon, html: !!M };
   },
   active(i) { const e = this.get()[i]; if (!this.valid(e) || e.i) return false; return e.w === Tools.weapon && (!e.m || e.m === Tools.mode) && (e.m || !this.get().some((o, j) => j !== i && o && o.w === e.w && o.m === Tools.mode && e.w === 'toolgun')); },
   use(i) {
@@ -6840,11 +6891,13 @@ const Hotbar = {
     for (let k = 1; k <= 12; k++) { const i = (cur + dir * k + 144) % 12; if (this.valid(s[i]) && !s[i].i) { this.use(i); return; } }
   },
 };
+// what alt-fire does with each tool gun mode
+const TOOL_ALT = { weld: 'Clear the selection', rope: 'Clear the selection', motor: 'Clear the selection', remover: 'Remove only its constraints', paint: 'Copy the material from an object', dupe: 'Paste the copied contraption' };
 const TOOL_ICON = { heal: 'medical_services', weld: 'link', rope: 'cable', thruster: 'rocket_launch', wheel: 'tire_repair', seat: 'chair', remover: 'delete', paint: 'format_paint', dupe: 'content_copy', motor: 'settings', balloon: 'air', hover: 'blur_circular', dynamite: 'local_fire_department' };
 const TOAST_ICONS = { '❄': 'ac_unit', '💾': 'save', '📋': 'content_copy', '🔒': 'lock', '⚠': 'warning', '🎮': 'sports_esports', '🕊': 'flight', '✏': 'edit', '🧹': 'mop', '👢': 'person_remove', '🔗': 'link', '⚔': 'swords', '👑': 'workspace_premium', '🔇': 'volume_off', '🌍': 'public' };
 const TOAST_WORDS = [[/^Graphics/i, 'tune'], [/noclip/i, 'flight'], [/frozen|freeze/i, 'ac_unit'], [/unfrozen/i, 'water_drop'], [/welded/i, 'link'], [/thruster/i, 'rocket_launch'], [/limit/i, 'block'], [/copied/i, 'content_copy'], [/undo/i, 'undo'], [/snap/i, 'grid_4x4'], [/controller/i, 'sports_esports'], [/not allowed|disabled/i, 'lock']];
 const UI = {
-  open: null, smTab: 'props', smQuery: '', setTab: 'graphics', slTab: 'worlds', rad: { page: 0, sel: -1, vx: 0, vy: 0 }, hintKey: '', fpsAcc: 0, fpsN: 0, fpsT: 0,
+  open: null, smTab: 'props', smQuery: '', setTab: 'general', slTab: 'worlds', rad: { page: 0, sel: -1, vx: 0, vy: 0 }, hintKey: '', fpsAcc: 0, fpsN: 0, fpsT: 0,
   init() {
     // ---- lobby ----
     document.body.classList.toggle('pixel', Settings.pixelFont !== false);
@@ -7248,11 +7301,12 @@ const UI = {
   },
   // ---- HUD ----------------------------------------------------------------------
   buildSlots() {
-    const s = $('#slots'); s.innerHTML = '';
+    const s = $('#slots'); s.innerHTML = ''; let grp = null;
     Hotbar.get().forEach((e, i) => {
       const f = Hotbar.info(e); if (!f) return;
+      const g = Hotbar.group(e); if (grp && g !== grp) s.append(h('div', { class: 'slot-gap' })); grp = g;
       const pic = f.url ? `<img src="${f.url}" alt="${esc(f.name)}">` : f.html ? `<span class="emo">${f.icon}</span>` : `<span class="emo">${esc(f.icon)}</span>`;
-      s.append(h('div', { class: 'slot' + (Hotbar.active(i) ? ' act' : '') + (e.i ? ' item' : ''), 'data-i': i, title: f.name, html: `<b>${HOTBAR_LABEL[i]}</b>` + pic + (f.sub ? `<i class="snm">${esc(f.name)}</i>` : '') }));
+      s.append(h('div', { class: 'slot' + (Hotbar.active(i) ? ' act' : '') + (e.i ? ' item' : ''), 'data-i': i, title: f.name + (f.sub ? ` (${f.sub})` : ''), html: `<b>${HOTBAR_LABEL[i]}</b>` + pic + `<i class="snm">${esc(f.short)}</i>` }));
     });
   },
   refreshTool() {
@@ -7314,7 +7368,7 @@ const UI = {
       if (me && me.noclip && !pad) hint(glyph('Wheel'), 'Fly speed');
       if (Game.placing) { H.length = 0; hint(glyph('fire'), 'Place (stays selected)'); hint(glyph('reload'), 'Rotate'); hint(glyph('alt'), 'Put away'); }
       else if (Game.aimSeat) hint(glyph('use'), Game.aimSeatName ? (Game.aimSeatDrive ? 'Drive' : 'Ride') : 'Sit in seat');
-      hint(glyph('spawnMenu'), W_BY_ID[w] && W_BY_ID[w].att ? 'Spawn menu (Weapons: attachments)' : 'Spawn menu'); hint(glyph('radial'), 'Radial menu');
+      hint(glyph('spawnMenu'), w === 'toolgun' ? 'Spawn menu + tool settings' : W_BY_ID[w] && W_BY_ID[w].att ? 'Spawn menu (Weapons: attachments)' : 'Spawn menu'); hint(glyph('radial'), 'Radial menu');
       if (!pad) hint('<kbd>1</kbd>–<kbd>0</kbd>', 'Weapons'); else hint(glyph(PAD.LEFT) + glyph(PAD.RIGHT), 'Switch weapon');
     }
     if (!pad) H.push(`<div class="hint more">${glyph('hints')}${Settings.showHints ? 'Hide hints' : 'Show controls'}</div>`);
@@ -7452,13 +7506,17 @@ const UI = {
     Nav.update(dt);
   },
   // ---- spawn menu -----------------------------------------------------------------
+  // the categories down the side, in groups: things to spawn, things to hold, the map itself
   spawnCats() {
-    return [['favs', 'Favorites', 'star', '⭐', store.get('favs', []).filter(k => ITEM_INDEX[k]).length], ['building', 'Building', 'domain', '🧱', CATALOG.building.length], ['props', 'Props', 'inventory_2', '📦', CATALOG.props.length], ['furniture', 'Furniture', 'chair', '🛋️', CATALOG.furniture.length], ['fun', 'Fun & Explosive', 'celebration', '🎉', CATALOG.fun.length], ['npcs', 'NPCs', 'person', '🧍', CATALOG.npcs.length], ['vehicles', 'Vehicles', 'directions_car', '🚗', CATALOG.vehicles.length],
-      ['weapons', 'Weapons', 'swords', '🔫', WEAPONS.length], ['tools', 'Tool Gun', 'build', '🔧', TOOL_MODES.length], ['dupes', 'Dupes', 'content_copy', '📋', Object.keys(Save.dupes()).length], ['map', 'Map Pieces', 'foundation', '🧱', CATALOG.map.length]];
+    return [['favs', 'Favorites', 'star', '⭐', store.get('favs', []).filter(k => ITEM_INDEX[k]).length, 'Spawn'], ['props', 'Props', 'inventory_2', '📦', CATALOG.props.length, 'Spawn'], ['building', 'Building', 'domain', '🧱', CATALOG.building.length, 'Spawn'],
+      ['furniture', 'Furniture', 'chair', '🛋️', CATALOG.furniture.length, 'Spawn'], ['fun', 'Fun & Explosive', 'celebration', '🎉', CATALOG.fun.length, 'Spawn'], ['npcs', 'NPCs', 'person', '🧍', CATALOG.npcs.length, 'Spawn'], ['vehicles', 'Vehicles', 'directions_car', '🚗', CATALOG.vehicles.length, 'Spawn'],
+      ['dupes', 'Saved Dupes', 'content_copy', '📋', Object.keys(Save.dupes()).length, 'Spawn'],
+      ['tools', 'Tool Gun', 'build', '🔧', TOOL_MODES.length, 'Equip'], ['weapons', 'Weapons', 'swords', '🔫', WEAPONS.length, 'Equip'],
+      ['map', 'Map Pieces', 'foundation', '🧱', CATALOG.map.length, 'Edit the map']];
   },
   spawnCard(o) {
     const url = o.key && Thumbs.urls[o.key];
-    const el = h('div', { class: 'item', tabindex: 0, title: o.desc || o.name, onclick: o.onclick },
+    const el = h('div', { class: 'item' + (o.sel ? ' sel' : ''), tabindex: 0, title: o.desc || o.name, onclick: o.onclick },
       url ? h('img', { src: url, alt: '' }) : h('div', { class: 'ph', text: o.icon || '•' }), h('div', { text: o.name }), o.sub ? h('div', { class: 'desc', text: o.sub }) : null);
     if (o.tag) el.append(h('span', { class: 'tag' + (o.tagCls ? ' ' + o.tagCls : ''), text: o.tag }));
     if (o.key && ITEM_INDEX[o.key] && ITEM_INDEX[o.key].pf && o.cat !== 'map') {   // star to add to Favorites
@@ -7474,15 +7532,17 @@ const UI = {
       key: it.key, name: it.name, icon: it.icon, desc: it.desc, cat,
       sub: cat === 'vehicles' ? 'Sit to drive' : it.desc ? it.desc : (() => { const d = it.pf().ents[0]; return (MATDEFS[d.m] ? MATDEFS[d.m].name : ''); })(),
       tag: it.key === 'zombie' ? 'HOSTILE' : ['xbarrel', 'propane'].includes(it.key) ? 'EXPLOSIVE' : null, tagCls: 'hostile', onclick: () => { Game.spawnItem(it.key); close(); } }));
-    if (cat === 'weapons') return WEAPONS.map((w, i) => ({ key: 'wp_' + w.id, name: w.name, icon: w.icon, sub: w.desc, tag: (j => j >= 0 ? 'SLOT ' + HOTBAR_LABEL[j] : null)(Hotbar.get().findIndex(e => e && e.w === w.id && !e.m)), cat, onclick: () => { Tools.setWeapon(w.id); this.closeMenu(); } }));
-    if (cat === 'tools') return TOOL_MODES.map(m => ({ name: m.name, icon: m.icon, sub: m.desc, cat, onclick: () => { Tools.setWeapon('toolgun'); Tools.setMode(m.id); this.buildSpawn(); } }));
+    if (cat === 'weapons') return WEAPONS.map((w, i) => ({ key: 'wp_' + w.id, name: w.name, icon: w.icon, sub: w.desc, sel: Tools.weapon === w.id, tag: Tools.weapon === w.id ? 'IN HAND' : (j => j >= 0 ? 'SLOT ' + HOTBAR_LABEL[j] : null)(Hotbar.get().findIndex(e => e && e.w === w.id && !e.m)), cat, onclick: () => { Tools.setWeapon(w.id); this.closeMenu(); } }));
+    if (cat === 'tools') return TOOL_MODES.map(m => { const on = Tools.weapon === 'toolgun' && Tools.mode === m.id; return { name: m.name, icon: m.icon, sub: m.desc, cat, sel: on, tag: on ? 'IN HAND' : null, onclick: () => { Tools.setWeapon('toolgun'); Tools.setMode(m.id); this.buildSpawn(); } }; });
     if (cat === 'map') return CATALOG.map.map(it => ({ key: it.key, name: it.name, icon: it.icon, sub: 'Edit mode', cat, onclick: () => { if (!Editor.active) Editor.toggle(true); if (Editor.active) { Editor.arm(it.key); this.closeMenu(); this.toast('Click to place ' + it.name + (Input.device === 'pad' ? ' (RT)' : ''), 'architecture'); } } }));
     return [];
   },
   buildSpawn() {
-    const cats = $('#smCats'); cats.innerHTML = '';
-    for (const [k, l, icn, em, n] of this.spawnCats())
+    const cats = $('#smCats'); cats.innerHTML = ''; let grp = '';
+    for (const [k, l, icn, em, n, gl] of this.spawnCats()) {
+      if (gl !== grp) { grp = gl; cats.append(h('div', { class: 'cat-h', text: gl })); }
       cats.append(h('button', { class: 'cat' + (this.smTab === k && !this.smQuery ? ' act' : ''), html: ic(icn, em) + `<span class="lbl">${l}</span><small>${n}</small>`, onclick: () => { this.smTab = k; this.smQuery = ''; $('#smSearch').value = ''; this.buildSpawn(); } }));
+    }
     const g = $('#smGrid'); g.innerHTML = '';
     const sec = (icn, em, t) => g.append(h('div', { class: 'sm-sec', html: ic(icn, em) + esc(t) }));
     const q = this.smQuery;
@@ -7528,8 +7588,11 @@ const UI = {
           sec('inventory_2', '📦', 'All props');
         }
       }
-      this.spawnEntries(tab).forEach(e => g.append(this.spawnCard(e)));
-      if (tab === 'weapons') { sec('build', '🔧', 'Attachments'); g.append(this.attPanel()); }
+      if (tab === 'weapons') {   // in the hotbar's order: building tools, then weapons
+        const all = this.spawnEntries(tab), at = k => all.find(e => e.key === 'wp_' + k), rest = WEAPONS.map(w => w.id).filter(k => !HOTBAR_DEF.includes(k));
+        sec('construction', '🛠', 'Building tools'); BUILD_TOOLS.forEach(k => g.append(this.spawnCard(at(k))));
+        sec('swords', '🔫', 'Weapons'); [...HOTBAR_DEF, ...rest].filter(k => !BUILD_TOOLS.includes(k)).forEach(k => g.append(this.spawnCard(at(k))));
+      } else this.spawnEntries(tab).forEach(e => g.append(this.spawnCard(e)));
     }
     this.buildToolOptions();
   },
@@ -7564,41 +7627,75 @@ const UI = {
     box.append(st, h('div', { class: 'att-note', text: 'Attachments stay on the gun until you change them. Everyone sees them, and the host applies them.' }));
     return box;
   },
+  // put a weapon or tool on the hotbar (the first empty slot), unless it's already there
+  toHotbar(e) {
+    const slots = Hotbar.get(), name = (Hotbar.info(e) || {}).name || 'It', on = slots.findIndex(x => x && JSON.stringify(x) === JSON.stringify(e));
+    if (on >= 0) return this.toast(`${name} is already on slot ${HOTBAR_LABEL[on]}`, 'info');
+    const i = slots.findIndex(x => !Hotbar.valid(x));
+    if (i < 0) return this.toast(`The hotbar is full. Open Inventory (${keyLabel(Settings.binds.inventory)}) to swap something out.`, 'info');
+    Hotbar.set(i, e); this.toast(`${name} is on slot ${HOTBAR_LABEL[i]}`, 'check'); Audio.play('place');
+    if (this.open === 'spawn') this.buildSpawn();
+  },
+  // the spawn menu's side panel follows what you're doing: the settings of the tool gun mode you hold (or pick on the
+  // Tool Gun tab), or your guns' attachments on the Weapons tab. Nothing to show: no panel. On phones it sits above the grid.
   buildToolOptions() {
-    const s = $('#smSide'); s.innerHTML = ''; const o = Tools.opt;
+    const s = $('#smSide'), narrow = matchMedia('(max-width:700px)').matches, tab = this.smQuery ? '' : this.smTab;
+    const kind = tab === 'weapons' ? 'att' : tab === 'tools' || (Tools.weapon === 'toolgun' && !narrow && tab !== 'map') ? 'tool' : '';
+    s.innerHTML = ''; $('#smBody').classList.toggle('noside', !kind || narrow); const old = $('#smGrid .sm-inline'); if (old) old.remove();
+    if (!kind) return;
+    const box = narrow ? h('div', { class: 'sm-inline' }) : s;
+    if (narrow) $('#smGrid').prepend(box);
+    if (kind === 'att') {
+      box.append(h('div', { class: 'side-t', text: 'Attachments' }), h('p', { class: 'side-p', text: 'Pick a gun, then one part per slot. Each part trades something away: green is better, red is worse.' }), this.attPanel());
+      return;
+    }
+    const o = Tools.opt, M = TOOL_MODES.find(m => m.id === Tools.mode) || TOOL_MODES[0], held = Tools.weapon === 'toolgun';
+    const redo = () => this.buildToolOptions();
+    const opt = (label, ctl, val) => h('div', { class: 'opt' }, h('div', { class: 'row' }, h('label', { text: label }), val || null, ctl && ctl.type !== 'range' ? ctl : null), ctl && ctl.type === 'range' ? ctl : null);
     const slider = (label, key, min, max, step, fmt) => {
       const v = h('span', { class: 'val', text: fmt(o[key]) });
       const inp = h('input', { type: 'range', min, max, step, value: o[key], oninput: () => { o[key] = +inp.value; v.textContent = fmt(o[key]); Tools.saveOpt(); } });
-      return h('div', { class: 'opt' }, h('div', { class: 'row' }, h('label', { text: label }), v), inp);
+      return opt(label, inp, v);
     };
-    s.append(h('h3', { text: 'Tool Gun options', style: 'margin-top:0' }));
-    const modes = h('div', { class: 'mats' });
-    for (const m of TOOL_MODES) modes.append(h('button', { class: Tools.mode === m.id && Tools.weapon === 'toolgun' ? 'on' : '', title: m.desc, text: m.icon + ' ' + m.name, onclick: () => { Tools.setWeapon('toolgun'); Tools.setMode(m.id); this.buildToolOptions(); } }));
-    s.append(h('div', { class: 'opt' }, modes));
-    s.append(h('h3', { text: 'Rope' }), slider('Length', 'ropeLen', 0.3, 2, 0.05, v => Math.round(v * 100) + '%'), slider('Rigidity', 'ropeRigid', 0, 1, 0.05, v => v >= 0.95 ? 'Rope' : Math.round(v * 100) + '% elastic'));
-    s.append(h('h3', { text: 'Thruster' }), slider('Force', 'thrForce', 1, 60, 1, v => v));
-    const kb = h('button', { class: 'bindbtn', text: keyLabel(o.thrKey), onclick: () => { kb.textContent = 'press key…'; kb.classList.add('wait'); Input.capture = code => { if (code !== 'Escape') { o.thrKey = code; Tools.saveOpt(); } kb.textContent = keyLabel(o.thrKey); kb.classList.remove('wait'); }; } });
-    const padSel = h('select', { onchange: () => { o.thrPad = padSel.value; Tools.saveOpt(); } });
-    for (const [v, l] of [['Pad7', 'RT / R2'], ['Pad6', 'LT / L2'], ['Pad0', 'A / ✕'], ['Pad5', 'RB / R1'], ['Pad12', 'D-pad ↑'], ['Pad13', 'D-pad ↓'], ['', 'none']]) padSel.append(h('option', { value: v, text: l, selected: o.thrPad === v }));
-    s.append(h('div', { class: 'opt' }, h('div', { class: 'row' }, h('label', { text: 'Key' }), kb)), h('div', { class: 'opt' }, h('div', { class: 'row' }, h('label', { text: 'Controller' }), padSel)));
-    s.append(h('h3', { text: 'Wheel' }), slider('Radius', 'wheelR', 0.15, 1.2, 0.05, v => v.toFixed(2) + ' m'));
-    s.append(h('h3', { text: 'Motor' }), slider('Speed', 'motSpd', -20, 20, 0.5, v => (v > 0 ? '' : v < 0 ? 'reverse ' : '') + Math.round(Math.abs(v) * 9.55) + ' rpm'));
-    const mk = h('button', { class: 'bindbtn', text: keyLabel(o.motKey), onclick: () => { mk.textContent = 'press key…'; mk.classList.add('wait'); Input.capture = code => { if (code !== 'Escape') { o.motKey = code; Tools.saveOpt(); } mk.textContent = keyLabel(o.motKey); mk.classList.remove('wait'); }; } });
-    s.append(h('div', { class: 'opt' }, h('div', { class: 'row' }, h('label', { text: 'Key' }), mk)),
-      h('div', { class: 'opt' }, h('div', { class: 'row' }, h('label', { text: 'Toggle (press to start / stop)' }), h('input', { type: 'checkbox', checked: !!o.motTog, onchange: e => { o.motTog = e.target.checked; Tools.saveOpt(); } }))));
     const bind = (label, key) => {
-      const b = h('button', { class: 'bindbtn', text: keyLabel(o[key]), onclick: () => { b.textContent = 'press key…'; b.classList.add('wait'); Input.capture = code => { if (code !== 'Escape') { o[key] = code; Tools.saveOpt(); } b.textContent = keyLabel(o[key]); b.classList.remove('wait'); }; } });
-      return h('div', { class: 'opt' }, h('div', { class: 'row' }, h('label', { text: label }), b));
+      const b = h('button', { class: 'bindbtn', text: keyLabel(o[key]), onclick: () => { b.textContent = 'press a key…'; b.classList.add('wait'); Input.capture = code => { if (code !== 'Escape') { o[key] = code; Tools.saveOpt(); } b.textContent = keyLabel(o[key]); b.classList.remove('wait'); this.hintKey = ''; }; } });
+      return opt(label, b);
     };
-    s.append(h('h3', { text: 'Balloon' }), slider('Lift', 'blLift', 1, 300, 1, v => v + ' kg'), slider('String length', 'blLen', 0.5, 8, 0.25, v => v.toFixed(2) + ' m'));
-    s.append(h('h3', { text: 'Hoverball' }), slider('Rise / sink speed', 'hovSpd', 0.5, 10, 0.5, v => v + ' m/s'), slider('Air resistance', 'hovAir', 0, 1, 0.05, v => Math.round(v * 100) + '%'), bind('Rise key', 'hovUp'), bind('Sink key', 'hovDn'));
-    s.append(h('h3', { text: 'Dynamite' }), slider('Power', 'dynPow', 0.3, 2.5, 0.1, v => Math.round(v * 100) + '%'), bind('Detonate key', 'dynKey'));
-    s.append(h('h3', { text: 'Painter' }));
-    const mats = h('div', { class: 'mats' });
-    for (const k of MAT_KEYS) mats.append(h('button', { class: o.paintMat === k ? 'on' : '', text: MATDEFS[k].name, onclick: () => { o.paintMat = k; Tools.saveOpt(); this.buildToolOptions(); } }));
-    const cols = h('div', { class: 'colors' });
-    for (const c of PAINT_COLORS) cols.append(h('button', { class: o.paintCol === c ? 'sel' : '', style: `background:${c}`, title: c, onclick: () => { o.paintCol = c; Tools.saveOpt(); this.buildToolOptions(); } }));
-    s.append(h('div', { class: 'opt' }, mats), h('div', { class: 'opt' }, cols));
+    // which tool, what it does, how to use it
+    const pick = h('select', { 'aria-label': 'Tool gun mode', onchange: () => { Tools.setWeapon('toolgun'); Tools.setMode(pick.value); this.buildSpawn(); } });
+    for (const m of TOOL_MODES) pick.append(h('option', { value: m.id, text: m.name, selected: m.id === M.id }));
+    box.append(h('div', { class: 'side-t', text: held ? 'Tool gun (in hand)' : 'Tool gun' }),
+      h('div', { class: 'side-head' }, h('div', { class: 'side-ic', html: ic(TOOL_ICON[M.id], M.icon) }), pick),
+      h('p', { class: 'side-p', text: M.desc }));
+    const how = h('div', { class: 'side-how' }), line = (g, t) => how.append(h('div', { class: 'hint', html: g + esc(t) }));
+    line(glyph('fire'), M.two ? 'Click the first object, then the second' : 'Use on what you aim at');
+    if (TOOL_ALT[M.id]) line(glyph('alt'), TOOL_ALT[M.id]);
+    line(glyph('reload'), 'Switch to the next tool');
+    box.append(how);
+    // this tool's settings (only the ones it uses)
+    const padSel = () => { const el = h('select', { onchange: () => { o.thrPad = el.value; Tools.saveOpt(); } }); for (const [v, l] of [['Pad7', 'RT / R2'], ['Pad6', 'LT / L2'], ['Pad0', 'A / ✕'], ['Pad5', 'RB / R1'], ['Pad12', 'D-pad ↑'], ['Pad13', 'D-pad ↓'], ['', 'none']]) el.append(h('option', { value: v, text: l, selected: o.thrPad === v })); return opt('Controller button', el); };
+    const opts = {
+      rope: () => [slider('Length', 'ropeLen', 0.3, 2, 0.05, v => Math.round(v * 100) + '% of the gap'), slider('Rigidity', 'ropeRigid', 0, 1, 0.05, v => v >= 0.95 ? 'Rope' : Math.round(v * 100) + '% elastic')],
+      thruster: () => [slider('Force', 'thrForce', 1, 60, 1, v => v), bind('Fire key', 'thrKey'), padSel()],
+      wheel: () => [slider('Size (radius)', 'wheelR', 0.15, 1.2, 0.05, v => v.toFixed(2) + ' m')],
+      motor: () => [slider('Speed', 'motSpd', -20, 20, 0.5, v => (v > 0 ? '' : v < 0 ? 'reverse ' : '') + Math.round(Math.abs(v) * 9.55) + ' rpm'), bind('Run key', 'motKey'),
+        opt('Press once to start / stop', h('input', { type: 'checkbox', checked: !!o.motTog, onchange: e => { o.motTog = e.target.checked; Tools.saveOpt(); } }))],
+      balloon: () => [slider('Lift', 'blLift', 1, 300, 1, v => v + ' kg'), slider('String length', 'blLen', 0.5, 8, 0.25, v => v.toFixed(2) + ' m')],
+      hover: () => [slider('Rise / sink speed', 'hovSpd', 0.5, 10, 0.5, v => v + ' m/s'), slider('Air resistance', 'hovAir', 0, 1, 0.05, v => Math.round(v * 100) + '%'), bind('Rise key', 'hovUp'), bind('Sink key', 'hovDn')],
+      dynamite: () => [slider('Power', 'dynPow', 0.3, 2.5, 0.1, v => Math.round(v * 100) + '%'), bind('Detonate key', 'dynKey')],
+      paint: () => {
+        const mats = h('div', { class: 'mats' }), cols = h('div', { class: 'colors' });
+        for (const k of MAT_KEYS) mats.append(h('button', { class: o.paintMat === k ? 'on' : '', text: MATDEFS[k].name, onclick: () => { o.paintMat = k; Tools.saveOpt(); redo(); } }));
+        for (const c of PAINT_COLORS) cols.append(h('button', { class: o.paintCol === c ? 'sel' : '', style: `background:${c}`, title: c, onclick: () => { o.paintCol = c; Tools.saveOpt(); redo(); } }));
+        return [h('div', { class: 'opt' }, h('label', { text: 'Material' }), mats), h('div', { class: 'opt' }, h('label', { text: 'Color' }), cols)];
+      },
+    }[M.id];
+    box.append(h('div', { class: 'side-t', text: 'Settings' }));
+    if (opts) box.append(...opts()); else box.append(h('p', { class: 'side-p', text: M.id === 'dupe' ? 'No settings. Saved contraptions are under Saved Dupes.' : 'This tool has no settings.' }));
+    // get it into your hands
+    box.append(h('div', { class: 'side-btns' },
+      held ? null : h('button', { class: 'primary', text: 'Equip', onclick: () => { Tools.setWeapon('toolgun'); this.closeMenu(); } }),
+      h('button', { text: 'Put on hotbar', title: 'Adds this tool to the first empty hotbar slot', onclick: () => this.toHotbar({ w: 'toolgun', m: M.id }) })));
   },
   // ---- radial menu ------------------------------------------------------------------
   radialPages() {
@@ -7773,19 +7870,23 @@ const UI = {
     left.append(h('h2', { text: 'Paused' }));
     if (Net.online) left.append(h('div', { class: 'psub' }, h('span', { text: 'Room' }), h('b', { text: fmtCode(Net.code) }), h('span', { text: `${Players.map.size} player${Players.map.size === 1 ? '' : 's'}` })));
     else left.append(h('div', { class: 'psub', text: 'Solo sandbox' }));
+    // grouped: playing, this world and room, the game itself
     const list = h('div', { class: 'mlist' }), item = (label, fn, cls, key) => list.append(h('button', { class: 'mitem' + (cls ? ' ' + cls : ''), onclick: fn, html: esc(label) + (key ? `<kbd>${esc(key)}</kbd>` : '') }));
+    const head = t => list.append(h('div', { class: 'mhead', text: t }));
     item('Resume', () => this.closeMenu(), '', 'Esc');
     item('Spawn menu', () => this.openMenu('spawn'), '', keyLabel(Settings.binds.spawnMenu));
-    item('Inventory / hotbar', () => this.openMenu('inventory'), '', keyLabel(Settings.binds.inventory));
-    item('Friends', () => this.openMenu('friends'));
+    item('Hotbar & inventory', () => this.openMenu('inventory'), '', keyLabel(Settings.binds.inventory));
+    head(Net.online ? 'This room' : 'This world');
+    if (Net.isHost) item('Host settings', () => this.openMenu('admin'));
+    else if (Owner.ok) item('Host settings (owner)', () => this.openMenu('admin'));
     item('Save / load', () => this.openMenu('saveload'));
     item('Clean up props', () => this.openMenu('cleanup'));
     item('Workshop', () => this.openMenu('addons'));
-    if (Net.isHost) item('Host settings', () => this.openMenu('admin'));
-    else if (Owner.ok) item('Host settings (owner)', () => this.openMenu('admin'));
+    item('Friends', () => this.openMenu('friends'));
+    head('Game');
     item('Settings', () => this.openMenu('settings'));
     item('Controls', () => this.openMenu('help'), '', keyLabel(Settings.binds.help));
-    item(Owner.key ? 'Owner access ✓' : 'Owner access', () => this.openMenu('owner'));
+    item(Owner.key ? 'Owner access ✓' : 'Owner access', () => this.openMenu('owner'), 'small');
     left.append(list, h('div', { class: 'ps-leave' }, h('button', { class: 'mitem danger', text: Net.online ? 'Leave room' : 'Quit to menu', onclick: () => Game.toLobby() })));
     // players
     const th = THEMES[Rules.env], card = h('div', { class: 'ps-card panel' });
@@ -7821,13 +7922,36 @@ const UI = {
     const s = $('#settings'); s.innerHTML = '';
     s.append(h('h2', { text: 'Settings' }));
     const tabs = h('div', { class: 'tabs' });
-    for (const [k, l] of [['graphics', 'Graphics'], ['audio', 'Audio'], ['controls', 'Controls'], ['keys', 'Keybinds'], ['network', 'Network']]) tabs.append(h('button', { class: this.setTab === k ? 'act' : '', text: l, onclick: () => { this.setTab = k; this.buildSettings(); } }));
+    for (const [k, l] of [['general', 'General'], ['graphics', 'Graphics'], ['audio', 'Audio'], ['controls', 'Controls'], ['keys', 'Keybinds'], ['network', 'Network']]) tabs.append(h('button', { class: this.setTab === k ? 'act' : '', text: l, onclick: () => { this.setTab = k; this.buildSettings(); } }));
     s.append(tabs);
     const row = (label, ctl, extra) => h('div', { class: 'setrow' }, h('span', { html: label }), ctl, extra || null);
     const check = (key, on) => h('input', { type: 'checkbox', checked: !!Settings[key], onchange: e => { Settings[key] = e.target.checked; saveSettings(); if (on) on(); } });
     const range = (key, min, max, step, fmt, on) => { const v = h('span', { class: 'v', text: fmt(Settings[key]) }); const i = h('input', { type: 'range', min, max, step, value: Settings[key], oninput: () => { Settings[key] = +i.value; v.textContent = fmt(Settings[key]); saveSettings(); if (on) on(); } }); return [i, v]; };
+    const head = txt => s.append(h('h3', { class: 'set-h', text: txt }));
     const t = this.setTab;
-    if (t === 'graphics') {
+    if (t === 'general') {
+      head('Screen');
+      s.append(row('Show control hints <span class="muted">(the box in the corner)</span>', check('showHints', () => { this.hintKey = ''; })));
+      s.append(row('Damage numbers', check('dmgNums')));
+      s.append(row('Show FPS counter', check('showFps')));
+      s.append(row('Pixel font', check('pixelFont', () => { document.body.classList.toggle('pixel', !!Settings.pixelFont); for (const p of Players.map.values()) PlayerView.updatePlate(p, true); })));
+      const su = h('select', { onchange: () => { Settings.speedUnit = su.value; saveSettings(); } });
+      for (const [v, l] of [['mph', 'mph'], ['kmh', 'km/h']]) su.append(h('option', { value: v, text: l, selected: (Settings.speedUnit || 'mph') === v }));
+      s.append(row('Speedometer units', su));
+      head('Playing');
+      s.append(row('Show a preview before spawning', check('spawnPreview')));
+      s.append(row('Noclip fly speed', ...range('flySpeed', 0.25, 5, 0.25, v => v + 'x')));
+      const gs = h('select', { onchange: () => { Settings.gore = gs.value; saveSettings(); if (gs.value === 'off') Gore.clearAll(); } });
+      for (const [v, l] of [['full', 'Full'], ['blood', 'Blood only'], ['off', 'Off']]) gs.append(h('option', { value: v, text: l, selected: Settings.gore === v }));
+      s.append(row('Gore', gs));
+      const bc = h('select', { onchange: () => { Settings.bloodColor = bc.value; saveSettings(); Gore.rebuildMats(); } });
+      for (const [v, l] of [['red', 'Red'], ['green', 'Green']]) bc.append(h('option', { value: v, text: l, selected: Settings.bloodColor === v }));
+      s.append(row('Blood color', bc));
+      s.append(row('Ask before closing the tab during a game', check('confirmClose')));
+      head('Hotbar');
+      s.append(row('Change what\'s on each slot', h('button', { class: 'small', text: 'Open inventory', onclick: () => this.openMenu('inventory') })));
+      s.append(row('Back to the default order <span class="muted">(build tools 1-4, weapons 5-=)</span>', h('button', { class: 'small', text: 'Reset hotbar', onclick: () => { Settings.hotbar = Hotbar.def(); saveSettings(); this.buildSlots(); this.toast('Hotbar reset', 'check'); } })));
+    } else if (t === 'graphics') {
       const sel = h('select', { onchange: () => Game.setTier(sel.value) });
       for (const k of TIER_KEYS) sel.append(h('option', { value: k, text: TIERS[k].label + (k === 'low' ? ' (PS1 style)' : ''), selected: R.tier === k }));
       s.append(row('Quality preset ' + tierBadge(R.tier), sel, h('button', { class: 'small', text: 'Auto-detect', onclick: () => { const d = R.detectTier(); Game.detected = d; Game.setTier(d.tier); this.toast(`Detected ${TIERS[d.tier].label} (${d.ms} ms bench)`); } })));
@@ -7835,23 +7959,14 @@ const UI = {
       s.append(row('Shadows' + (pbr ? '' : ' <span class="muted">(n/a on Low)</span>'), check('shadows', () => R.applyTier(R.tier, false))));
       s.append(row('Ambient occlusion (GTAO)', check('ao', () => R.setupComposer())));
       s.append(row('Bloom', check('bloom', () => R.setupComposer())));
-      s.append(row('Pixel font', check('pixelFont', () => { document.body.classList.toggle('pixel', !!Settings.pixelFont); for (const p of Players.map.values()) PlayerView.updatePlate(p, true); })));
       s.append(row('Reflection probes <span class="muted">(Ultra)</span>', check('reflections')));
       s.append(row('Dynamic resolution', check('drs')));
       const tf = h('select', { onchange: () => { Settings.targetFps = +tf.value; saveSettings(); } });
       for (const f of [30, 45, 60, 90, 120, 144]) tf.append(h('option', { value: f, text: f + ' FPS', selected: Settings.targetFps === f }));
       s.append(row('Target frame rate', tf, h('span', { class: 'v', id: 'rsVal', text: Math.round(R.drs.scale * 100) + '%' })));
-      s.append(row('Show FPS counter', check('showFps')));
-      const gs = h('select', { onchange: () => { Settings.gore = gs.value; saveSettings(); if (gs.value === 'off') Gore.clearAll(); } });
-      for (const [v, l] of [['full', 'Full'], ['blood', 'Blood only'], ['off', 'Off']]) gs.append(h('option', { value: v, text: l, selected: Settings.gore === v }));
-      s.append(row('Gore', gs));
-      const bc = h('select', { onchange: () => { Settings.bloodColor = bc.value; saveSettings(); Gore.rebuildMats(); } });
-      for (const [v, l] of [['red', 'Red'], ['green', 'Green']]) bc.append(h('option', { value: v, text: l, selected: Settings.bloodColor === v }));
-      s.append(row('Blood color', bc));
       s.append(h('p', { class: 'muted', style: 'font-size:12px;line-height:1.5', text: `GPU: ${R.gpuName || 'unknown'}. Every preset shows the same gameplay information.` }));
     } else if (t === 'audio') {
       const pct = v => Math.round(v * 100) + '%', sel = (key, opts, on) => { const e = h('select', { onchange: () => { Settings[key] = /^\d+$/.test(e.value) ? +e.value : e.value; saveSettings(); if (on) on(); } }); for (const [v, l] of opts) e.append(h('option', { value: v, text: l, selected: String(Settings[key]) === String(v) })); return e; };
-      const head = txt => s.append(h('h3', { text: txt, style: 'margin:14px 0 4px;font-size:13px;text-transform:uppercase;letter-spacing:.06em;opacity:.7' }));
       head('Volume');
       s.append(row('Master', ...range('volume', 0, 1, 0.05, pct, () => Audio.setVolume())));
       for (const [k, l] of [['volWeapons', 'Weapons &amp; explosions'], ['volImpacts', 'Impacts, breaking &amp; water'], ['volSteps', 'Footsteps &amp; movement'], ['volVoices', 'Voices (NPCs, players, nextbots)'],
@@ -7872,21 +7987,16 @@ const UI = {
       s.append(h('div', { class: 'row', style: 'margin-top:12px' }, h('button', { text: 'Reset audio to defaults', onclick: () => { Object.assign(Settings, AUDIO_DEFAULTS, { volume: 0.6 }); saveSettings(); Audio.applyOptions(); this.buildSettings(); } })));
       s.append(h('p', { class: 'muted', style: 'font-size:12px;line-height:1.5', text: 'Volumes go up to 150%. Headphone 3D (HRTF) gives the most realistic direction but costs a little more CPU.' }));
     } else if (t === 'controls') {
+      head('Mouse and view');
       s.append(row('Field of view', ...range('fov', 60, 110, 1, v => v + '°', () => R.setFov(Settings.fov))));
       s.append(row('Mouse sensitivity', ...range('sens', 0.1, 3, 0.05, v => v.toFixed(2))));
       s.append(row('Invert look Y', check('invertY')));
+      head('Aiming');
       const at = h('select', { onchange: () => { Settings.aimToggle = at.value; saveSettings(); this.hintKey = ''; } });
       for (const [v, l] of [['auto', 'Auto (toggle without a mouse)'], ['hold', 'Hold alt-fire'], ['toggle', 'Toggle: click on, click off']]) at.append(h('option', { value: v, text: l, selected: (Settings.aimToggle || 'auto') === v }));
       const pt = Input.pointer || (Input.hasMouse() ? '' : 'no mouse'), atNote = Settings.aimToggle === 'auto' && pt ? ` <span class="muted">(${pt === 'touchpad' ? 'touchpad' : pt} detected: ${Input.aimToggle() ? 'toggle' : 'hold'})</span>` : '';
       s.append(row('Aim / scope (touchpads: pick toggle)' + atNote, at));
-      s.append(row('Ask before closing the tab during a game', check('confirmClose')));
-      s.append(row('Show control hints', check('showHints', () => { this.hintKey = ''; })));
-      s.append(row('Spawn with hologram preview', check('spawnPreview')));
-      s.append(row('Damage numbers', check('dmgNums')));
-      const su = h('select', { onchange: () => { Settings.speedUnit = su.value; saveSettings(); } });
-      for (const [v, l] of [['mph', 'mph'], ['kmh', 'km/h']]) su.append(h('option', { value: v, text: l, selected: (Settings.speedUnit || 'mph') === v }));
-      s.append(row('Speedometer units', su));
-      s.append(row('Noclip fly speed', ...range('flySpeed', 0.25, 5, 0.25, v => v + 'x')));
+      head('Controller');
       s.append(row('Controller look speed', ...range('padSens', 0.2, 3, 0.05, v => v.toFixed(2))));
       s.append(row('Controller deadzone', ...range('deadzone', 0.02, 0.45, 0.01, v => v.toFixed(2))));
       const aa = h('select', { onchange: () => { Settings.aimAssist = +aa.value; saveSettings(); } });
