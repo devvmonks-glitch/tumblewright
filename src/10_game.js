@@ -1042,6 +1042,11 @@ const Game = {
       if (GAME.discord) DiscordAct.start();   // launched from a voice channel: go straight into its room
       // crouch (Ctrl) + forward (W) is also the browser's close-tab shortcut: ask first while a game is running
       addEventListener('beforeunload', e => { if (this.state === 'playing' && Settings.confirmClose !== false && !GAME.discord) { e.preventDefault(); e.returnValue = ''; } });
+      // Trystero leaves every room on beforeunload, which fires before that prompt: cancelling it still disconnected you.
+      // Listeners added from here on (Trystero's, when a room starts) run on pagehide instead: only once the page really goes.
+      const addL = window.addEventListener, remL = window.removeEventListener, onLeave = t => t === 'beforeunload' ? 'pagehide' : t;
+      window.addEventListener = function (t, ...a) { return addL.call(this || window, onLeave(t), ...a); };
+      window.removeEventListener = function (t, ...a) { return remL.call(this || window, onLeave(t), ...a); };
       addEventListener('pointerdown', () => Audio.ensure(), true); addEventListener('keydown', () => Audio.ensure(), true);
       this.lastRaf = performance.now(); this.startWatchdog();
       $('#c').addEventListener('click', () => { if (this.state === 'playing' && !UI.open && !Editor.active) this.lock(); });
